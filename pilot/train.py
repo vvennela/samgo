@@ -53,6 +53,36 @@ def load_model(path: str):
         return Auto.from_pretrained(path, **kwargs)
 
 
+def completion_loss(model, ids: torch.Tensor, prompt_len: int, chunk: int = 512) -> torch.Tensor:
+    """Mean cross-entropy over completion tokens, computing logits 512 positions at a time.
+
+    The full-vocabulary logits for a ~4k-token sequence (~200k vocab, fp32) need ~3 GB plus as
+    much again for their gradient, which ran the last GPU out of memory. Here each chunk's
+    logits are rebuilt during backward (checkpoint), so only one chunk is ever held. The head
+    matches the model's own: lm_head, then T * tanh(logits * multiplier / T) when softcapped.
+    """
+    base = model.get_base_model() if hasattr(model, "get_base_model") else model
+    cfg = base.config.get_text_config()
+    mult = getattr(cfg, "output_multiplier", 1.0) or 1.0
+    cap = getattr(cfg, "final_logit_softcapping", None)
+    hidden = base.model(input_ids=ids).last_hidden_state[0]  # final-normed hidden states
+    # Position t predicts token t+1, so completion tokens [P, L) come from hidden [P-1, L-1).
+    h = hidden[prompt_len - 1: ids.shape[1] - 1]
+    targets = ids[0, prompt_len:]
+
+    def chunk_loss(h_chunk, t_chunk):
+        logits = base.lm_head(h_chunk).float() * mult
+        if cap:
+            logits = torch.tanh(logits / cap) * cap
+        return torch.nn.functional.cross_entropy(logits, t_chunk.to(logits.device), reduction="sum")
+
+    total = 0.0
+    for s in range(0, h.shape[0], chunk):
+        total = total + torch.utils.checkpoint.checkpoint(chunk_loss, h[s:s + chunk], targets[s:s + chunk],
+                                                          use_reentrant=False)
+    return total / targets.numel()
+
+
 def lora_target_names(model) -> list[str]:
     names = [n for n, m in model.named_modules()
              if isinstance(m, torch.nn.Linear) and n.split(".")[-1] in LORA_TARGETS and not SKIP.search(n)]
@@ -112,11 +142,9 @@ def main() -> None:
     for epoch in range(args.epochs):
         for ex in data:
             ids = torch.tensor([ex["prompt_ids"] + ex["completion_ids"]], device=device)
-            labels = ids.clone()
-            labels[0, : len(ex["prompt_ids"])] = -100
-            out = model(input_ids=ids, labels=labels)
-            (out.loss / args.accum).backward()
-            running += out.loss.item()
+            loss = completion_loss(model, ids, len(ex["prompt_ids"]))
+            (loss / args.accum).backward()
+            running += loss.item()
             running_tokens += len(ex["completion_ids"])
             micro += 1
             if micro % args.accum == 0:

@@ -32,18 +32,23 @@ finish() {
   phase "$status"
   case "$status" in
     done*) aws s3 sync "$OUT" "$ARCHIVE/" --quiet && log "archived to $ARCHIVE" ;;
-    *) newest=$(ls -t "$OUT"/*.log 2>/dev/null | grep -v -E "run.log|gpu.log" | head -1)
-       { echo "status: $status"; echo "log: $newest"; tail -40 "$newest" 2>/dev/null; } > "$OUT/failure.txt"
+    *) case "$status" in  # the log of the step that failed, not just the newest file
+         failed_baseline_test) flog=base_test.log ;; failed_baseline_train) flog=base_train.log ;;
+         failed_train) flog=train.log ;; failed_merge) flog=merge.log ;; failed_round1_test*) flog=r1_test.log ;;
+         *) flog=$(cd "$OUT" && ls -t *.log 2>/dev/null | grep -v -E "run.log|gpu.log" | head -1) ;;
+       esac
+       { echo "status: $status"; echo "log: $flog"; grep -v -i warning "$OUT/$flog" 2>/dev/null | tail -40; } > "$OUT/failure.txt"
        # Keep the real baseline data even if a later step fails.
        aws s3 cp "$OUT/base_test/samples.jsonl" "$ARCHIVE/base_test/samples.jsonl" --quiet ;;
   esac
   aws s3 sync "$OUT" "$LIVE/" --quiet --exclude "*" --include "phase.json" --include "run.log" --include "failure.txt" \
-    --include "plan.json" --include "*/progress.json" --include "round1/train_*"
+    --include "plan.json" --include "*/progress.json" --include "round1/train_*" --include "errors.txt"
   shutdown -h now
   exit 0
 }
 
-log "phase 2 takeover: baseline cut after $(wc -l < "$OUT/base_test/samples.jsonl") samples"
+START_AT=${START_AT:-plan}
+log "phase 2 (start at $START_AT): baseline has $(wc -l < "$OUT/base_test/samples.jsonl") samples"
 python - <<'EOF' || finish failed_subset
 import json
 ids = {json.loads(l)["id"] for l in open("/opt/run/out/base_test/samples.jsonl")}
@@ -52,6 +57,7 @@ open("/opt/run/tasks/test_sub.jsonl", "w").writelines(rows)
 print(f"test subset: {len(rows)} tasks")
 EOF
 
+if [ "$START_AT" = plan ]; then
 phase plan
 python -m pilot.band "$OUT" >> "$OUT/run.log" 2>&1 || finish failed_plan
 DECISION=$(python -c "import json; print(json.load(open('$OUT/plan.json'))['decision'])")
@@ -62,10 +68,11 @@ if [ "$DECISION" = "stop" ]; then python -m pilot.report "$OUT" >> "$OUT/run.log
 phase baseline_train
 python -m pilot.sample --model "$MODEL" --tasks "$W/tasks/train.jsonl" --out "$OUT/base_train" --n 4 \
   --levels "$TRAIN_LEVELS" > "$OUT/base_train.log" 2>&1 || finish failed_baseline_train
+fi
 
 phase train
 python -m pilot.train --model "$MODEL" --samples "$OUT/base_train/samples.jsonl" --out "$OUT/round1" \
-  --cap 1 --max-examples 400 > "$OUT/train.log" 2>&1 || finish failed_train
+  --cap "${TRAIN_CAP:-1}" --max-examples 400 > "$OUT/train.log" 2>&1 || finish failed_train
 
 phase round1_test
 if ! python -m pilot.sample --model "$MODEL" --tasks "$W/tasks/test_sub.jsonl" --out "$OUT/r1_test" --n 4 \

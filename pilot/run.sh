@@ -35,8 +35,12 @@ finish() {
   phase "$status"
   case "$status" in
     done*) aws s3 sync "$OUT" "$ARCHIVE/" --quiet && log "archived to $ARCHIVE" ;;
-    *) newest=$(ls -t "$OUT"/*.log 2>/dev/null | grep -v -E "run.log|gpu.log" | head -1)
-       { echo "status: $status"; echo "log: $newest"; tail -40 "$newest" 2>/dev/null; } > "$OUT/failure.txt" ;;
+    *) case "$status" in  # the log of the step that failed, not just the newest file
+         failed_baseline_test) flog=base_test.log ;; failed_baseline_train) flog=base_train.log ;;
+         failed_train) flog=train.log ;; failed_merge) flog=merge.log ;; failed_round1_test*) flog=r1_test.log ;;
+         *) flog=$(cd "$OUT" && ls -t *.log 2>/dev/null | grep -v -E "run.log|gpu.log" | head -1) ;;
+       esac
+       { echo "status: $status"; echo "log: $flog"; grep -v -i warning "$OUT/$flog" 2>/dev/null | tail -40; } > "$OUT/failure.txt" ;;
   esac
   log "shutting down"; sync_live
   shutdown -h now
