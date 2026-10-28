@@ -82,6 +82,17 @@ def main() -> None:
     if args.levels:
         keep = set(args.levels.split(","))
         rows = [r for r in rows if r["level"] in keep]
+    # Mid-run budget overrides, keyed by output dir name, e.g. {"r1_test": {"n": 4}}.
+    overrides = Path("/opt/run/overrides.json")
+    if overrides.exists():
+        ov = json.loads(overrides.read_text()).get(args.out.name, {})
+        args.n = ov.get("n", args.n)
+        if "per_level" in ov:
+            seen: dict[str, int] = {}
+            rows = [r for r in rows if seen.setdefault(r["level"], 0) < ov["per_level"]
+                    and not seen.__setitem__(r["level"], seen[r["level"]] + 1)]
+        if ov:
+            print(f"[sample] overrides for {args.out.name}: {ov} -> {len(rows)} tasks x {args.n}", flush=True)
     if args.limit:
         rows = rows[: args.limit]
 
