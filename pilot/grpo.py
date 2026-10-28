@@ -75,6 +75,9 @@ def main() -> None:
     ap.add_argument("--max-minutes", type=float, default=50)
     ap.add_argument("--max-rounds", type=int, default=100)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--probe", type=Path, default=None, help="fixed held-out tasks scored at the start and the end")
+    ap.add_argument("--probe-n", type=int, default=4)
+    ap.add_argument("--probe-minutes", type=float, default=6, help="time reserved for the final probe")
     args = ap.parse_args()
     started = time.time()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -112,15 +115,44 @@ def main() -> None:
     assert receive(responses, worker, 1800).get("ready")
     print(f"[grpo] vLLM ready after {time.time() - started:.0f}s", flush=True)
 
+    probe_rows = [json.loads(line) for line in open(args.probe)] if args.probe else []
+
+    def run_probe(tag: str, lora_path, lora_id: int, pool) -> dict:
+        """Pass count per probe task with the given adapter; written to OUT/probe_<tag>.json."""
+        t = time.time()
+        ps = [prompt_ids(tok, r["messages"], "low") for r in probe_rows]
+        requests.put({"prompts": ps, "n": args.probe_n, "max_tokens": args.max_tokens,
+                      "stop": [eot, tok.eos_token_id], "lora_path": lora_path, "lora_id": lora_id})
+        outs = receive(responses, worker, 3600)["outputs"]
+        jobs, owners = [], []
+        for r, o in zip(probe_rows, outs):
+            for ids, finish in o:
+                jobs.append((r["target"], r["given"], tok.decode(ids, skip_special_tokens=False)))
+                owners.append((r, finish))
+        passed = defaultdict(int)
+        for (r, finish), sc in zip(owners, pool.map(score_one, jobs, chunksize=8)):
+            passed[r["id"]] += int(sc["passed"] and finish != "length")
+        result = {"tag": tag, "passed": dict(passed), "n": args.probe_n,
+                  "rate": sum(passed.values()) / (len(probe_rows) * args.probe_n),
+                  "by_level": {lv: sum(passed[r["id"]] for r in probe_rows if r["level"] == lv)
+                               / (args.probe_n * sum(r["level"] == lv for r in probe_rows))
+                               for lv in sorted({r["level"] for r in probe_rows})},
+                  "seconds": round(time.time() - t)}
+        (args.out / f"probe_{tag}.json").write_text(json.dumps(result, indent=1))
+        print(f"[grpo] probe {tag}: rate {result['rate']:.3f} {result['by_level']} ({result['seconds']}s)", flush=True)
+        return result
+
     rows = [json.loads(line) for line in open(args.tasks)]
     levels = args.levels.split(",")
     used: set = set()
     log = open(args.out / "rounds.jsonl", "a")
     adapter, round_minutes = None, 0.0
     with ProcessPoolExecutor() as pool:
+        base_probe = run_probe("base", None, 0, pool) if probe_rows else None
+        reserve = args.probe_minutes if probe_rows else 0
         for rnd in range(args.max_rounds):
             elapsed = (time.time() - started) / 60
-            if rnd and elapsed + round_minutes > args.max_minutes:
+            if rnd and elapsed + round_minutes + reserve > args.max_minutes:
                 print(f"[grpo] stopping before round {rnd}: {elapsed:.0f} min used, a round takes {round_minutes:.0f}",
                       flush=True)
                 break
@@ -188,6 +220,15 @@ def main() -> None:
             log.write(json.dumps(row) + "\n")
             log.flush()
             print("[grpo] " + json.dumps(row), flush=True)
+        if base_probe and adapter:
+            final = run_probe("final", adapter, 10_000, pool)
+            diffs = [final["passed"].get(i, 0) - base_probe["passed"].get(i, 0) for i in base_probe["passed"]]
+            boot = sorted(sum(rng.choice(diffs) for _ in diffs) / (len(diffs) * args.probe_n) for _ in range(2000))
+            summary = {"base": base_probe["rate"], "final": final["rate"], "delta": final["rate"] - base_probe["rate"],
+                       "ci95": [boot[50], boot[1949]], "base_by_level": base_probe["by_level"],
+                       "final_by_level": final["by_level"], "rounds": rnd}
+            (args.out / "probe_summary.json").write_text(json.dumps(summary, indent=1))
+            print("[grpo] PROBE " + json.dumps(summary), flush=True)
     requests.put(None)
     worker.join(timeout=120)
     if worker.is_alive():
