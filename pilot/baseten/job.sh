@@ -1,11 +1,12 @@
 #!/bin/bash
-# Pilot phase 2 on one Baseten 2xH100 node: same-hardware baseline, round-1 training, re-test, report.
-# Every step's output is copied to $BT_CHECKPOINT_DIR (synced by Baseten) as soon as it exists.
+# Pilot phase 2 on one 2xH100 node (Baseten or Modal): same-hardware baseline, round-1 training, re-test, report.
+# Every step's output is copied to $SAVE (Baseten checkpoint dir or a Modal volume) as soon as it exists.
+# SKIP_SETUP=1 when the image already has the packages and the model is already at $MODEL.
 set -uo pipefail
 CODE=$(pwd)
 OUT=/opt/run/out
-MODEL=${BT_PROJECT_CACHE_DIR:-/root/.cache/user_artifacts}/glimmer
-SAVE=${BT_CHECKPOINT_DIR:-/tmp/save}/results
+MODEL=${MODEL:-${BT_PROJECT_CACHE_DIR:-/root/.cache/user_artifacts}/glimmer}
+SAVE=${SAVE:-${BT_CHECKPOINT_DIR:-/tmp/save}/results}
 mkdir -p "$OUT" "$SAVE" /opt/run
 export PYTHONPATH=$CODE PYTHONUNBUFFERED=1 HF_HUB_ENABLE_HF_TRANSFER=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 log() { echo "[job] $(date -u +%T) $*"; }
@@ -25,6 +26,7 @@ step() {  # step NAME CMD... ; logs to $OUT/NAME.log, echoes progress lines
   save
 }
 
+if [ -z "${SKIP_SETUP:-}" ]; then
 log "setup"
 pip install -q uv
 uv venv /opt/venv --python 3.12 -q && source /opt/venv/bin/activate
@@ -35,6 +37,7 @@ python -c "import vllm, transformers, peft, torch; print('[job] vllm', vllm.__ve
 log "download (cache: $MODEL)"
 hf download meta-models/Muse-Glimmer-30B --local-dir "$MODEL" > "$OUT/download.log" 2>&1 || fail download
 du -sh "$MODEL"
+fi
 
 cp "$CODE/aws_plan.json" "$OUT/plan.json"
 echo '{"base_train": {"n": 4, "per_level": 25}}' > /opt/run/overrides.json
