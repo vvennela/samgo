@@ -5,7 +5,7 @@ import pytest
 import trimesh
 
 from samgo.parts import COLOR_INDEX
-from samgo.perceive import best_mask
+from samgo.perceive import best_mask, place_mask
 from samgo.voxelize import load_mesh, nearest_color, render, voxelize
 
 
@@ -18,23 +18,41 @@ def colored_box(extents, rgb, center=(0, 0, 0)):
 
 # --- S1 mask choice -------------------------------------------------------------
 
-def test_best_mask_prefers_confidence_and_scales_to_photo():
-    small, big = np.zeros((4, 4), np.uint8), np.ones((4, 4), np.uint8)
-    small[1:3, 1:3] = 1
-    mask, confidence = best_mask([(big, 0.4), (small, 0.9)], size=(8, 12))
-    assert confidence == 0.9 and mask.shape == (12, 8) and mask.sum() == 4 * 6
+def test_mask_raster_is_placed_in_its_box():
+    # SAM 3.1 returns a raster covering only the object's box, not the whole photo.
+    raster = np.ones((2, 3), np.uint8)
+    full = place_mask(raster, bounds=(4, 1, 7, 3), size=(10, 5))
+    assert full.shape == (5, 10) and full.sum() == 6
+    assert full[1:3, 4:7].all() and not full[:, :4].any()
+
+
+def test_mask_raster_at_other_resolution_is_scaled_to_box():
+    full = place_mask(np.ones((1, 1), np.uint8), bounds=(2, 2, 6, 4), size=(8, 8))
+    assert full.sum() == 4 * 2
+
+
+def test_mask_box_off_the_edge_is_clipped():
+    full = place_mask(np.ones((4, 4), np.uint8), bounds=(6, 6, 10, 10), size=(8, 8))
+    assert full.sum() == 4
+
+
+def test_best_mask_prefers_confidence():
+    small, big = np.zeros((4, 4), bool), np.ones((4, 4), bool)
+    small[1:3, 1:3] = True
+    mask, confidence = best_mask([(big, 0.4), (small, 0.9)])
+    assert confidence == 0.9 and mask.sum() == 4
 
 
 def test_best_mask_falls_back_to_largest():
-    small, big = np.zeros((4, 4), np.uint8), np.ones((4, 4), np.uint8)
-    small[0, 0] = 1
-    mask, confidence = best_mask([(small, None), (big, None)], size=(4, 4))
+    small, big = np.zeros((4, 4), bool), np.ones((4, 4), bool)
+    small[0, 0] = True
+    mask, confidence = best_mask([(small, None), (big, None)])
     assert confidence is None and mask.all()
 
 
 def test_best_mask_needs_a_match():
     with pytest.raises(RuntimeError):
-        best_mask([], size=(4, 4))
+        best_mask([])
 
 
 # --- S2 voxelization ------------------------------------------------------------

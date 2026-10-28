@@ -45,23 +45,36 @@ def prepare_photo(src: Path, dest: Path) -> Image.Image:
     return image
 
 
-def decode_masks(records: list) -> list[tuple[np.ndarray, float | None]]:
-    """SAM 3.1 mask records -> (0/1 raster at SAM's resolution, confidence)."""
+def place_mask(raster: np.ndarray, bounds: tuple[int, int, int, int], size: tuple[int, int]) -> np.ndarray:
+    """Put a box-sized SAM raster into a full-photo mask. bounds = (left, top, right, bottom), size = (width, height)."""
+    left, top, right, bottom = bounds
+    width, height = size
+    full = np.zeros((height, width), dtype=bool)
+    box_w, box_h = max(right - left, 1), max(bottom - top, 1)
+    # The raster covers only the object's box, sometimes at a slightly different resolution.
+    scaled = np.asarray(Image.fromarray(raster.astype(np.uint8) * 255).resize((box_w, box_h), Image.NEAREST)) > 127
+    x0, y0 = max(left, 0), max(top, 0)
+    x1, y1 = min(left + box_w, width), min(top + box_h, height)
+    full[y0:y1, x0:x1] = scaled[y0 - top:y1 - top, x0 - left:x1 - left]
+    return full
+
+
+def decode_masks(records: list, size: tuple[int, int]) -> list[tuple[np.ndarray, float | None]]:
+    """SAM 3.1 mask records -> (full-photo boolean mask, confidence)."""
     out = []
     for r in records:
         if isinstance(r, SegmentationMaskRecord):
-            bits = np.frombuffer(decode_mask_to_raster(r.mask), dtype=np.uint8)
-            out.append((bits.reshape(r.mask.height, r.mask.width), r.confidence))
+            bits = np.frombuffer(decode_mask_to_raster(r.mask), dtype=np.uint8).reshape(r.mask.height, r.mask.width)
+            b = r.bounds
+            out.append((place_mask(bits, (b.left, b.top, b.right, b.bottom), size), r.confidence))
     return out
 
 
-def best_mask(candidates: list[tuple[np.ndarray, float | None]], size: tuple[int, int]) -> tuple[np.ndarray, float | None]:
-    """Pick the most confident mask (largest if no confidence) and scale it to the photo's (width, height)."""
+def best_mask(candidates: list[tuple[np.ndarray, float | None]]) -> tuple[np.ndarray, float | None]:
+    """Pick the most confident full-photo mask (largest if no confidence)."""
     if not candidates:
         raise RuntimeError("SAM 3.1 found no matching object")
-    raster, confidence = max(candidates, key=lambda c: (c[1] if c[1] is not None else -1, int(c[0].sum())))
-    small = Image.fromarray(raster.astype(np.uint8) * 255)
-    return np.asarray(small.resize(size, Image.NEAREST)) > 127, confidence
+    return max(candidates, key=lambda c: (c[1] if c[1] is not None else -1, int(c[0].sum())))
 
 
 async def segment(image_url: str, prompt: str, size: tuple[int, int], client: AsyncOpenAI) -> tuple[np.ndarray, float | None, int]:
@@ -75,8 +88,8 @@ async def segment(image_url: str, prompt: str, size: tuple[int, int], client: As
         stream=True,
     )
     result = await parse_responses_stream(stream, image_segmentation_format()).final_result()
-    candidates = decode_masks(list(result.records))
-    mask, confidence = best_mask(candidates, size)
+    candidates = decode_masks(list(result.records), size)
+    mask, confidence = best_mask(candidates)
     return mask, confidence, len(candidates)
 
 
