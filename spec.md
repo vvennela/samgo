@@ -137,7 +137,7 @@ Each stage proves exactly one thing. Each one depends only on stages before it.
 | **S3b** | We can tell a build that stands from one that collapses. | Force-balance check (linear program, scipy) agrees with hand-made stable/unstable cases, including one-stud overhangs; < 1 s under 300 pieces; per-brick scores. |
 | **S3c** | We can tell a car that rolls from one that doesn't. | Catches: axle through an axle-shaped hole (locked), wheel sweep blocked by the body, body lower than the wheels, misaligned axles. |
 | **Parts** | Functional parts fit the stud grid. | Technic brick with round hole (studded, on the grid), axle, and wheel+tire verify correctly. |
-| **S4** | An algorithm can turn a target into a valid, stable build. | ≥ 80% of procedural targets pass S3a + S3b. Greedy layer tiling (seam and support scoring), then repair: recombine → bridge → remove, weakest bricks first. |
+| **S4** | An algorithm can turn a target into a valid, stable build. | ≥ 80% of procedural targets pass S3a + S3b. Greedy layer tiling (seam and support scoring), then repair: recombine → bridge → remove, weakest bricks first. ✅ S3a: 93.8% of 500 (`samgo/builder.py`); stability-aware repair pending S3b |
 | **S4f** | An algorithm can build a car that rolls. | A car target passes S3c: round-hole chassis at the wheel positions, axles, wheels, body on top. |
 | **S5** | A valid build can become instructions a person can follow. | Someone builds a small model from the generated steps without help. |
 | **S6** | A user can go from photo to a working build with no manual steps. | A new car photo goes through the app end to end, with the verifier rejecting and rolling back bad steps. |

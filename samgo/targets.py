@@ -41,7 +41,9 @@ def stairs(rng):
 
 
 def table(rng):
-    x, y, legs_h, top_h = (int(v) for v in rng.integers([5, 4, 6, 1], [13, 11, 16, 4]))
+    # Tops are at least 2 plates: a 1-plate slab wider than 8 studs can't be tied
+    # together by any single part, so it is unbuildable, not hard.
+    x, y, legs_h, top_h = (int(v) for v in rng.integers([5, 4, 6, 2], [13, 11, 16, 5]))
     g = _grid(x, y, legs_h + top_h)
     leg = rng.choice(PALETTE)
     for lx in (0, x - 1):
@@ -52,7 +54,7 @@ def table(rng):
 
 
 def chair(rng):
-    x, legs_h, seat_h, back_h = (int(v) for v in rng.integers([4, 6, 1, 6], [9, 13, 3, 16]))
+    x, legs_h, seat_h, back_h = (int(v) for v in rng.integers([4, 6, 2, 6], [9, 13, 4, 16]))
     g = _grid(x, x, legs_h + seat_h + back_h)
     wood = rng.choice(PALETTE)
     for lx in (0, x - 1):
