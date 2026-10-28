@@ -40,7 +40,8 @@ Answer with one JSON object per line and nothing else, for example:
 class Task:
     id: str
     family: str
-    k: int
+    k: int                 # pieces removed
+    level: str             # curriculum level: "1", "2", "5", "10", "20", or "all" (full build from empty)
     target: np.ndarray
     given: list[dict]      # pieces already built
     removed: list[dict]    # the builder's own completion, for reference only
@@ -90,18 +91,25 @@ def score(task: Task, answer: str) -> Report:
     return verify(task.given + added, task.target, config=EXACT)
 
 
-def make_tasks(seeds: range, ks: tuple[int, ...]) -> list[Task]:
-    """One task per (seed, k) whose builder solution passes and has more than k pieces."""
+def make_tasks(seeds: range, levels: tuple) -> list[Task]:
+    """One task per (seed, level) whose builder solution passes exactly.
+
+    A numeric level k removes the last k pieces (the build must have more than k);
+    "all" removes every piece, so the model builds the whole target from empty.
+    """
     tasks = []
     for seed in seeds:
         family, target = sample(seed)
         solution = build(target, seed=seed)
-        if not solution.report.passed or "iou" in solution.report.metrics and solution.report.metrics["iou"] < 1.0:
+        if not solution.report.passed or solution.report.metrics.get("iou", 1.0) < 1.0:
             continue
-        for k in ks:
-            if len(solution.pieces) <= k:
+        n = len(solution.pieces)
+        for level in levels:
+            k = n if level == "all" else int(level)
+            if level != "all" and n <= k:
                 continue
-            tasks.append(Task(f"{seed}-k{k}", family, k, target, solution.pieces[:-k], solution.pieces[-k:]))
+            tasks.append(Task(f"{seed}-{level}", family, k, str(level), target, solution.pieces[:n - k],
+                              solution.pieces[n - k:]))
     return tasks
 
 

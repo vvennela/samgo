@@ -1,9 +1,9 @@
 """Pilot report: baseline vs. round 1 on the frozen test set, plus the go/no-go call.
 
 Go if all three hold (fixed before the run):
-  1. baseline pass rate at k = 1 or 2 is between 5% and 90% (the task is learnable),
-  2. round 1 improves the overall test pass rate by >= 5 points,
-  3. round 1 improves k = 10, which was never trained on (transfer, not memorization).
+  1. some level's baseline pass rate is in the 10-90% band (the task is learnable),
+  2. round 1 improves the pass rate on the trained levels by >= 5 points,
+  3. round 1 improves the held-out transfer level, never trained on, with the 95% CI above zero.
 """
 
 import json
@@ -11,6 +11,8 @@ import random
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+LEVELS = ["1", "2", "5", "10", "20", "all"]
 
 
 def load(path: Path) -> list[dict]:
@@ -25,11 +27,11 @@ def summarize(rows: list[dict]) -> dict:
     by_k, tasks = defaultdict(list), defaultdict(list)
     codes = defaultdict(int)
     for r in rows:
-        by_k[r["k"]].append(r["passed"])
+        by_k[r["level"]].append(r["passed"])
         tasks[r["id"]].append(r["passed"])
         for c in r["codes"]:
             codes[c] += 1
-    task_k = {r["id"]: r["k"] for r in rows}
+    task_k = {r["id"]: r["level"] for r in rows}
     pass_at_n = defaultdict(list)
     for t, v in tasks.items():
         pass_at_n[task_k[t]].append(any(v))
@@ -37,8 +39,8 @@ def summarize(rows: list[dict]) -> dict:
     return {
         "samples": n,
         "pass_rate": sum(r["passed"] for r in rows) / n,
-        "pass_rate_by_k": {k: sum(v) / len(v) for k, v in sorted(by_k.items())},
-        "pass_at_n_by_k": {k: sum(v) / len(v) for k, v in sorted(pass_at_n.items())},
+        "pass_rate_by_level": {k: sum(v) / len(v) for k, v in sorted(by_k.items(), key=lambda x: LEVELS.index(x[0]))},
+        "pass_at_n_by_level": {k: sum(v) / len(v) for k, v in sorted(pass_at_n.items(), key=lambda x: LEVELS.index(x[0]))},
         "answered_rate": sum(r["answered"] for r in rows) / n,
         "truncated_rate": sum(r.get("finish") == "length" for r in rows) / n,
         "mean_completion_tokens": sum(len(r.get("completion_ids", [])) for r in rows) / n,
@@ -46,12 +48,12 @@ def summarize(rows: list[dict]) -> dict:
     }
 
 
-def paired_delta(before: list[dict], after: list[dict], k: int | None = None, iters: int = 2000) -> dict:
+def paired_delta(before: list[dict], after: list[dict], levels: set | None = None, iters: int = 2000) -> dict:
     """Per-task pass-fraction change with a task-level bootstrap 95% interval."""
     def per_task(rows):
         d = defaultdict(list)
         for r in rows:
-            if k is None or r["k"] == k:
+            if levels is None or r["level"] in levels:
                 d[r["id"]].append(r["passed"])
         return {t: sum(v) / len(v) for t, v in d.items()}
     b, a = per_task(before), per_task(after)
@@ -76,30 +78,36 @@ def main(out: Path) -> None:
     if log:
         metrics["train_loss"] = {"first": log[0]["loss"], "last": log[-1]["loss"], "steps": len(log),
                                  "minutes": log[-1]["elapsed_s"] / 60}
+    plan = json.loads((out / "plan.json").read_text()) if (out / "plan.json").exists() else {}
+    metrics["plan"] = plan
     if base and after:
         metrics["delta_overall"] = paired_delta(base, after)
-        metrics["delta_by_k"] = {k: paired_delta(base, after, k) for k in sorted({r["k"] for r in base})}
+        metrics["delta_by_level"] = {lv: paired_delta(base, after, {lv}) for lv in LEVELS if any(r["level"] == lv for r in base)}
+        if plan.get("train_levels"):
+            metrics["delta_trained_levels"] = paired_delta(base, after, set(plan["train_levels"]))
 
     b = metrics["baseline_test"]
     checks = {}
     if b:
-        small = [b["pass_rate_by_k"].get(k, 0) for k in (1, 2)]
-        checks["1_learnable"] = any(0.05 <= s <= 0.90 for s in small)
-    if "delta_overall" in metrics:
-        checks["2_improves_5pts"] = metrics["delta_overall"]["delta"] >= 0.05
-        d10 = metrics["delta_by_k"].get(10, {})
-        checks["3_transfers_to_k10"] = bool(d10) and d10["delta"] > 0
+        checks["1_learnable"] = any(0.10 <= p <= 0.90 for p in b["pass_rate_by_level"].values())
+    if "delta_trained_levels" in metrics:
+        checks["2_improves_5pts_on_trained_levels"] = metrics["delta_trained_levels"]["delta"] >= 0.05
+        t = plan.get("transfer_level")
+        if t:
+            dt = metrics["delta_by_level"].get(t, {})
+            # Transfer counts only if the whole 95% interval is above zero.
+            checks[f"3_transfers_to_level_{t}"] = bool(dt) and dt["ci95"][0] > 0
     metrics["checks"] = checks
-    metrics["verdict"] = ("GO" if checks and len(checks) == 3 and all(checks.values())
+    metrics["verdict"] = ("GO" if len(checks) == 3 and all(checks.values())
                           else "NO-GO" if checks else "INCOMPLETE")
     (out / "metrics.json").write_text(json.dumps(metrics, indent=1))
 
-    lines = [f"# SAMgo pilot report — verdict: **{metrics['verdict']}**", ""]
+    lines = [f"# SAMgo pilot report — verdict: **{metrics['verdict']}**", "", f"Plan: {json.dumps(plan)}", ""]
     for name, s in (("Baseline (test)", b), ("Round 1 (test)", metrics["round1_test"])):
         if s:
             lines += [f"## {name}", f"- pass rate: {s['pass_rate']:.3f} over {s['samples']} samples",
-                      "- by k: " + ", ".join(f"k={k}: {v:.3f}" for k, v in s["pass_rate_by_k"].items()),
-                      "- pass@n by k: " + ", ".join(f"k={k}: {v:.3f}" for k, v in s["pass_at_n_by_k"].items()),
+                      "- by level: " + ", ".join(f"{k}: {v:.3f}" for k, v in s["pass_rate_by_level"].items()),
+                      "- pass@n by level: " + ", ".join(f"{k}: {v:.3f}" for k, v in s["pass_at_n_by_level"].items()),
                       f"- answered {s['answered_rate']:.3f}, truncated {s['truncated_rate']:.3f}, "
                       f"mean completion tokens {s['mean_completion_tokens']:.0f}",
                       f"- failure codes: {s['failure_codes']}", ""]
@@ -107,8 +115,11 @@ def main(out: Path) -> None:
         d = metrics["delta_overall"]
         lines += ["## Change (paired by task, bootstrap 95% CI)",
                   f"- overall: {d['delta']:+.3f} [{d['ci95'][0]:+.3f}, {d['ci95'][1]:+.3f}]"]
-        lines += [f"- k={k}: {v['delta']:+.3f} [{v['ci95'][0]:+.3f}, {v['ci95'][1]:+.3f}]"
-                  for k, v in metrics["delta_by_k"].items() if v]
+        if "delta_trained_levels" in metrics:
+            d = metrics["delta_trained_levels"]
+            lines.append(f"- trained levels {plan['train_levels']}: {d['delta']:+.3f} [{d['ci95'][0]:+.3f}, {d['ci95'][1]:+.3f}]")
+        lines += [f"- level {k}: {v['delta']:+.3f} [{v['ci95'][0]:+.3f}, {v['ci95'][1]:+.3f}]"
+                  for k, v in metrics["delta_by_level"].items() if v]
         lines.append("")
     if "train_meta" in metrics:
         lines += ["## Training", f"- {json.dumps(metrics['train_meta'])}", f"- loss: {metrics.get('train_loss')}", ""]

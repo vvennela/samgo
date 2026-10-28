@@ -61,7 +61,8 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--lora", default="")
     ap.add_argument("--tp", type=int, default=4)
-    ap.add_argument("--max-tokens", type=int, default=4096)
+    ap.add_argument("--max-tokens", type=int, default=8192)
+    ap.add_argument("--levels", default="", help="comma-separated levels to keep, e.g. 2,5,10")
     ap.add_argument("--chunk", type=int, default=100)
     args = ap.parse_args()
 
@@ -71,6 +72,9 @@ def main() -> None:
 
     args.out.mkdir(parents=True, exist_ok=True)
     rows = [json.loads(line) for line in open(args.tasks)]
+    if args.levels:
+        keep = set(args.levels.split(","))
+        rows = [r for r in rows if r["level"] in keep]
     if args.limit:
         rows = rows[: args.limit]
 
@@ -90,7 +94,7 @@ def main() -> None:
 
     started, done, passed, total = time.time(), 0, 0, 0
     out_tokens = 0
-    by_k: dict[int, list[int]] = {}
+    by_level: dict[str, list[int]] = {}
     with open(args.out / "samples.jsonl", "w") as f, ProcessPoolExecutor() as pool:
         for c in range(0, len(rows), args.chunk):
             chunk = rows[c:c + args.chunk]
@@ -107,18 +111,18 @@ def main() -> None:
                     jobs.append((r["target"], r["given"], text))
                     meta.append((r, p, ids, text, s.finish_reason))
             for (r, p, ids, text, finish), sc in zip(meta, pool.map(score_one, jobs, chunksize=8)):
-                f.write(json.dumps({"id": r["id"], "k": r["k"], "family": r["family"], "prompt_ids": p,
+                f.write(json.dumps({"id": r["id"], "k": r["k"], "level": r["level"], "family": r["family"], "prompt_ids": p,
                                     "completion_ids": ids, "completion": text, "finish": finish, **sc}) + "\n")
                 total += 1
                 passed += sc["passed"]
                 out_tokens += len(ids)
-                by_k.setdefault(r["k"], []).append(sc["passed"])
+                by_level.setdefault(r["level"], []).append(sc["passed"])
             f.flush()
             done += len(chunk)
             elapsed = time.time() - started
             (args.out / "progress.json").write_text(json.dumps({
                 "tasks_done": done, "tasks_total": len(rows), "samples": total, "pass_rate": passed / max(total, 1),
-                "pass_rate_by_k": {k: sum(v) / len(v) for k, v in sorted(by_k.items())},
+                "pass_rate_by_level": {k: sum(v) / len(v) for k, v in by_level.items()},
                 "mean_completion_tokens": out_tokens / max(total, 1),
                 "tokens_per_s": out_tokens / max(elapsed, 1e-9), "elapsed_s": elapsed,
             }, indent=1))

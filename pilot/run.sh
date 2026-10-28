@@ -52,20 +52,16 @@ phase baseline_test
 python -m pilot.sample --model "$MODEL" --tasks "$W/tasks/test.jsonl" --out "$OUT/base_test" --n 8 \
   > "$OUT/base_test.log" 2>&1 || finish failed_baseline_test
 
-# Gate: don't pay for training if the task is broken (k=1 near 0%) or already solved (>90% overall).
-GATE=$(python - <<'EOF'
-import json
-p = json.load(open("/opt/run/out/base_test/progress.json"))
-k1 = p["pass_rate_by_k"].get("1", 0)
-print("stop" if k1 < 0.02 or p["pass_rate"] > 0.90 else "go")
-EOF
-)
-log "gate after baseline: $GATE"
-if [ "$GATE" = "stop" ]; then python -m pilot.report "$OUT" >> "$OUT/run.log" 2>&1; finish done_gate_stop; fi
+# Gate + plan: train only on levels in the 10-90% band; hold out the next harder level.
+python -m pilot.band "$OUT" >> "$OUT/run.log" 2>&1 || finish failed_plan
+DECISION=$(python -c "import json; print(json.load(open('$OUT/plan.json'))['decision'])")
+TRAIN_LEVELS=$(python -c "import json; print(','.join(json.load(open('$OUT/plan.json')).get('train_levels', [])))")
+log "plan: $DECISION, train levels: $TRAIN_LEVELS"
+if [ "$DECISION" = "stop" ]; then python -m pilot.report "$OUT" >> "$OUT/run.log" 2>&1; finish done_gate_stop; fi
 
 phase baseline_train
 python -m pilot.sample --model "$MODEL" --tasks "$W/tasks/train.jsonl" --out "$OUT/base_train" --n 8 \
-  > "$OUT/base_train.log" 2>&1 || finish failed_baseline_train
+  --levels "$TRAIN_LEVELS" > "$OUT/base_train.log" 2>&1 || finish failed_baseline_train
 
 phase train
 python -m pilot.train --model "$MODEL" --samples "$OUT/base_train/samples.jsonl" --out "$OUT/round1" \
