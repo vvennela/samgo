@@ -2,6 +2,10 @@
 # Pilot orchestrator, run as EC2 user-data on a 4-GPU box (g6e.12xlarge or g5.12xlarge).
 # Baseline -> gate -> one expert-iteration round -> re-test -> report -> S3 -> shutdown.
 # A dead-man timer stops the instance after MAX_MIN minutes no matter what.
+#
+# S3 layout: code/<run>.tgz (input), live/<run>/ (small monitoring files, wiped at start),
+# runs/<run>/ (everything, written only when the run ends with a result). A crash writes
+# only live/<run>/failure.txt, never runs/<run>/.
 set -uo pipefail
 BUCKET=s3://samgo-runs-811269446285
 RUN=${RUN:-pilot-002}
@@ -9,32 +13,46 @@ MAX_MIN=${MAX_MIN:-300}
 MODEL=/opt/models/glimmer
 W=/opt/run
 OUT=$W/out
+LIVE=$BUCKET/live/$RUN
+ARCHIVE=$BUCKET/runs/$RUN
 
 shutdown -h +"$MAX_MIN"
 mkdir -p "$OUT" && cd "$W"
 export HOME=/root PATH=/root/.local/bin:$PATH HF_HUB_ENABLE_HF_TRANSFER=1 PYTHONPATH=$W/code PYTHONUNBUFFERED=1
+aws s3 rm "$LIVE/" --recursive --quiet
 
 log() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$OUT/run.log"; }
 phase() { echo "{\"phase\": \"$1\", \"t\": \"$(date -u +%FT%TZ)\"}" > "$OUT/phase.json"; log "phase: $1"; }
-sync_out() { aws s3 sync "$OUT" "$BUCKET/$RUN/" --quiet --exclude "*/adapter/*" ; }
+sync_live() {
+  # Only small monitoring files; error lines are collected so the full logs never need to leave the box.
+  grep -h -E "Traceback|Error|error:|out of memory|OutOfMemory|Killed" "$OUT"/*.log 2>/dev/null | sort -u | tail -40 > "$OUT/errors.txt"
+  aws s3 sync "$OUT" "$LIVE/" --quiet --exclude "*" --include "phase.json" --include "run.log" --include "gpu.log" \
+    --include "errors.txt" --include "failure.txt" --include "plan.json" --include "*/progress.json" \
+    --include "round1/train_log.jsonl" --include "round1/train_meta.json"
+}
 finish() {
-  phase "${1:-done}"
-  sync_out; aws s3 sync "$OUT" "$BUCKET/$RUN/" --quiet
-  log "shutting down"; sync_out
+  status=${1:-done}
+  phase "$status"
+  case "$status" in
+    done*) aws s3 sync "$OUT" "$ARCHIVE/" --quiet && log "archived to $ARCHIVE" ;;
+    *) newest=$(ls -t "$OUT"/*.log 2>/dev/null | grep -v -E "run.log|gpu.log" | head -1)
+       { echo "status: $status"; echo "log: $newest"; tail -40 "$newest" 2>/dev/null; } > "$OUT/failure.txt" ;;
+  esac
+  log "shutting down"; sync_live
   shutdown -h now
   exit 0
 }
 
-# Heartbeat: GPU stats and every log to S3 once a minute.
+# Heartbeat: GPU stats and monitoring files to S3 once a minute.
 ( while true; do
     nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total --format=csv,noheader \
       | sed "s/^/$(date -u +%T) /" >> "$OUT/gpu.log" 2>/dev/null
-    sync_out
+    sync_live
     sleep 60
   done ) &
 
 phase setup
-aws s3 cp "$BUCKET/$RUN/code.tgz" /tmp/code.tgz && mkdir -p "$W/code" && tar xzf /tmp/code.tgz -C "$W/code" || finish failed_code_download
+aws s3 cp "$BUCKET/code/$RUN.tgz" /tmp/code.tgz && mkdir -p "$W/code" && tar xzf /tmp/code.tgz -C "$W/code" || finish failed_code_download
 cp -r "$W/code/runs/pilot/tasks" "$W/tasks"
 curl -LsSf https://astral.sh/uv/install.sh | sh >> "$OUT/setup.log" 2>&1
 uv venv /opt/venv --python 3.12 >> "$OUT/setup.log" 2>&1
