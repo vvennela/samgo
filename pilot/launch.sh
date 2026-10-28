@@ -13,7 +13,7 @@ mkdir -p runs/pilot
 exec > >(tee -a "$LOG") 2>&1
 sed "s/^RUN=.*/RUN=$RUN/" "$SRC" > "$USERDATA"
 for round in $(seq 1 "$ROUNDS"); do
-  for type in g6e.12xlarge g5.12xlarge g6.12xlarge; do
+  for type in ${TYPES:-g6e.12xlarge g5.12xlarge g6.12xlarge}; do
     out=$(aws ec2 run-instances --region us-west-2 --image-id "$IMAGE" --instance-type "$type" --count 1 \
       --iam-instance-profile Name=SamgoPilotEC2 --instance-initiated-shutdown-behavior stop \
       --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=400,VolumeType=gp3,Iops=6000,Throughput=1000,DeleteOnTermination=true}' \

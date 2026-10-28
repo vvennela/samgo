@@ -74,8 +74,31 @@ def job(run: str = RUN, knobs: dict | None = None) -> int:
     return rc
 
 
+@app.function(gpu="H200:2", volumes={"/models": models, "/runs": runs}, cpu=8, memory=64 * 1024, timeout=58 * 60)
+def grpo(run: str, args: str = "") -> int:
+    """Online GRPO: vLLM rollouts on GPU 0, the LoRA policy on GPU 1. Hard-capped by the timeout."""
+    stop = threading.Event()
+
+    def committer():
+        while not stop.wait(60):
+            runs.commit()
+
+    threading.Thread(target=committer, daemon=True).start()
+    cmd = (f"python -m pilot.grpo --model /models/glimmer --tasks /code/tasks/train.jsonl --out /runs/{run} "
+           f"--roll-gpus 0 --train-gpus 1 {args}")
+    rc = subprocess.run(["bash", "-c", cmd], cwd="/code",
+                        env={**os.environ, "PYTHONPATH": "/code", "PYTHONUNBUFFERED": "1",
+                             "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}).returncode
+    stop.set()
+    runs.commit()
+    return rc
+
+
 @app.local_entrypoint()
-def main(run: str = RUN, knobs: str = "{}"):
+def main(run: str = RUN, knobs: str = "{}", mode: str = "job", args: str = ""):
+    if mode == "grpo":
+        print(f"[job] exit {grpo.remote(run, args)}")
+        return
     import json
 
     download.remote()
