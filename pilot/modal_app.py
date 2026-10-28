@@ -1,7 +1,8 @@
 """Pilot phase 2 on Modal: same job script as Baseten, on 2xH100.
 
-    modal run --detach pilot/modal_app.py     # download (CPU, cached in a volume), then the GPU job
-    modal volume get samgo-runs pilot-002 runs/pilot/pilot-002/modal
+    modal run --detach pilot/modal_app.py                       # pilot-002 settings
+    modal run --detach pilot/modal_app.py --run pilot-003 --knobs '{"TRAIN_PER_LEVEL": "0", ...}'
+    modal volume get samgo-runs <run> runs/pilot/<run>/modal
 
 The model lives in the samgo-models volume, so a retry skips the 60 GB download. Results go to
 the samgo-runs volume and are committed once a minute, so a crash keeps every finished step.
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import modal
 
-RUN = "pilot-002"
+RUN = "pilot-002"  # the baseline run whose AWS plan ships in the image
 ROOT = Path(__file__).resolve().parent.parent
 
 image = (
@@ -55,9 +56,9 @@ def download() -> str:
     return size
 
 
-@app.function(gpu="H100:2", volumes={"/models": models, "/runs": runs}, cpu=16, memory=200 * 1024,
+@app.function(gpu="H100:2", volumes={"/models": models, "/runs": runs}, cpu=16, memory=64 * 1024,
               timeout=170 * 60)
-def job() -> int:
+def job(run: str = RUN, knobs: dict | None = None) -> int:
     stop = threading.Event()
 
     def committer():  # results survive a crash or timeout
@@ -65,7 +66,8 @@ def job() -> int:
             runs.commit()
 
     threading.Thread(target=committer, daemon=True).start()
-    env = {**os.environ, "SKIP_SETUP": "1", "MODEL": "/models/glimmer", "SAVE": f"/runs/{RUN}", "BT_NUM_GPUS": "2"}
+    env = {**os.environ, "SKIP_SETUP": "1", "MODEL": "/models/glimmer", "SAVE": f"/runs/{run}", "BT_NUM_GPUS": "2",
+           **(knobs or {})}
     rc = subprocess.run(["bash", "/code/pilot/baseten/job.sh"], cwd="/code", env=env).returncode
     stop.set()
     runs.commit()
@@ -73,7 +75,9 @@ def job() -> int:
 
 
 @app.local_entrypoint()
-def main():
+def main(run: str = RUN, knobs: str = "{}"):
+    import json
+
     download.remote()
-    rc = job.remote()
+    rc = job.remote(run, json.loads(knobs))
     print(f"[job] exit {rc}")

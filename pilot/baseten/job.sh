@@ -2,6 +2,7 @@
 # Pilot phase 2 on one 2xH100 node (Baseten or Modal): same-hardware baseline, round-1 training, re-test, report.
 # Every step's output is copied to $SAVE (Baseten checkpoint dir or a Modal volume) as soon as it exists.
 # SKIP_SETUP=1 when the image already has the packages and the model is already at $MODEL.
+# Round knobs: BASE_FROM (reuse a same-hardware base_test dir), TRAIN_N, TRAIN_PER_LEVEL (0 = all), CAP, MAX_EX, LR.
 set -uo pipefail
 CODE=$(pwd)
 OUT=/opt/run/out
@@ -40,12 +41,20 @@ du -sh "$MODEL"
 fi
 
 cp "$CODE/aws_plan.json" "$OUT/plan.json"
-echo '{"base_train": {"n": 4, "per_level": 25}}' > /opt/run/overrides.json
+PER_LEVEL=${TRAIN_PER_LEVEL:-25}
+python -c "import json; print(json.dumps({'base_train': {'n': ${TRAIN_N:-4}, **({'per_level': $PER_LEVEL} if $PER_LEVEL else {})}}))" \
+  > /opt/run/overrides.json
+log "overrides: $(cat /opt/run/overrides.json); cap ${CAP:-2}, max examples ${MAX_EX:-400}, lr ${LR:-1e-4}"
 TP=${BT_NUM_GPUS:-2}
-step base_test python -m pilot.sample --model "$MODEL" --tasks "$CODE/tasks/test_sub.jsonl" --out "$OUT/base_test" --n 4 --tp "$TP" --chunk 25
+if [ -n "${BASE_FROM:-}" ]; then
+  cp -r "$BASE_FROM" "$OUT/base_test" && log "reusing baseline from $BASE_FROM ($(wc -l < "$OUT/base_test/samples.jsonl") samples)"
+else
+  step base_test python -m pilot.sample --model "$MODEL" --tasks "$CODE/tasks/test_sub.jsonl" --out "$OUT/base_test" --n 4 --tp "$TP" --chunk 25
+fi
 step base_train python -m pilot.sample --model "$MODEL" --tasks "$CODE/tasks/train.jsonl" --out "$OUT/base_train" --n 4 --tp "$TP" \
-  --levels 5,10,20 --chunk 25
-step train python -m pilot.train --model "$MODEL" --samples "$OUT/base_train/samples.jsonl" --out "$OUT/round1" --cap 2 --max-examples 400
+  --levels 5,10,20 --chunk 50
+step train python -m pilot.train --model "$MODEL" --samples "$OUT/base_train/samples.jsonl" --out "$OUT/round1" --cap "${CAP:-2}" \
+  --max-examples "${MAX_EX:-400}" --lr "${LR:-1e-4}"
 cp -r "$OUT/round1/adapter" "$SAVE/adapter"
 if ! ( step r1_test python -m pilot.sample --model "$MODEL" --tasks "$CODE/tasks/test_sub.jsonl" --out "$OUT/r1_test" --n 4 \
           --tp "$TP" --chunk 25 --lora "$OUT/round1/adapter" ); then
