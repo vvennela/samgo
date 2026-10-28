@@ -1,8 +1,8 @@
 """Sample K completions per task with vLLM and score each with the verifier.
 
 Glimmer writes reasoning to a `to=self` channel ending in <|eom|>, then the
-answer ending in <|eot|>. Both are in generation_config's eos list, so we
-ignore it and stop only on <|eot|>, keeping special tokens to split channels.
+answer ending in <|eot|>. We stop on <|eot|> or <|end_of_text|> only, never on
+<|eom|>, and keep special tokens so the channels can be split.
 
 Writes <out>/samples.jsonl (one row per completion, with token ids for
 training) and <out>/progress.json after every chunk, for monitoring.
@@ -35,6 +35,13 @@ def answer_text(completion: str) -> str:
             continue
         answer = body.split("<|eot|>")[0].split("<|eom|>")[0]
     return answer
+
+
+def prompt_ids(tok, messages: list[dict], reasoning: str) -> list[int]:
+    """Chat-template token ids. Render to text first: in transformers 5, tokenize=True returns
+    a dict, not ids. The template already writes the BOS token, so don't add special tokens again."""
+    text = tok.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, reasoning_strength=reasoning)
+    return list(tok(text, add_special_tokens=False)["input_ids"])
 
 
 def score_one(args):
@@ -89,7 +96,7 @@ def main() -> None:
         print(f"[sample] retrying without video limit: {e}", flush=True)
         llm = LLM(limit_mm_per_prompt={"image": 0}, **common)
     params = SamplingParams(n=args.n, temperature=1.0, top_p=0.95, top_k=64, max_tokens=args.max_tokens,
-                            stop_token_ids=[eot], ignore_eos=True, skip_special_tokens=False)
+                            stop_token_ids=[eot, tok.eos_token_id], ignore_eos=True, skip_special_tokens=False)
     lora = LoRARequest("round1", 1, args.lora) if args.lora else None
 
     started, done, passed, total = time.time(), 0, 0, 0
@@ -98,14 +105,15 @@ def main() -> None:
     with open(args.out / "samples.jsonl", "w") as f, ProcessPoolExecutor() as pool:
         for c in range(0, len(rows), args.chunk):
             chunk = rows[c:c + args.chunk]
-            prompts = [tok.apply_chat_template(r["messages"], add_generation_prompt=True, tokenize=True,
-                                               reasoning_strength=args.reasoning) for r in chunk]
+            prompts = [prompt_ids(tok, r["messages"], args.reasoning) for r in chunk]
             outputs = llm.generate([TokensPrompt(prompt_token_ids=p) for p in prompts], params, lora_request=lora)
             jobs, meta = [], []
             for r, p, o in zip(chunk, prompts, outputs):
                 for s in o.outputs:
                     ids = list(s.token_ids)
-                    if not ids or ids[-1] != eot:
+                    if ids and ids[-1] == tok.eos_token_id:
+                        ids[-1] = eot  # train on the chat template's turn end
+                    elif not ids or ids[-1] != eot:
                         ids = ids + ([] if s.finish_reason == "length" else [eot])
                     text = tok.decode(ids, skip_special_tokens=False)
                     jobs.append((r["target"], r["given"], text))

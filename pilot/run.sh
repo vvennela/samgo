@@ -4,7 +4,7 @@
 # A dead-man timer stops the instance after MAX_MIN minutes no matter what.
 set -uo pipefail
 BUCKET=s3://samgo-runs-811269446285
-RUN=${RUN:-pilot-001}
+RUN=${RUN:-pilot-002}
 MAX_MIN=${MAX_MIN:-300}
 MODEL=/opt/models/glimmer
 W=/opt/run

@@ -9,7 +9,7 @@ for round in $(seq 1 "$ROUNDS"); do
       --iam-instance-profile Name=SamgoPilotEC2 --instance-initiated-shutdown-behavior stop \
       --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=400,VolumeType=gp3,Iops=6000,Throughput=1000,DeleteOnTermination=true}' \
       --metadata-options HttpTokens=required,HttpEndpoint=enabled \
-      --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=samgo-pilot-001},{Key=project,Value=samgo}]' \
+      --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=samgo-pilot-002},{Key=project,Value=samgo}]' \
                            'ResourceType=volume,Tags=[{Key=project,Value=samgo}]' \
       --user-data file://pilot/run.sh --query 'Instances[0].InstanceId' --output text 2>&1)
     case "$out" in
