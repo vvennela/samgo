@@ -2,7 +2,7 @@
 
 *LEGO comes from the Danish* leg godt, *"play well." SAMgo comes from* saml godt, *"assemble well," built on Meta's SAM.*
 
-Photo → buildable LEGO-compatible model.
+Photo → buildable LEGO-compatible model that **works**: a photo of a car becomes a brick car that rolls.
 
 Meta Global AI Developer Hackathon · Indie track · Theme: Push the Frontier
 Submission: **Wed Nov 4, 6:00 PM PT**
@@ -19,14 +19,15 @@ LEGO is a clean testbed for this: a fixed part catalog, exact geometry, and vali
 
 ## 2. Solution (bird's eye)
 
-1. **See it.** Meta's SAM models turn a photo of an object into a 3D shape.
-2. **Define the target.** The shape becomes a LEGO-scale target: a grid of what should be filled, and in which color.
-3. **Build it.** A builder proposes a brick-by-brick design for that target.
-4. **Check it.** A verifier, written as plain code, checks every design: real parts, no overlaps, everything connected and grounded, close enough to the target. Only designs that pass are shown or kept.
-5. **Explain it.** Passing designs become step-by-step instructions and a parts list.
-6. **Learn it (research).** An open-weight Meta model (size TBD) is trained to be the builder, using only the verifier as its training signal: generate designs, keep the ones that pass, train on them, repeat.
+1. **See it.** SAM 3D turns a photo of an object into a 3D shape. SAM 3.1 also segments its functional parts (wheels), giving their positions and sizes.
+2. **Understand it.** Muse Spark infers what the object must *do*: "car → 4 wheels on 2 axles, rotating side to side."
+3. **Define the target.** The shape becomes a LEGO-scale target: a grid of what should be filled, and in which color, plus the function spec.
+4. **Build it.** A builder proposes a brick-by-brick design: a body for the shape, and a chassis, axles and wheels for the function.
+5. **Check it.** A verifier, written as plain code, checks every design in three levels: **structure** (real parts, no overlaps, connected, grounded, on target), **stability** (force balance: it doesn't collapse), and **function** (axles turn in round holes, wheels clear the body, wheels are the lowest contact). Only designs that pass are shown or kept.
+6. **Explain it.** Passing designs become step-by-step instructions and a parts list.
+7. **Learn it (research).** An open-weight Meta model is trained to be the builder using only the verifier as its training signal (no human designs, no supervised warm start): expert iteration with a reverse curriculum over structural and functional tasks.
 
-The product works without training (an algorithmic builder plus a Muse Spark agent). Training is the research claim: *a model can learn to build physically valid structures from a verifier alone.*
+The product works without training (an algorithmic builder plus a Muse Spark agent, with the verifier in the loop). Two claims are new: **a build that works**, not just one that looks right; and **a model that learns to build from a verifier alone**. Prior photo-to-brick and learned brick generators produce static shapes and train on datasets of designs.
 
 ---
 
@@ -110,16 +111,16 @@ The product works without training (an algorithmic builder plus a Muse Spark age
 
 | Day | Focus | Stages |
 |---|---|---|
-| **Wed 10/28** | Photo → target, and the verifier | S1, S2, S3 |
-| **Thu 10/29** | Algorithmic builder, instructions, end-to-end app | S4, S5, S6 |
-| **Fri 10/30** | Training harness + baseline numbers | S7 |
-| **Sat 10/31** | First training run → **go/no-go** | S8 |
-| **Sun 11/1** | More rounds; trained model as alternate builder | S8 → S9 |
-| **Mon 11/2** | Ablation, final evals, physical build | S9, S10 |
+| **Wed 10/28** | Structural verifier; photo → target; algorithmic builder; functional parts + function verifier | S1, S2, S3a ✅, S4, Parts, S3c |
+| **Thu 10/29** | Stability verifier; rolling-car builder; curriculum generator; GPU up; harness + baseline | S3b, S4f, S7 |
+| **Fri 10/30** | One training run, structural + functional tasks mixed → **go/no-go** | S8 + S9 |
+| **Sat 10/31** | More rounds; function spec; instructions | S8, S2.5, S5 |
+| **Sun 11/1** | End-to-end app; trained model as alternate builder | S6 |
+| **Mon 11/2** | Final evals, physical rolling car | S10 |
 | **Tue 11/3** | Demo video, write-up, repo cleanup | — |
 | **Wed 11/4** | Buffer · submit by 6 PM PT · post on X | — |
 
-If S8 fails, the product (S1–S6) still ships and training is reported as a partial result.
+If S8 fails, the product (S1–S6) still ships and training is reported as a partial result. If behind, cut in order: hollowing (S2) → DPO round → per-brick stability scores (keep pass/fail). Protect the rolling car (S3c, S4f, S10) and S8 + S9.
 
 ---
 
@@ -129,18 +130,25 @@ Each stage proves exactly one thing. Each one depends only on stages before it.
 
 | # | Proves | Done when |
 |---|---|---|
-| **S1** | A photo can become a usable 3D shape. | 5 of 5 test photos produce a mesh you'd recognize as the object. |
-| **S2** | A 3D shape can become a LEGO-scale target that still looks like the object. | Voxel renders of the S1 meshes are recognizable at the chosen size. |
-| **S3** | We can reliably tell a valid build from an invalid one. | Verifier agrees with every hand-made good/bad test build (invalid part, out of bounds, overlap, floating, disconnected, off-target). ✅ `samgo/verifier.py`, 33 tests |
-| **S4** | An algorithm can turn a target into a valid build. | ≥ 80% of targets produce a build that passes the verifier. |
+| **S1** | A photo can become a usable 3D shape, plus where its functional parts are. | 5 of 5 test photos produce a recognizable mesh; for vehicles, SAM 3.1 also returns a mask per wheel (positions and diameters come from these masks, not the mesh). |
+| **S2** | A 3D shape can become a LEGO-scale target that still looks like the object. | Renders are recognizable at the chosen size, without patchy colors (cluster colors first, fold rare ones). Large models are hollowed with internal pillars. |
+| **S2.5** | A Meta model can infer what an object must *do*. | Muse Spark returns the right function spec for 5 of 5 photos (e.g. `car → 4 wheels, 2 axles, side-to-side axis`). |
+| **S3a** | We can tell a structurally valid build from an invalid one. | Verifier agrees with every hand-made good/bad test build (invalid part, out of bounds, overlap, floating, disconnected, off-target). ✅ `samgo/verifier.py`, 33 tests |
+| **S3b** | We can tell a build that stands from one that collapses. | Force-balance check (linear program, scipy) agrees with hand-made stable/unstable cases, including one-stud overhangs; < 1 s under 300 pieces; per-brick scores. |
+| **S3c** | We can tell a car that rolls from one that doesn't. | Catches: axle through an axle-shaped hole (locked), wheel sweep blocked by the body, body lower than the wheels, misaligned axles. |
+| **Parts** | Functional parts fit the stud grid. | Technic brick with round hole (studded, on the grid), axle, and wheel+tire verify correctly. |
+| **S4** | An algorithm can turn a target into a valid, stable build. | ≥ 80% of procedural targets pass S3a + S3b. Greedy layer tiling (seam and support scoring), then repair: recombine → bridge → remove, weakest bricks first. |
+| **S4f** | An algorithm can build a car that rolls. | A car target passes S3c: round-hole chassis at the wheel positions, axles, wheels, body on top. |
 | **S5** | A valid build can become instructions a person can follow. | Someone builds a small model from the generated steps without help. |
-| **S6** | A user can go from photo to instructions with no manual steps. | A new photo goes through the app end to end, agent included. |
-| **S7** | An open model can attempt builds, and we can measure how well it does. | Baseline pass rate recorded on a fixed held-out set of targets. |
-| **S8** | Training against the verifier makes the model better at building. | **Trained model ≥ +5 points absolute pass rate over baseline.** |
-| **S9** | Self-generated harder targets beat plain training. | Self-play run beats plain expert iteration at equal compute. *(stretch)* |
-| **S10** | It's real. | A physical LEGO build from the instructions, next to the original object. |
+| **S6** | A user can go from photo to a working build with no manual steps. | A new car photo goes through the app end to end, with the verifier rejecting and rolling back bad steps. |
+| **S7** | An open model can attempt builds, and we can measure how well it does. | Baseline on a frozen set of 200+ targets: % valid, % stable, IoU, rollbacks per build. Piece encoding (absolute vs. relative to parent) decided. |
+| **S8** | Training against the verifier makes the model better at building. | **Trained model ≥ +5 points absolute full-build pass rate over baseline**, or a clear drop in rollbacks per build. Expert iteration: K samples per target, cap kept per target, fresh targets every round, retrain from base each round. |
+| **S9** | The model learns function, not just shape. | In the same run as S8, functional tasks (put back a car's wheels and axles) are mixed into the curriculum; the trained model's functional pass rate beats baseline. |
+| **S10** | It's real. | A brick car built from the instructions rolls across a table, next to the original object. |
 
 S1–S6 = the product. S7–S9 = the research. S10 = the demo.
+
+**Curriculum (S8 + S9).** Two task families, structural (fill a target) and functional (wheels, axles), each with "pieces missing" levels from the last 1 up to all. Every batch mixes levels, weighted toward those where the model succeeds 10–90% of the time; levels advance on measured success, not on a fixed schedule. Out of scope: steering, gears, other mechanisms.
 
 ---
 
