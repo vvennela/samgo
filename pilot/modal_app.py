@@ -18,7 +18,9 @@ RUN = "pilot-002"
 ROOT = Path(__file__).resolve().parent.parent
 
 image = (
-    modal.Image.debian_slim(python_version="3.12")
+    # A CUDA devel image, not debian_slim: vLLM's FlashInfer JIT-compiles kernels and needs nvcc (torch is cu130).
+    modal.Image.from_registry("nvidia/cuda:13.0.1-devel-ubuntu24.04", add_python="3.12")
+    .entrypoint([])
     .apt_install("procps")
     .pip_install("vllm==0.32.0", "transformers==5.19.0", "peft==0.21.2", "accelerate", "hf_transfer",
                  "huggingface_hub[cli]", "numpy", "scipy")
@@ -31,6 +33,14 @@ image = (
 models = modal.Volume.from_name("samgo-models", create_if_missing=True)
 runs = modal.Volume.from_name("samgo-runs", create_if_missing=True)
 app = modal.App("samgo-pilot", image=image)
+
+
+@app.function(cpu=2, timeout=10 * 60)
+def check() -> None:
+    """CPU-only image check (no GPU spend): nvcc present and the pinned stack imports."""
+    subprocess.run(["bash", "-c", "nvcc --version | tail -1; python -c 'import vllm, torch, transformers, peft; "
+                    "print(\"vllm\", vllm.__version__, \"torch\", torch.__version__, \"cuda\", torch.version.cuda)'"],
+                   check=True)
 
 
 @app.function(volumes={"/models": models}, cpu=8, memory=16 * 1024, timeout=60 * 60)
