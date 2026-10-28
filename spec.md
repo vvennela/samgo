@@ -72,6 +72,19 @@ The product works without training (an algorithmic builder plus a Muse Spark age
    (model proposes variants it can barely solve)
 ```
 
+### Part model & build contract
+
+- **Grid.** x, y in studs; z in plate heights (a brick is 3 plates). Targets use the same grid, so voxelization (S2) produces plate-height layers.
+- **Palette: 22 rectangular parts.** Bricks and plates in 1×1, 1×2, 1×3, 1×4, 1×6, 1×8, 2×2, 2×3, 2×4, 2×6, 2×8. No tiles, slopes, or special parts.
+- **Parts are written by size, not ID.** No rotation field: a 4×2 is a 2×4 turned sideways. LDraw IDs are used only for export (parts list, `.ldr`).
+  ```json
+  {"w": 2, "l": 4, "type": "plate", "x": 3, "y": 5, "z": 7, "color": "red"}
+  ```
+- **Colors.** 11 fixed LDraw colors. Color never affects validity, only target match.
+- **Connected** means one part sits directly on another (top face meets bottom face) and they share at least one stud. Side contact doesn't count.
+- **A build passes when:** every part is in the palette and in bounds, nothing overlaps, there is no floating part (all parts connect down to z = 0), everything is one structure, and it matches the target (IoU ≥ 0.85 and color accuracy ≥ 0.80 by default; curriculum tasks require exact occupancy). Not checked: clutch strength, balance, build order.
+- **Curricula.** Two axes, raised one at a time: pieces missing (last 1, 2, 5, 10, … all) and part choice (size given → near-miss options → any of the 22). Any completion the verifier accepts counts, not only the original parts.
+
 ---
 
 ## 4. User flow (bird's eye)
@@ -118,7 +131,7 @@ Each stage proves exactly one thing. Each one depends only on stages before it.
 |---|---|---|
 | **S1** | A photo can become a usable 3D shape. | 5 of 5 test photos produce a mesh you'd recognize as the object. |
 | **S2** | A 3D shape can become a LEGO-scale target that still looks like the object. | Voxel renders of the S1 meshes are recognizable at the chosen size. |
-| **S3** | We can reliably tell a valid build from an invalid one. | Verifier agrees with every hand-made good/bad test build (overlap, floating, disconnected, off-target). |
+| **S3** | We can reliably tell a valid build from an invalid one. | Verifier agrees with every hand-made good/bad test build (invalid part, out of bounds, overlap, floating, disconnected, off-target). ✅ `samgo/verifier.py`, 33 tests |
 | **S4** | An algorithm can turn a target into a valid build. | ≥ 80% of targets produce a build that passes the verifier. |
 | **S5** | A valid build can become instructions a person can follow. | Someone builds a small model from the generated steps without help. |
 | **S6** | A user can go from photo to instructions with no manual steps. | A new photo goes through the app end to end, agent included. |
