@@ -6,13 +6,15 @@ ROUNDS=${ROUNDS:-60}
 WAIT=${WAIT:-120}
 RUN=${RUN:?set RUN, e.g. RUN=pilot-002}
 USERDATA=$(mktemp)
+IMAGE=${IMAGE:-ami-0ca70308d230e8a6e}   # base DLAMI; a pilot image to resume
+SRC=${SRC:-pilot/run.sh}               # user-data script
 LOG=runs/pilot/launch_$RUN.log
 mkdir -p runs/pilot
 exec > >(tee -a "$LOG") 2>&1
-sed "s/^RUN=.*/RUN=$RUN/" pilot/run.sh > "$USERDATA"
+sed "s/^RUN=.*/RUN=$RUN/" "$SRC" > "$USERDATA"
 for round in $(seq 1 "$ROUNDS"); do
   for type in g6e.12xlarge g5.12xlarge g6.12xlarge; do
-    out=$(aws ec2 run-instances --region us-west-2 --image-id ami-0ca70308d230e8a6e --instance-type "$type" --count 1 \
+    out=$(aws ec2 run-instances --region us-west-2 --image-id "$IMAGE" --instance-type "$type" --count 1 \
       --iam-instance-profile Name=SamgoPilotEC2 --instance-initiated-shutdown-behavior stop \
       --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=400,VolumeType=gp3,Iops=6000,Throughput=1000,DeleteOnTermination=true}' \
       --metadata-options HttpTokens=required,HttpEndpoint=enabled \
