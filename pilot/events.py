@@ -39,15 +39,15 @@ def emit(msg: str) -> None:
     print(f"[{datetime.now(timezone.utc):%H:%M:%S}] {msg}", flush=True)
 
 
-def instance() -> tuple[str, str] | None:
+def instance() -> tuple[str, str, str] | None:
     out = sh("aws", "ec2", "describe-instances", "--region", "us-west-2",
              "--filters", f"Name=tag:Name,Values=samgo-{RUN}",
-             "--query", "Reservations[].Instances[].[InstanceId,State.Name,LaunchTime]", "--output", "text")
+             "--query", "Reservations[].Instances[].[InstanceId,State.Name,LaunchTime,InstanceType]", "--output", "text")
     rows = [line.split("\t") for line in out.strip().splitlines() if line.strip()]
     if not rows:
         return None
     rows.sort(key=lambda r: r[2])
-    return rows[-1][0], rows[-1][1]
+    return rows[-1][0], rows[-1][1], rows[-1][3]
 
 
 def main() -> None:
@@ -58,10 +58,10 @@ def main() -> None:
     while True:
         inst = instance()
         if inst:
-            iid, state = inst
+            iid, state, itype = inst
             if st.get("instance") != iid:
-                st["instance"] = iid
-                emit(f"instance launched: {iid}")
+                st["instance"], st["instance_type"] = iid, itype
+                emit(f"instance launched: {iid} ({itype})")
             if st.get("state") != state:
                 st["state"] = state
                 emit(f"instance {iid} is {state}")
@@ -80,6 +80,9 @@ def main() -> None:
             key = f"{part}:{p['tasks_done']}"
             if key not in st["chunks"]:
                 st["chunks"][key] = 1
+                st.setdefault("history", []).append({"part": part, "tasks": p["tasks_done"], "of": p["tasks_total"],
+                                                     "pass": p["pass_rate"], "by_level": p.get("pass_rate_by_level", {}),
+                                                     "tok_s": p["tokens_per_s"], "t": time.time()})
                 levels = " ".join(f"{k}={v:.2f}" for k, v in p.get("pass_rate_by_level", {}).items())
                 emit(f"{part} {p['tasks_done']}/{p['tasks_total']} tasks | pass {p['pass_rate']:.3f} | {levels} | "
                      f"{p['mean_completion_tokens']:.0f} tok/sample, {p['tokens_per_s']:.0f} tok/s")
