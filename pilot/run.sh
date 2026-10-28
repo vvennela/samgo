@@ -1,11 +1,11 @@
 #!/bin/bash
-# Pilot orchestrator, run as EC2 user-data on a g6e.12xlarge (4x L40S).
+# Pilot orchestrator, run as EC2 user-data on a 4-GPU box (g6e.12xlarge or g5.12xlarge).
 # Baseline -> gate -> one expert-iteration round -> re-test -> report -> S3 -> shutdown.
 # A dead-man timer stops the instance after MAX_MIN minutes no matter what.
 set -uo pipefail
 BUCKET=s3://samgo-runs-811269446285
 RUN=${RUN:-pilot-001}
-MAX_MIN=${MAX_MIN:-240}
+MAX_MIN=${MAX_MIN:-300}
 MODEL=/opt/models/glimmer
 W=/opt/run
 OUT=$W/out
@@ -69,7 +69,7 @@ python -m pilot.sample --model "$MODEL" --tasks "$W/tasks/train.jsonl" --out "$O
 
 phase train
 python -m pilot.train --model "$MODEL" --samples "$OUT/base_train/samples.jsonl" --out "$OUT/round1" \
-  --cap 1 --max-examples 600 > "$OUT/train.log" 2>&1 || finish failed_train
+  --cap 1 --max-examples ${MAX_EX:-400} > "$OUT/train.log" 2>&1 || finish failed_train
 
 phase round1_test
 if ! python -m pilot.sample --model "$MODEL" --tasks "$W/tasks/test.jsonl" --out "$OUT/r1_test" --n 8 \
