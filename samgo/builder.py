@@ -92,8 +92,10 @@ def _score(layout: _Layout, x: int, y: int, z: int, w: int, l: int, h: int) -> f
     return w * l * (1 + 0.3 * (h == 3)) + 8 * joins + 3 * crossings + 4 * supported + 4 * grounded - 6 * aligned
 
 
-def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool) -> list[dict]:
+def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, given: list[dict] = ()) -> list[dict]:
     layout = _Layout(target)
+    for p in given:  # pre-placed pieces (e.g. a car's chassis) are built around, never changed
+        layout.place(p["w"], p["l"], p["type"], p["x"], p["y"], p["z"], COLOR_INDEX[p["color"]])
     X, Y, Z = target.shape
     kinds = ["brick", "plate"] if bricks else ["plate"]
     for z in range(Z):
@@ -124,23 +126,27 @@ def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool) -
     return layout.pieces
 
 
-def _repair(pieces: list[dict], target: np.ndarray, config: MatchConfig) -> tuple[list[dict], Report]:
+def _repair(pieces: list[dict], target: np.ndarray, config: MatchConfig, keep: int = 0) -> tuple[list[dict], Report]:
     report = verify(pieces, target, config=config)
-    drop = {i for issue in report.issues if issue.code in ("floating", "disconnected") for i in issue.pieces}
+    drop = {i for issue in report.issues if issue.code in ("floating", "disconnected") for i in issue.pieces if i >= keep}
     if not drop or "overlap" in report.codes:
         return pieces, report
     kept = [p for i, p in enumerate(pieces) if i not in drop]
     return kept, verify(kept, target, config=config)
 
 
-def build(target: np.ndarray, attempts: int = 8, seed: int = 0, config: MatchConfig = MatchConfig()) -> Build:
-    """Return the best of several layouts: passing first, then highest IoU, then fewest pieces."""
+def build(target: np.ndarray, attempts: int = 8, seed: int = 0, config: MatchConfig = MatchConfig(),
+          given: list[dict] = ()) -> Build:
+    """Return the best of several layouts: passing first, then highest IoU, then fewest pieces.
+
+    `given` pieces come first in the result and are kept as they are; the target must contain their cells.
+    """
     rng = np.random.default_rng(seed)
     best: Build | None = None
     for attempt in range(attempts):
         # Attempt 0 is deterministic; later ones randomize scans and ties, and some use plates only.
-        pieces = _layout(target, None if attempt == 0 else rng, bricks=attempt % 4 != 3)
-        pieces, report = _repair(pieces, target, config)
+        pieces = _layout(target, None if attempt == 0 else rng, bricks=attempt % 4 != 3, given=list(given))
+        pieces, report = _repair(pieces, target, config, keep=len(given))
         candidate = Build(pieces, report, attempt)
         if best is None or _rank(candidate) > _rank(best):
             best = candidate
