@@ -84,7 +84,7 @@ def describe(report: Report, given: list, added: list, target: np.ndarray) -> st
             pieces = given + added
             lines.append("- Not supported (a piece connects only to one directly below or above that covers a shared "
                          "(x, y) stud, or it must sit at z=0): "
-                         + ", ".join(_own(issue.pieces, given, added, lambda i: _below(pieces, i, target.shape))))
+                         + ", ".join(_own(issue.pieces, given, added, lambda i: _below(pieces, i, target))))
         elif issue.code == "disconnected":
             lines.append("- These stand on the ground but are not joined to the main build through stacked pieces: "
                          + ", ".join(_own(issue.pieces, given, added)))
@@ -110,14 +110,23 @@ def describe(report: Report, given: list, added: list, target: np.ndarray) -> st
     return "\n".join(lines)
 
 
-def _below(pieces: list, i: int, shape: tuple) -> str:
-    """Where the build under piece i actually ends, so a wrong z is visible."""
+def _below(pieces: list, i: int, target: np.ndarray) -> str:
+    """Why piece i has no support, in terms the model can act on."""
     try:
         p = parse_piece(pieces[i])
     except PartError:
         return ""
+    shape = target.shape
     built, _ = _occupancy(pieces[:i] + pieces[i + 1:], shape)
-    column = built[p.cells[0], p.cells[1], : max(min(p.z, shape[2]), 0)]
+    xs, ys = p.cells[0], p.cells[1]
+    if 0 < p.z <= shape[2]:
+        wanted_under = target[xs, ys, p.z - 1] > 0
+        if not wanted_under.any():  # the target overhangs here: nothing may ever sit below this piece
+            return " [overhang: no target cell under it, so it must be a longer piece that also covers a supported stud]"
+        if (empty := wanted_under & ~built[xs, ys, p.z - 1]).any():
+            cells = " ".join(f"({xs.start + x},{ys.start + y})" for x, y in zip(*np.nonzero(empty)))
+            return f" [target cells under it at z={p.z - 1} are still empty: {cells}]"
+    column = built[xs, ys, : max(min(p.z, shape[2]), 0)]
     filled = np.nonzero(column.any(axis=(0, 1)))[0]
     if not len(filled):
         return " [nothing under it]"

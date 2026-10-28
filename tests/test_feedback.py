@@ -28,7 +28,7 @@ def test_floating_piece_is_named_by_its_answer_number():
     given = [brick(0, 0, 0)]
     added = [brick(2, 0, 3, type="plate")]
     text = check(given, added, target)
-    assert "Not supported" in text and "#1 2x2 plate at (2,0,3) [nothing under it]" in text
+    assert "Not supported" in text and "#1 2x2 plate at (2,0,3) [overhang" in text
 
 
 def test_floating_piece_one_layer_too_high_shows_the_real_top():
@@ -36,7 +36,7 @@ def test_floating_piece_one_layer_too_high_shows_the_real_top():
     target[:, :, 0:4] = RED
     added = [brick(0, 0, 0), brick(0, 0, 4, type="plate")]  # brick tops out at z=3, plate placed at z=4
     target[:, :, 4] = RED
-    assert "[build under it tops out at z=3]" in check([], added, target)
+    assert "target cells under it at z=3 are still empty: (0,0) (0,1) (1,0) (1,1)" in check([], added, target)
 
 
 def test_missing_cells_are_listed_by_layer():
@@ -61,3 +61,9 @@ def test_empty_answer_and_retry_wording():
     target = np.full((2, 2, 3), RED)
     assert "no pieces" in describe(verify([], target, config=EXACT), [], [], target)
     assert "complete corrected list" in retry_message("- x")
+
+
+def test_floating_piece_over_unbuilt_target_cells_names_them():
+    target = np.full((2, 2, 4), RED)
+    added = [brick(0, 0, 0, w=1), brick(1, 0, 3, w=1, type="plate")]  # plate over the x=1 column, never built
+    assert "target cells under it at z=2 are still empty: (1,0) (1,1)" in check([], added, target)
