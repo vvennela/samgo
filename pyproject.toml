@@ -3,7 +3,16 @@ name = "samgo"
 version = "0.1.0"
 description = "Photo to buildable LEGO-compatible model"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26"]
+dependencies = [
+    "fal-client>=1.0.3",
+    "meta-sam-parser>=0.1.0",
+    "numpy>=1.26",
+    "openai>=3.40.0",
+    "pillow>=13.0.0",
+    "python-dotenv>=1.2.4",
+    "scipy>=1.17.1",
+    "trimesh>=5.2.0",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]
