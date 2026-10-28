@@ -12,6 +12,18 @@ OUT=$W/out
 MODEL=/opt/models/glimmer
 source /opt/venv/bin/activate
 export HOME=/root PYTHONPATH=$W/code PYTHONUNBUFFERED=1
+shutdown -h +"${MAX_MIN:-150}"   # own dead-man: after a reboot run.sh's timer is gone
+
+# Own heartbeat (run.sh's is gone after a reboot): GPU stats + monitoring files once a minute.
+( while true; do
+    nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total --format=csv,noheader \
+      | sed "s/^/$(date -u +%T) /" >> "$OUT/gpu.log" 2>/dev/null
+    grep -h -E "Traceback|Error|error:|out of memory|OutOfMemory|Killed" "$OUT"/*.log 2>/dev/null | sort -u | tail -40 > "$OUT/errors.txt"
+    aws s3 sync "$OUT" "s3://samgo-runs-811269446285/live/${RUN:-pilot-002}/" --quiet --exclude "*" --include "phase.json" \
+      --include "run.log" --include "gpu.log" --include "errors.txt" --include "plan.json" --include "*/progress.json" \
+      --include "round1/train_log.jsonl" --include "round1/train_meta.json"
+    sleep 60
+  done ) &
 
 log() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$OUT/run.log"; }
 phase() { echo "{\"phase\": \"$1\", \"t\": \"$(date -u +%FT%TZ)\"}" > "$OUT/phase.json"; log "phase: $1"; }
