@@ -25,6 +25,20 @@ from pathlib import Path
 LEN_CONST = 8192  # Dr. GRPO: fixed divisor instead of each sequence's own length
 
 
+def receive(responses, worker, timeout_s: float) -> dict:
+    """Wait for the rollout worker, failing fast if it died instead of waiting out the timeout."""
+    import queue
+
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            return responses.get(timeout=10)
+        except queue.Empty:
+            if not worker.is_alive():
+                raise RuntimeError(f"rollout worker exited with code {worker.exitcode}")
+    raise TimeoutError("rollout worker did not answer in time")
+
+
 def advantages(rewards: list[float]) -> list[float] | None:
     """Reward minus the group mean; None when the group has no contrast."""
     if max(rewards) == min(rewards):
@@ -69,8 +83,8 @@ def main() -> None:
     ctx = mp.get_context("spawn")
     requests, responses = ctx.Queue(), ctx.Queue()
     from pilot.rollout_worker import serve
-    worker = ctx.Process(target=serve, args=(requests, responses, {"gpus": args.roll_gpus, "model": args.model}),
-                         daemon=True)
+    # Not daemonic: vLLM starts its own engine processes, which a daemon may not have.
+    worker = ctx.Process(target=serve, args=(requests, responses, {"gpus": args.roll_gpus, "model": args.model}))
     worker.start()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.train_gpus
 
@@ -95,7 +109,7 @@ def main() -> None:
     opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.0)
     device = next(p.device for p in params)
     print(f"[grpo] trainer ready after {time.time() - started:.0f}s; waiting for vLLM", flush=True)
-    assert responses.get(timeout=1800).get("ready")
+    assert receive(responses, worker, 1800).get("ready")
     print(f"[grpo] vLLM ready after {time.time() - started:.0f}s", flush=True)
 
     rows = [json.loads(line) for line in open(args.tasks)]
@@ -115,7 +129,7 @@ def main() -> None:
             prompts = [prompt_ids(tok, r["messages"], "low") for r in batch]
             requests.put({"prompts": prompts, "n": args.group, "max_tokens": args.max_tokens,
                           "stop": [eot, tok.eos_token_id], "lora_path": adapter, "lora_id": rnd})
-            outputs = responses.get(timeout=3600)["outputs"]
+            outputs = receive(responses, worker, 3600)["outputs"]
             t_roll = time.time() - t0
 
             jobs, meta = [], []
@@ -175,6 +189,9 @@ def main() -> None:
             log.flush()
             print("[grpo] " + json.dumps(row), flush=True)
     requests.put(None)
+    worker.join(timeout=120)
+    if worker.is_alive():
+        worker.terminate()
     print("[grpo] done", flush=True)
 
 
