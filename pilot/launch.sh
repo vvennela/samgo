@@ -1,10 +1,14 @@
 #!/bin/bash
-# Launch exactly one pilot instance, retrying every 10 minutes while 4-GPU capacity is short.
+# Launch exactly one pilot instance, retrying every WAIT seconds while 4-GPU capacity is short.
 # Prints the instance id and exits on the first success; gives up after ROUNDS rounds.
 cd "$(dirname "$0")/.."
-ROUNDS=${ROUNDS:-12}
+ROUNDS=${ROUNDS:-60}
+WAIT=${WAIT:-120}
 RUN=${RUN:?set RUN, e.g. RUN=pilot-002}
 USERDATA=$(mktemp)
+LOG=runs/pilot/launch_$RUN.log
+mkdir -p runs/pilot
+exec > >(tee -a "$LOG") 2>&1
 sed "s/^RUN=.*/RUN=$RUN/" pilot/run.sh > "$USERDATA"
 for round in $(seq 1 "$ROUNDS"); do
   for type in g6e.12xlarge g5.12xlarge g6.12xlarge; do
@@ -20,7 +24,7 @@ for round in $(seq 1 "$ROUNDS"); do
       *) echo "round $round $type: $(echo "$out" | tail -1 | cut -c1-90)" ;;
     esac
   done
-  [ "$round" -lt "$ROUNDS" ] && sleep 600
+  [ "$round" -lt "$ROUNDS" ] && sleep "$WAIT"
 done
 echo "GAVE UP after $ROUNDS rounds $(date -u +%FT%TZ)"
 exit 1

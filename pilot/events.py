@@ -55,7 +55,13 @@ def main() -> None:
     st.setdefault("chunks", {})
     st.setdefault("errors", [])
     idle_since = None
+    launch_log = Path(f"runs/pilot/launch_{RUN}.log")
     while True:
+        if launch_log.exists():  # the local launcher's outcome, the moment it happens
+            for line in launch_log.read_text().splitlines():
+                if line.startswith(("LAUNCHED", "GAVE UP")) and line not in st.setdefault("launch_events", []):
+                    st["launch_events"].append(line)
+                    emit(f"capacity: {line}")
         inst = instance()
         if inst:
             iid, state, itype = inst
@@ -135,7 +141,7 @@ def main() -> None:
             failure = s3("failure.txt").strip()
             print(report or failure or "(no report or failure note in S3)", flush=True)
             return
-        time.sleep(30)
+        time.sleep(30 if st.get("instance") else 10)
 
 
 if __name__ == "__main__":
