@@ -14,13 +14,15 @@ done
 aws ec2 wait instance-running --region us-west-2 --instance-ids "$ID"
 until [ "$(aws ssm describe-instance-information --region us-west-2 --filters Key=InstanceIds,Values="$ID" \
           --query 'InstanceInformationList[0].PingStatus' --output text)" = "Online" ]; do sleep 10; done
-echo '{"phase": "resuming", "t": "'"$(date -u +%FT%TZ)"'"}' | aws s3 cp - "$LIVE/phase.json"
+echo '{"phase": "resuming_train", "t": "'"$(date -u +%FT%TZ)"'"}' | aws s3 cp - "$LIVE/phase.json"
 aws s3 rm "$LIVE/failure.txt" --quiet
 read -r -d '' SCRIPT <<'EOF'
 nvidia-smi --query-gpu=memory.used --format=csv,noheader
-rm -rf /opt/run/out/base_train /opt/run/out/failure.txt
+rm -rf /opt/run/out/failure.txt /opt/run/out/round1 /opt/run/out/train.log
 aws s3 cp s3://samgo-runs-811269446285/code/pilot-002-phase2.sh /opt/run/phase2.sh
-nohup bash /opt/run/phase2.sh > /opt/run/out/phase2.log 2>&1 &
+aws s3 cp s3://samgo-runs-811269446285/code/pilot-002-train.py /opt/run/code/pilot/train.py
+grep -c balanced /opt/run/code/pilot/train.py
+START_AT=train MAX_MIN=110 TRAIN_CAP=2 nohup bash /opt/run/phase2.sh > /opt/run/out/phase2.log 2>&1 &
 sleep 5; pgrep -fl phase2.sh; cat /run/systemd/shutdown/scheduled 2>/dev/null | head -2
 EOF
 CMD=$(aws ssm send-command --region us-west-2 --instance-ids "$ID" --document-name AWS-RunShellScript \

@@ -11,7 +11,7 @@ W=/opt/run
 OUT=$W/out
 MODEL=/opt/models/glimmer
 source /opt/venv/bin/activate
-export HOME=/root PYTHONPATH=$W/code PYTHONUNBUFFERED=1
+export HOME=/root PYTHONPATH=$W/code PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 shutdown -h +"${MAX_MIN:-150}"   # own dead-man: after a reboot run.sh's timer is gone
 
 # Own heartbeat (run.sh's is gone after a reboot): GPU stats + monitoring files once a minute.

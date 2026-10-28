@@ -44,7 +44,8 @@ def select(samples_path: Path, cap: int, seed: int) -> list[dict]:
 
 def load_model(path: str):
     # On GPUs, spread the BF16 model across all of them; CPU (local smoke tests) stays plain float32.
-    kwargs = {"dtype": torch.bfloat16, "device_map": "auto"} if torch.cuda.is_available() else {"dtype": torch.float32}
+    # "balanced", not "auto": auto packed ~21 of 22 GB per A10G with weights and OOM'd in backward.
+    kwargs = {"dtype": torch.bfloat16, "device_map": "balanced"} if torch.cuda.is_available() else {"dtype": torch.float32}
     try:
         from transformers import AutoModelForImageTextToText as Auto
         return Auto.from_pretrained(path, **kwargs)
@@ -103,13 +104,15 @@ def main() -> None:
     ap.add_argument("--accum", type=int, default=8)
     ap.add_argument("--epochs", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--max-tokens", type=int, default=7000, help="skip longer examples (memory)")
     args = ap.parse_args()
 
     from peft import LoraConfig, get_peft_model
 
     torch.manual_seed(args.seed)
     args.out.mkdir(parents=True, exist_ok=True)
-    data = select(args.samples, args.cap, args.seed)[: args.max_examples]
+    data = [d for d in select(args.samples, args.cap, args.seed)
+            if len(d["prompt_ids"]) + len(d["completion_ids"]) <= args.max_tokens][: args.max_examples]
     if not data:
         raise SystemExit("no passing samples to train on")
 
