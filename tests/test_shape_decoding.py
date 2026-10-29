@@ -81,7 +81,32 @@ def test_repeating_a_rejected_part_raises_temperature_and_gives_up_when_stuck():
 
     rounds = [["2x4 (0,0,0)"]] + [["2x4 (9,9,0)"]] * 60
     s = checked(box(x=2, y=4, z=1), min_coverage=0.0)
-    res = generate(Candidates(rounds), "", Config(best_of=3, max_repeats=5), structure=s, parse_line=parse)
+    res = generate(Candidates(rounds), "", Config(best_of=3, max_repeats=5, max_backtracks=0), structure=s, parse_line=parse)
     temps = [e["temperature"] for e in res.events if e["kind"] in ("reject", "repeat")]
     assert res.gave_up == "stuck repeating rejected parts" and temps == sorted(temps) and temps[-1] > temps[0] + 0.2
     assert s.txt().splitlines() == ["2x4 (0,0,0)"]
+
+
+def test_a_stuck_model_backtracks_out_of_its_pattern_before_giving_up():
+    from brickgpt.decode import Config, generate
+
+    # Two good parts, then the model locks onto an outside part; after backtracking it continues differently.
+    class Locked:
+        def __init__(self):
+            self.calls = 0
+
+        def candidates(self, prompt, temperature, top_k, max_tokens, k):
+            self.calls += 1
+            placed = prompt.count("\n")
+            if "backtracked" in self.__dict__:
+                return ["2x4 (2,0,0)"] if placed == 0 else [None]
+            if placed < 2:
+                return [["2x4 (0,0,0)", "2x4 (0,0,1)"][placed]]
+            self.stuck = getattr(self, "stuck", 0) + 1
+            if self.stuck > 3:
+                self.backtracked = True
+            return ["2x4 (9,9,0)"]
+
+    s = checked(box(x=4, y=4, z=2), min_coverage=0.0)
+    res = generate(Locked(), "", Config(best_of=3, max_repeats=2), structure=s, parse_line=parse)
+    assert any(e["kind"] == "backtrack" for e in res.events) and not res.gave_up

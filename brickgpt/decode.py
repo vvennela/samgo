@@ -45,7 +45,11 @@ class Config:
     # A line already rejected at this position is a repeat: it raises the temperature this much more, and after
     # max_repeats repeats at one position the model counts as stuck and the build stops there.
     repeat_temperature_jump: float = 0.05
-    max_repeats: int = 40
+    max_repeats: int = 10
+    # When stuck, the parts just placed usually set up the pattern the model is locked into (a column it keeps
+    # extending): remove the last `backtrack_parts` and let it continue from there, at most `max_backtracks` times.
+    backtrack_parts: int = 2
+    max_backtracks: int = 5
 
 
 @dataclass
@@ -120,7 +124,7 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
         if on_event:
             on_event(event)
 
-    refusals = 0
+    refusals = backtracks = 0
     while True:
         done = False
         while len(s.bricks) < cfg.max_bricks and not done:
@@ -129,6 +133,12 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
             repeats = 0
             for attempt in range(cfg.max_brick_rejections):
                 if repeats > cfg.max_repeats:
+                    if backtracks < cfg.max_backtracks and s.bricks:
+                        backtracks += 1
+                        keep = max(len(s.bricks) - cfg.backtrack_parts, 0)
+                        emit("backtrack", removed=len(s.bricks) - keep, to=keep, n=backtracks)
+                        s.truncate(keep)
+                        break  # recompute the context from the shorter build
                     res.gave_up = "stuck repeating rejected parts"
                     emit("give_up", why=res.gave_up, at=len(s.bricks))
                     done = True
