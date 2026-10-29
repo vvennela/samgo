@@ -48,6 +48,7 @@ class Config:
     max_repeats: int = 10
     # When stuck, the parts just placed usually set up the pattern the model is locked into (a column it keeps
     # extending): remove the last `backtrack_parts` and let it continue from there, at most `max_backtracks` times.
+    # Stuck again without getting past the last stuck point doubles the amount removed (2, 4, 8, ...).
     backtrack_parts: int = 2
     max_backtracks: int = 5
 
@@ -125,6 +126,7 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
             on_event(event)
 
     refusals = backtracks = 0
+    stuck_at, cut = None, cfg.backtrack_parts
     while True:
         done = False
         while len(s.bricks) < cfg.max_bricks and not done:
@@ -135,7 +137,9 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
                 if repeats > cfg.max_repeats:
                     if backtracks < cfg.max_backtracks and s.bricks:
                         backtracks += 1
-                        keep = max(len(s.bricks) - cfg.backtrack_parts, 0)
+                        cut = cut * 2 if stuck_at is not None and len(s.bricks) <= stuck_at else cfg.backtrack_parts
+                        stuck_at = len(s.bricks)
+                        keep = max(len(s.bricks) - cut, 0)
                         emit("backtrack", removed=len(s.bricks) - keep, to=keep, n=backtracks)
                         s.truncate(keep)
                         break  # recompute the context from the shorter build

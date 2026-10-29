@@ -110,3 +110,19 @@ def test_a_stuck_model_backtracks_out_of_its_pattern_before_giving_up():
     s = checked(box(x=4, y=4, z=2), min_coverage=0.0)
     res = generate(Locked(), "", Config(best_of=3, max_repeats=2), structure=s, parse_line=parse)
     assert any(e["kind"] == "backtrack" for e in res.events) and not res.gave_up
+
+
+def test_stuck_again_at_the_same_point_backtracks_further():
+    from brickgpt.decode import Config, generate
+
+    # Rebuilds the same column each time and locks at the same height: the cut must grow.
+    column = [f"1x1 (0,0,{z})" for z in range(4)]
+
+    class SameLock:
+        def candidates(self, prompt, temperature, top_k, max_tokens, k):
+            placed = prompt.count("\n")
+            return [column[placed]] if placed < 4 else ["2x4 (9,9,0)"]
+
+    s = checked(box(x=1, y=1, z=4), min_coverage=1.1)
+    res = generate(SameLock(), "", Config(best_of=3, max_repeats=1, max_backtracks=3), structure=s, parse_line=parse)
+    assert [e["removed"] for e in res.events if e["kind"] == "backtrack"] == [2, 4, 4]
