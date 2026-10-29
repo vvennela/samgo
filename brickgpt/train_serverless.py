@@ -17,6 +17,7 @@ import json
 import math
 import os
 import random
+import signal
 import sys
 import time
 from pathlib import Path
@@ -67,6 +68,8 @@ def main() -> None:
     ap.add_argument("--max-eval-tokens", type=int, default=7000)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
+    # A plain kill (SIGTERM) skips `finally` in Python; turn it into an exit so the session is always deleted.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
 
     from dotenv import load_dotenv
 
@@ -120,9 +123,10 @@ def main() -> None:
         # One Glimmer run at a time per account: wait for the slot instead of failing.
         for attempt in range(180):
             try:
-                if state.get("dcp_path"):
-                    tc = service.create_training_client_from_state_with_optimizer(state["dcp_path"])
-                    say(event="resumed", step=state["step"], session=getattr(service, "training_session_id", None))
+                if state.get("adapter_path"):  # warm start from the snapshot saved when the last attempt ended
+                    tc = service.create_lora_training_client(base_model=BASE_MODEL, rank=args.rank, alpha=32)
+                    tc.load_adapter(state["adapter_path"]).result()
+                    say(event="resumed", rows=state.get("rows"), session=getattr(service, "training_session_id", None))
                 else:
                     tc = service.create_lora_training_client(base_model=BASE_MODEL, rank=args.rank, alpha=32)
                     say(event="session", session=getattr(service, "training_session_id", None))
@@ -199,6 +203,7 @@ def main() -> None:
             grad = {k2: round(v, 4) for k2, v in (opt.metrics or {}).items() if k2 in ("grad_norm", "grad_norm_rms")}
             elapsed = time.time() - t_start
             rate_rows = max(r - state.get("rows_at_start", 0), 1) / max(elapsed, 1e-9)
+            state["rows"], state["step"] = r, st
             say(event="step", step=st, batch=b, rows=r, of=total_rows, loss=round(loss, 4), latency_s=round(dt, 1),
                 eta_h=round((total_rows - r) / rate_rows / 3600, 2), **grad)
             if r - last_saved >= args.save_every_rows:
@@ -252,12 +257,21 @@ def main() -> None:
         say(event="done", promoted_model=promoted, base=state["base_eval"], tuned=state["tuned_eval"])
         done = True
     finally:
-        if done:  # keep the session after a failure so the run can resume from its checkpoints
+        # Never leave a session holding the account's single Glimmer slot. After a failure, first export the
+        # weights (sampler snapshots outlive the session) so a rerun warm-starts at the same data position.
+        if not done and "tc" in locals():
             try:
-                service.delete_training_session()
-                say(event="session_deleted")
+                path = tc.save_weights_for_sampler(f"{args.run_id}-partial-{state.get('rows', 0)}").result().path
+                state.update(adapter_path=path)
+                state_path.write_text(json.dumps(state))
+                say(event="partial_saved", rows=state.get("rows"))
             except Exception as e:  # noqa: BLE001
-                say(event="delete_failed", detail=str(e)[:200])
+                say(event="partial_save_failed", detail=str(e)[:200])
+        try:
+            service.delete_training_session()
+            say(event="session_deleted")
+        except Exception as e:  # noqa: BLE001
+            say(event="delete_failed", detail=str(e)[:200])
         service.close()
         log.close()
 
