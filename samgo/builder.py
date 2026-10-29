@@ -5,7 +5,7 @@ in a scan order that changes per layer, becomes the corner of the best part
 that fits there in one color. Scores favor large parts, parts resting on
 something, and parts that join separate structures below (staggered seams),
 and penalize stacking exactly on one part. Several randomized attempts run
-and the best verified one wins. Repair then drops pieces that still float or
+and the best verified one wins: among those that pass, the one needing the least stud pull (S3b). Repair then drops pieces that still float or
 sit in a smaller separate structure, as long as the build stays on target.
 """
 
@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .parts import COLOR_INDEX, FOOTPRINTS, HEIGHTS
+from .stability import stability
 from .verifier import MatchConfig, Report, verify
 
 COLOR_NAMES = {i: name for name, i in COLOR_INDEX.items()}
@@ -29,6 +30,7 @@ class Build:
     pieces: list[dict]
     report: Report
     attempt: int
+    pull: float = float("inf")  # S3b peak stud tension of this layout (lower is sturdier)
 
 
 class _Layout:
@@ -136,27 +138,32 @@ def _repair(pieces: list[dict], target: np.ndarray, config: MatchConfig, keep: i
 
 
 def build(target: np.ndarray, attempts: int = 8, seed: int = 0, config: MatchConfig = MatchConfig(),
-          given: list[dict] = ()) -> Build:
-    """Return the best of several layouts: passing first, then highest IoU, then fewest pieces.
+          given: list[dict] = (), pull=None) -> Build:
+    """Return the best of several layouts: passing first, then least stud pull, then highest IoU, then fewest pieces.
 
     `given` pieces come first in the result and are kept as they are; the target must contain their cells.
+    `pull(pieces)` measures stress (default: S3b peak tension standing on the ground; inf if it can't balance).
     """
+    pull = pull or _ground_pull
     rng = np.random.default_rng(seed)
     best: Build | None = None
     for attempt in range(attempts):
         # Attempt 0 is deterministic; later ones randomize scans and ties, and some use plates only.
         pieces = _layout(target, None if attempt == 0 else rng, bricks=attempt % 4 != 3, given=list(given))
         pieces, report = _repair(pieces, target, config, keep=len(given))
-        candidate = Build(pieces, report, attempt)
+        candidate = Build(pieces, report, attempt, pull(pieces) if report.passed else np.inf)
         if best is None or _rank(candidate) > _rank(best):
             best = candidate
-        if report.passed and attempt >= 1:
-            break
     return best
 
 
+def _ground_pull(pieces: list[dict]) -> float:
+    peak = stability(pieces).metrics.get("peak_tension")
+    return np.inf if peak is None else peak
+
+
 def _rank(b: Build) -> tuple:
-    return (b.report.passed, b.report.metrics.get("iou", 0.0), -len(b.pieces))
+    return (b.report.passed, -b.pull, b.report.metrics.get("iou", 0.0), -len(b.pieces))
 
 
 def main() -> None:

@@ -13,6 +13,7 @@ import numpy as np
 
 from .builder import build
 from .parts import COLOR_INDEX
+from .stability import stability
 from .technic import TECHNIC_LENGTHS, structural, verify_function
 from .verifier import MatchConfig, Report, verify
 
@@ -94,11 +95,16 @@ def build_car(target: np.ndarray, wheel_fractions: tuple[float, float] = (0.15, 
     # Side-by-side bricks don't connect, so without it a chassis segment with no body above it floats free.
     deck = shaped[x0:x1, min(rows):max(rows) + 1, CHASSIS]
     deck[deck == 0] = COLOR_INDEX[chassis_color]
-    body = build(shaped, seed=seed, given=structural(chassis))
-    parts = chassis + body.pieces[len(chassis):]
-
+    running_gear = []
     for e in edges:
         y0 = -WHEEL_WIDTH
-        parts.append({"type": "axle", "axis": "y", "x": e, "z": 0, "y": y0, "length": Y + 2 * WHEEL_WIDTH})
-        parts += [{"type": "wheel", "axis": "y", "x": e, "z": 0, "y": y, "width": WHEEL_WIDTH} for y in (y0, Y)]
+        running_gear.append({"type": "axle", "axis": "y", "x": e, "z": 0, "y": y0, "length": Y + 2 * WHEEL_WIDTH})
+        running_gear += [{"type": "wheel", "axis": "y", "x": e, "z": 0, "y": y, "width": WHEEL_WIDTH} for y in (y0, Y)]
+
+    def pull_on_axles(pieces: list[dict]) -> float:  # rank body layouts by stress with the car on its wheels
+        peak = stability(chassis + pieces[len(chassis):] + running_gear, vehicle=True).metrics.get("peak_tension")
+        return np.inf if peak is None else peak
+
+    body = build(shaped, seed=seed, given=structural(chassis), pull=pull_on_axles)
+    parts = chassis + body.pieces[len(chassis):] + running_gear
     return Car(parts, shaped, verify(structural(parts), shaped, config=MatchConfig()), verify_function(parts))
