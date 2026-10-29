@@ -71,9 +71,12 @@ class Completions:
         return c.text, c.finish_reason
 
 
-def generate(llm, prompt: str, cfg: Config = Config(), on_event=None) -> Result:
+def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=None, parse_line=None) -> Result:
+    """structure/parse_line default to BrickGPT's 8-brick rules; pass brickgpt.v2.Structure2() and
+    samgo.palette.parse for the 35-part palette."""
     started = time.time()
-    s = Structure()
+    s = structure if structure is not None else Structure()
+    parse_line = parse_line or parse
     res = Result(s, False)
 
     def emit(kind: str, **kw):
@@ -85,7 +88,7 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None) -> Result:
     while True:
         done = False
         while len(s.bricks) < cfg.max_bricks and not done:
-            context = prompt + "".join(b.txt() + "\n" for b in s.bricks)
+            context = prompt + "".join(line + "\n" for line in s.txt().splitlines())
             for attempt in range(cfg.max_brick_rejections):
                 temp = min(cfg.temperature + cfg.temperature_increase * attempt, cfg.max_temperature)
                 text, finish = llm.line(context, temp, cfg.top_k, cfg.max_line_tokens)
@@ -95,9 +98,9 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None) -> Result:
                     break
                 why = s.reject_reason(text)
                 if why is None:
-                    b = parse(text)
+                    b = parse_line(text)
                     s.add(b)
-                    emit("place", brick=b.txt(), n=len(s.bricks))
+                    emit("place", brick=text.strip(), n=len(s.bricks))
                     break
                 res.rejections += 1
                 emit("reject", line=text.strip()[:40], why=why, temperature=round(temp, 2))

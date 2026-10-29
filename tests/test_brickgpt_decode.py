@@ -41,3 +41,17 @@ def test_dataset_structure_round_trips_through_ldraw_lines():
     # Same placement as BrickGPT's Brick.to_ldr: center in LDU, -y up, turned matrix for 4x2.
     assert ldr[3] == "1 71 20 0 40 0 0 1 0 1 0 -1 0 0 3001.dat"
     assert ldr[5] == "1 71 100 -24 80 -1 0 0 0 1 0 0 0 -1 3001.dat"
+
+
+def test_v2_rules_plug_into_the_same_decoder():
+    from brickgpt.v2 import Structure2
+    from samgo.palette import parse as parse2
+
+    script = ["brick 2x4 (0,0,0)", "slope 2x2 (0,0,3)", "slope 2x2 (0,0,3) -y", "tile 2x2 (0,2,3)",
+              "plate 2x1 (0,0,6)", ""]
+    res = generate(Scripted(script), "", Config(), structure=Structure2(), parse_line=parse2)
+    # The facing-less slope is rejected; a plate only over the slope's low row (no studs there) floats and
+    # is rolled back. (A 2x2 plate would hold: it reaches the high row's studs.)
+    assert [e["why"] for e in res.events if e["kind"] == "reject"] == ["not_in_library"]
+    assert res.rollbacks == 1 and res.stable
+    assert res.structure.txt().splitlines() == ["brick 2x4 (0,0,0)", "slope 2x2 (0,0,3) -y", "tile 2x2 (0,2,3)"]

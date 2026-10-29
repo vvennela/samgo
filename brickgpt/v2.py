@@ -229,3 +229,61 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+class Structure2:
+    """The decoder's view of a v2 build: same interface as brickgpt.structure.Structure, v2 rules."""
+
+    def __init__(self):
+        self.parts: list[Part] = []
+        self.occ = np.zeros((WORLD, WORLD, LAYERS), dtype=np.int16)
+
+    @property
+    def bricks(self):  # the decoder counts and logs these
+        return self.parts
+
+    def reject_reason(self, line: str) -> str | None:
+        from samgo.palette import PaletteError, parse
+
+        try:
+            p = parse(line)
+        except PaletteError as e:
+            return "malformed" if str(e) == "malformed" else "not_in_library"
+        if p.x < 0 or p.y < 0 or p.z < 0 or p.x + p.w > WORLD or p.y + p.l > WORLD or p.z + p.h > LAYERS:
+            return "out_of_bounds"
+        if self.occ[p.box].any():
+            return "collision"
+        return None
+
+    def add(self, p: Part) -> None:
+        self.parts.append(p)
+        self.occ[p.box] += 1
+
+    def truncate(self, n: int) -> None:
+        for p in self.parts[n:]:
+            self.occ[p.box] -= 1
+        del self.parts[n:]
+
+    def stable(self, n: int | None = None) -> bool:
+        parts = self.parts if n is None else self.parts[:n]
+        return bool(parts) and check(parts, (WORLD, WORLD, LAYERS))["ok"] and stability(parts)["ok"]
+
+    def first_unstable(self) -> int | None:
+        if self.stable():
+            return None
+        lo, hi = 1, len(self.parts)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if self.stable(mid):
+                lo = mid + 1
+            else:
+                hi = mid
+        return lo - 1
+
+    def txt(self) -> str:
+        return "\n".join(p.line() for p in self.parts)
+
+    def ldr(self, name: str = "model") -> str:
+        from samgo.palette import ldr
+
+        return ldr(self.parts, name)
