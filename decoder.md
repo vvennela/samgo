@@ -1,6 +1,21 @@
 # Decoder proposal: building *your* object, not just *an* object
 
-Status: proposal, for discussion. Nothing here is built yet beyond the BrickGPT decoder (`brickgpt/decode.py`).
+Status: **decided Oct 29 and built** (`brickgpt/shape.py`, `brickgpt/decode.py`, `brickgpt/build_photo.py`).
+
+## Decisions (Oct 29)
+
+| Choice | Now | Later |
+|---|---|---|
+| Parts outside the object | **Hard reject**, 1-cell tolerance at the edges | tune the tolerance from real outputs (`--tolerance`) |
+| Stopping early | refused below **70%** coverage | raise to 90% once builds reliably reach it (`--min-coverage`) |
+| Best-of-k per part | **on, k = 3**: one call per part returns 3 candidates from the same partial build; keep the one filling the most still-empty target cells | compare with k = 1 on the same photos |
+| Color | paint each part afterwards from the photo | |
+| Order | this decoder first; shape-conditioned training only if fidelity is not good enough | |
+
+Best-of-k is per part, inside one build: the prompt and partial build are sent once per call for all k
+candidates, so the extra cost is k x ~10 sampled tokens per part (~1.3-2x), not k x the whole build. It does
+use one call per part (no 8-lines-per-call speedup), and greedy coverage can favor big parts; the stability
+rollback catches structural damage from that.
 
 ## The gap
 
@@ -25,8 +40,8 @@ Inputs per build:
 | # | Option | What it does | Cost | Proposed |
 |---|---|---|---|---|
 | 1 | Inside-the-shape check | Reject and resample a brick that fills cells outside the target (BrickGPT's collision rule, extended), with a 1-cell tolerance at the edges | extra calls only when the model strays | **default** |
-| 2 | No early stopping | Refuse the model's end of answer until coverage of the target reaches a threshold (e.g. 90%); give up honestly after a cap | a few calls | **default** |
-| 3 | Best-of-k per brick | Ask for k candidates per brick (one call, `n=k`), keep the one that fills the most still-empty target cells and is best supported | ~same calls, ~k x tokens | **switch, k=3; compare on vs off** |
+| 2 | No early stopping | Refuse the model's end of answer until coverage of the target reaches a threshold (70% now, 90% later); give up honestly after a cap | a few calls | **default** |
+| 3 | Best-of-k per brick | Ask for k candidates per brick (one call, `n=k`), keep the one that fills the most still-empty target cells | one call per part, ~1.3-2x tokens | **default, k=3** |
 | 4 | Best-of-N whole builds | Build N models, keep the best match | N x time | rejected |
 | 5 | Stability rollback | Cut to the first unstable brick and continue (BrickGPT) | as now | **default** |
 | 6 | Color from the photo | Each brick takes the majority color of the target cells it covers | free | **default** |
@@ -46,7 +61,7 @@ Inputs per build:
 ## Measuring "is it my chair?"
 
 Reported on every build:
-- **Coverage**: fraction of target cells filled (aim >= 90%).
+- **Coverage**: fraction of target cells filled (70% required now, aim 90%).
 - **Precision**: fraction of built cells inside the target, with the 1-cell tolerance.
 - **IoU** with the target (aim >= 0.7 as "clearly your object").
 - **Image similarity**: render the build and compare it with the photo using CLIP and DINO (BrickGPT's
@@ -67,9 +82,6 @@ Put a compact encoding of the target shape in the prompt (as BrickAnything condi
 model proposes the right bricks from the start instead of being steered: fewer rejections, faster builds, and
 the route to resolution as an input and windowed large builds. A separate training run after v1.
 
-## Open questions for discussion
+## Still open
 
-1. Coverage threshold and tolerance values (90% and 1 cell are starting points).
-2. Is best-of-3 per brick worth ~3x the tokens? Decide from an on/off comparison on the same photos.
-3. Add the part count to the v2 prompts now (before v2 trains)?
-4. Order: decoder first, or shape-conditioned training first after v1?
+- Add the part count to the v2 prompts (before v2 trains)?

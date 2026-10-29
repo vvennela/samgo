@@ -4,7 +4,7 @@ Wraps a decoder structure (BrickGPT's 8 bricks, or the v2 35-part palette) with 
 (photo -> SAM 3.1 -> SAM 3D -> voxels) and adds:
 - `reject_reason`: a part that fills a cell outside the target (allowing `tolerance` cells at its edges)
   is rejected and resampled, like a collision;
-- `allow_end`: the model may only stop once the build covers `min_coverage` of the target;
+- `allow_end`: the model may only stop once the build covers `min_coverage` of the target (default 70%);
 - `score`: for best-of-k sampling, how many still-empty target cells a candidate part fills;
 - `metrics`: coverage, precision and IoU against the target;
 - `colors`: each part takes the most common photo color among the target cells it covers.
@@ -44,7 +44,7 @@ def _cells(part) -> tuple[slice, slice, slice]:
 
 
 class ShapeChecked:
-    def __init__(self, base, target: np.ndarray, parse_line, tolerance: int = 1, min_coverage: float = 0.9):
+    def __init__(self, base, target: np.ndarray, parse_line, tolerance: int = 1, min_coverage: float = 0.7):
         self.base, self.parse, self.min_coverage = base, parse_line, min_coverage
         self.target = target > 0
         self.color = target

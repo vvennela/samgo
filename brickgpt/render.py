@@ -66,12 +66,14 @@ def faces(p: Part):
     return _box(p.x, p.x + p.w, p.y, p.y + p.l, z0, z1)
 
 
-def draw(parts: list[Part], path: str, title: str = "", highlight: set | None = None) -> None:
+def draw(parts: list[Part], path: str, title: str = "", highlight: set | None = None,
+         colors: list[str] | None = None) -> None:
+    """`colors`: one matplotlib color per part (e.g. painted from the photo); default colors by part kind."""
     fig = plt.figure(figsize=(6, 6), dpi=110)
     ax = fig.add_subplot(projection="3d")
     for i, p in enumerate(parts):
         alpha = 1.0 if highlight is None or i in highlight else 0.15
-        ax.add_collection3d(Poly3DCollection(faces(p), facecolor=COLORS[p.kind], alpha=alpha,
+        ax.add_collection3d(Poly3DCollection(faces(p), facecolor=colors[i] if colors else COLORS[p.kind], alpha=alpha,
                                              edgecolor=(0.15, 0.15, 0.15, 0.5 * alpha), linewidth=0.3))
     xs = [v for p in parts for v in (p.x, p.x + p.w)]
     ys = [v for p in parts for v in (p.y, p.y + p.l)]

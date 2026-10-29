@@ -29,12 +29,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("folder", type=Path)
     ap.add_argument("--palette", choices=("brickgpt", "v2"), default="brickgpt")
-    ap.add_argument("--backend", choices=("completions", "sampler"), default="completions")
+    ap.add_argument("--backend", choices=("completions", "sampler", "replay"), default="completions",
+                    help="replay: feed lines from --replay (offline plumbing test, no model)")
+    ap.add_argument("--replay", type=Path, default=None)
     ap.add_argument("--base-url", default="https://api.fireworks.ai/inference/v1")
     ap.add_argument("--model", default=None)
-    ap.add_argument("--best-of", type=int, default=1)
-    ap.add_argument("--tolerance", type=int, default=1)
-    ap.add_argument("--min-coverage", type=float, default=0.9)
+    ap.add_argument("--best-of", type=int, default=3, help="candidates per part, best fills the most of the object")
+    ap.add_argument("--tolerance", type=int, default=1, help="cells a part may extend past the object's edge")
+    ap.add_argument("--min-coverage", type=float, default=0.7, help="share of the object built before stopping")
     ap.add_argument("--caption", default=None, help="skip Spark and use this caption")
     args = ap.parse_args()
     load_dotenv(REPO / ".env")
@@ -59,7 +61,9 @@ def main() -> None:
     tok = AutoTokenizer.from_pretrained("meta-models/Muse-Glimmer-30B")
     prompt = tok.apply_chat_template(messages(text), tokenize=False, add_generation_prompt=True)
     prompt = prompt[: -len("<|start|>assistant")] + ANSWER_PREFIX
-    if args.backend == "sampler":
+    if args.backend == "replay":
+        llm = Replay(args.replay.read_text().splitlines())
+    elif args.backend == "sampler":
         from .fw_sampler import Sampler
         llm = Sampler(args.model)
     else:
@@ -77,7 +81,37 @@ def main() -> None:
                "parts": len(s.bricks), "stable": res.stable, "rejections": res.rejections, "rollbacks": res.rollbacks,
                "calls": res.calls, "seconds": round(res.seconds, 1), "gave_up": res.gave_up, **s.metrics()}
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
+    if s.bricks:
+        render_build(s, out / "model.png", f"{args.folder.name}: IoU {summary['iou']}, {len(s.bricks)} parts")
     print(json.dumps(summary, indent=2))
+
+
+class Replay:
+    """Test-only stand-in for the model: answers each request with the next line of a file ('' ends)."""
+
+    def __init__(self, lines: list[str]):
+        self.lines, self.i = lines, 0
+
+    def line(self, prompt, temperature, top_k, max_tokens):
+        text = self.lines[self.i] if self.i < len(self.lines) else ""
+        self.i += 1
+        return text, "stop"
+
+    def candidates(self, prompt, temperature, top_k, max_tokens, k):
+        text, _ = self.line(prompt, temperature, top_k, max_tokens)
+        return [text or None]
+
+
+def render_build(s, path: Path, title: str) -> None:
+    """Picture of the build in the photo's colors (v1 bricks drawn as v2 bricks: a layer is 3 plates)."""
+    from samgo.palette import Part
+    from samgo.parts import COLORS
+
+    from .render import draw
+
+    rgb = {code: "#%02x%02x%02x" % c for code, c in ((v[0], v[1]) for v in COLORS.values())}
+    parts = [p if hasattr(p, "box") else Part("brick", p.h, p.w, p.x, p.y, 3 * p.z) for p in s.bricks]
+    draw(parts, str(path), title, colors=[rgb.get(code, "#9aa3ad") for code in s.colors()])
 
 
 if __name__ == "__main__":
