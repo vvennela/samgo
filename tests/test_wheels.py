@@ -36,3 +36,9 @@ def test_squashed_wheels_fall_back():
 def test_one_axle_falls_back():
     obj = car_mask()
     assert wheel_fractions(obj, [disc(obj.shape, 110, 160, 25, 25)])["source"] == "fallback"
+
+
+def test_three_quarter_view_with_foreshortened_wheelbase_falls_back():
+    obj = car_mask()  # Beetle photo: wheels at 9% and 57%, roundness 0.78 / 0.89
+    out = wheel_fractions(obj, [disc(obj.shape, 77, 160, 20, 25), disc(obj.shape, 222, 160, 24, 27)])
+    assert out["fractions"] == FALLBACK and out["source"] == "fallback"

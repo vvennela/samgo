@@ -3,8 +3,9 @@
 Masks are 2D and the target is 3D, so only ratios are used: each axle's position along the car's
 length, as a fraction of the object mask's horizontal extent, mapped onto the target's length (x).
 Masks that overlap in x are one axle (a partly hidden far wheel shows up as its own mask). A side
-view gives round wheel masks; a 3/4 view squashes them, so the fallback (wheels at 15% / 85%)
-is used, and flagged, unless there are exactly two axles with roundish masks.
+view gives round wheel masks; a 3/4 view squashes them and foreshortens the car, so the fallback
+(wheels at 15% / 85%) is used, and flagged, unless there are exactly two axles with round masks in
+the front and rear thirds, far enough apart.
 
     uv run python -m samgo.wheels runs/s1/car       # reads photo.png + mask.png, writes wheels.json
 """
@@ -18,7 +19,9 @@ from pathlib import Path
 import numpy as np
 
 FALLBACK = (0.15, 0.85)
-ROUND = (0.6, 1.4)        # wheel mask width/height for a side-ish view
+ROUND = (0.8, 1.25)       # wheel mask width/height for a side view (a 3/4 view gave 0.78)
+FRONT, REAR = 0.35, 0.65  # axles must sit in the outer thirds of the length...
+MIN_WHEELBASE = 0.45      # ...and this far apart; a 3/4 view foreshortens the car and fails this
 MIN_AREA = 0.002          # of the object mask, to drop specks
 
 
@@ -48,6 +51,9 @@ def wheel_fractions(obj: np.ndarray, wheels: list[np.ndarray]) -> dict:
     if not all(ROUND[0] <= a["roundness"] <= ROUND[1] for a in info["axles"]):
         return {"fractions": FALLBACK, "source": "fallback", "reason": "wheels not round: not a side view", **info}
     centers = tuple(sorted(a["center"] for a in info["axles"]))
+    if centers[0] > FRONT or centers[1] < REAR or centers[1] - centers[0] < MIN_WHEELBASE:
+        return {"fractions": FALLBACK, "source": "fallback",
+                "reason": f"axles at {centers[0]:.2f} / {centers[1]:.2f} of the length: not a side view", **info}
     return {"fractions": centers, "source": "masks", "reason": "", **info}
 
 
