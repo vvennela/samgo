@@ -82,8 +82,24 @@ def main() -> None:
     from training.utils.supervised import build_renderer
     from training.utils.tokenizers import load_tokenizer
 
-    sys.path.insert(0, str(STARTER))
-    from muse_glimmer_starter import _promote_tuned
+    from fireworks.training.sdk import FireworksClient
+
+    def promote(checkpoint_contains: str, model_id: str) -> str | None:
+        """Turn the newest matching sampler checkpoint into a LoRA model before the session (and it) go away.
+
+        (The cookbook starter's helper only matches its own 'starter-tuned' names.)"""
+        fw = FireworksClient(api_key=os.environ["FIREWORKS_API_KEY"],
+                             base_url=os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai"))
+        rows = [r for r in fw.list_training_session_checkpoints(service.training_session_name)
+                if r.get("promotable") and checkpoint_contains in (r.get("checkpointName") or r.get("name") or "")]
+        if not rows:
+            say(event="promote_missing", looking_for=checkpoint_contains)
+            return None
+        target = max(rows, key=lambda r: r.get("createTime", ""))
+        fw.promote_session_checkpoint(name=target["name"], output_model_id=model_id, base_model=BASE_MODEL)
+        name = f"accounts/{os.environ.get('FIREWORKS_ACCOUNT_ID', 'vvennela')}/models/{model_id}"
+        say(event="promoted", model=name, checkpoint=target["name"])
+        return name
 
     run_dir = REPO / "runs/train" / args.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -251,7 +267,7 @@ def main() -> None:
 
         state.update(step=step, rows=rows_done)
         state["tuned_eval"] = evaluate("tuned")
-        promoted = _promote_tuned(service, os.environ.get("FIREWORKS_ACCOUNT_ID", "vvennela"), args.run_id)
+        promoted = promote(f"{args.run_id}-tuned", f"{args.run_id}-tuned")
         state["promoted_model"] = promoted
         state_path.write_text(json.dumps(state))
         say(event="done", promoted_model=promoted, base=state["base_eval"], tuned=state["tuned_eval"])
@@ -261,10 +277,13 @@ def main() -> None:
         # weights (sampler snapshots outlive the session) so a rerun warm-starts at the same data position.
         if not done and "tc" in locals():
             try:
-                path = tc.save_weights_for_sampler(f"{args.run_id}-partial-{state.get('rows', 0)}").result().path
-                state.update(adapter_path=path)
+                rows_now = state.get("rows", 0)
+                tc.save_weights_for_sampler(f"{args.run_id}-partial-{rows_now}").result()
+                # load_adapter needs a promoted model, not a raw snapshot path, so promote before deleting.
+                model = promote(f"{args.run_id}-partial-{rows_now}", f"{args.run_id}-partial-{rows_now}")
+                state.update(adapter_path=model)
                 state_path.write_text(json.dumps(state))
-                say(event="partial_saved", rows=state.get("rows"))
+                say(event="partial_saved", rows=rows_now, model=model)
             except Exception as e:  # noqa: BLE001
                 say(event="partial_save_failed", detail=str(e)[:200])
         try:
