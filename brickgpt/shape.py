@@ -67,6 +67,9 @@ class ShapeChecked:
     def txt(self) -> str:
         return self.base.txt()
 
+    def ldr(self, name: str = "model") -> str:
+        return self.base.ldr(name, self.colors())
+
     def add(self, part) -> None:
         self.base.add(part)
         self.built[_cells(part)] = True

@@ -113,10 +113,10 @@ class Structure:
     def txt(self) -> str:
         return "\n".join(b.txt() for b in self.bricks)
 
-    def ldr(self, name: str = "model") -> str:
+    def ldr(self, name: str = "model", colors: list[int] | None = None) -> str:
         lines = [f"0 {name}", f"0 Name: {name}.ldr", "0 Author: SAMgo (Muse Glimmer)"]
-        for b in self.bricks:
-            lines += [b.ldr(), "0 STEP"]
+        for i, b in enumerate(self.bricks):
+            lines += [b.ldr(colors[i] if colors else 71), "0 STEP"]
         return "\n".join(lines) + "\n"
 
 

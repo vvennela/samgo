@@ -283,7 +283,7 @@ class Structure2:
     def txt(self) -> str:
         return "\n".join(p.line() for p in self.parts)
 
-    def ldr(self, name: str = "model") -> str:
+    def ldr(self, name: str = "model", colors: list[int] | None = None) -> str:
         from samgo.palette import ldr
 
-        return ldr(self.parts, name)
+        return ldr(self.parts, name, colors)

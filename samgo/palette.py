@@ -273,8 +273,9 @@ def stability(parts: list[Part], clutch: float = CLUTCH) -> dict:
     return {"ok": peak <= clutch, "peak_pull_per_stud": round(peak, 1)}
 
 
-def ldr(parts: list[Part], name: str = "model") -> str:
+def ldr(parts: list[Part], name: str = "model", colors: list[int] | None = None) -> str:
     lines = [f"0 {name}", f"0 Name: {name}.ldr", "0 Author: SAMgo (Muse Glimmer)"]
-    for p in sorted(parts, key=lambda p: p.z):
-        lines += [p.ldr(), "0 STEP"]
+    order = sorted(range(len(parts)), key=lambda i: parts[i].z)
+    for i in order:
+        lines += [parts[i].ldr(colors[i] if colors else 71), "0 STEP"]
     return "\n".join(lines) + "\n"
