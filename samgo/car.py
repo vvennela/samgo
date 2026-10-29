@@ -2,8 +2,8 @@
 
 The car's length runs along x. Two rows of Technic bricks form the chassis in the bottom brick layer,
 cut into 1x8/6/4/2 so every axle position falls inside a brick (where the holes are), never on a seam.
-The rest of that layer is left empty so the axles run free; the body is the target from z=3 up, built
-by the S4 builder on top of the chassis. Axles cross the car at the wheel positions with a wheel on
+The rest of that layer is left empty so the axles run free. A deck plate layer over both rows ties the
+chassis into one frame; the body is the target from z=3 up, built by the S4 builder on top of it. Axles cross the car at the wheel positions with a wheel on
 each side, just outside the body's width so nothing is in the wheels' way.
 """
 
@@ -90,6 +90,10 @@ def build_car(target: np.ndarray, wheel_fractions: tuple[float, float] = (0.15, 
     shaped[:, :, :CHASSIS] = 0
     for p in chassis:
         shaped[p["x"]:p["x"] + p["w"], p["y"], :CHASSIS] = COLOR_INDEX[chassis_color]
+    # Deck: one plate layer over both rows along the whole length, where the body leaves it empty.
+    # Side-by-side bricks don't connect, so without it a chassis segment with no body above it floats free.
+    deck = shaped[x0:x1, min(rows):max(rows) + 1, CHASSIS]
+    deck[deck == 0] = COLOR_INDEX[chassis_color]
     body = build(shaped, seed=seed, given=structural(chassis))
     parts = chassis + body.pieces[len(chassis):]
 

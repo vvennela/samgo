@@ -35,6 +35,12 @@ def wheel_fractions(obj: np.ndarray, wheels: list[np.ndarray]) -> dict:
     ox0, _, ox1, _ = _box(obj)
     length = ox1 - ox0
     boxes = [_box(m) for m in wheels if m.sum() > MIN_AREA * obj.sum()]
+    # Not wheels: wide slivers (a mudflap, a sill) or masks much smaller than the biggest wheel. Narrow
+    # masks stay: a 3/4 view squashes real wheels, and the side-view check below must see them to flag it.
+    boxes = [b for b in boxes if (b[2] - b[0]) / (b[3] - b[1]) <= 1.5]
+    if boxes:
+        tallest = max(b[3] - b[1] for b in boxes)
+        boxes = [b for b in boxes if b[3] - b[1] >= 0.5 * tallest]
     axles: list[list[int]] = []  # merged x-ranges with their tallest mask height and width
     for x0, y0, x1, y1 in sorted(boxes):
         if axles and min(x1, axles[-1][1]) - max(x0, axles[-1][0]) > 0.3 * min(x1 - x0, axles[-1][1] - axles[-1][0]):
