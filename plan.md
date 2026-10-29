@@ -87,3 +87,18 @@ and is rebuilt. → LDraw file + instructions → the physical build.
   deployment keeps it to about a minute per build (BrickGPT: 41 s median). Fallback: vLLM with the
   LoRA on a rented GPU.
 - Risk: SFT queue or a failed job. Fallback: same JSONL on RunPod with our LoRA trainer.
+
+## Status (Oct 29, 02:40)
+
+| Piece | State |
+|---|---|
+| v1 data (BrickGPT format, verbatim prompts) | `data/sft/train_c2.jsonl` 85,208 rows, `eval_500.jsonl` |
+| v1 fine-tune | launcher ready: `! bash brickgpt/start_finetune.sh` (Fireworks blocks agents from starting it) |
+| Checkers in BrickGPT format | `brickgpt/structure.py`: 200/200 of their test structures valid, 193/200 stable (ours is stricter) |
+| Decoder | `brickgpt/decode.py`: rejection + rollback, event log; real-API test 0.26 s per brick |
+| LDraw | matches BrickGPT's exporter; v2 ids checked against the official library |
+| 35-part palette | `samgo/palette.py`, 8 rule tests |
+| v2 data | `data/v2/train_c2.jsonl` 77,124 rows (38,562 shapes, 90.5% kept), `test_c1.jsonl` 454 rows; ~1.9k tokens/row |
+| v2 fine-tune | launcher ready: `! bash brickgpt/start_finetune_v2.sh` |
+| Eval + render | `brickgpt/evaluate.py` (Table-1 metrics), `brickgpt/render.py` |
+| Next | after training: serve (Fireworks $8/h or RunPod ~$2.50/h), 250-prompt eval, live demo view, Technic wheels |
