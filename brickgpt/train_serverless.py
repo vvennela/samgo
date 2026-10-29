@@ -55,12 +55,14 @@ def main() -> None:
     ap.add_argument("--train", type=Path, required=True)
     ap.add_argument("--eval", type=Path, required=True)
     ap.add_argument("--rank", type=int, default=32)
-    ap.add_argument("--batch-size", type=int, default=16)
-    ap.add_argument("--lr", type=float, default=1e-4)
-    ap.add_argument("--warmup", type=int, default=50)
+    ap.add_argument("--trial", default="32:25,64:25", help="batch:steps phases timed first, on the same model")
+    ap.add_argument("--lr", type=float, default=1e-4, help="for batch 32; scaled by sqrt(batch/32)")
+    ap.add_argument("--warmup-rows", type=int, default=800)
+    ap.add_argument("--faster", type=float, default=1.5, help="batch 64 must be this much faster to be chosen")
+    ap.add_argument("--inflight", type=int, default=2, help="steps queued before waiting (pipelining)")
     ap.add_argument("--epochs", type=int, default=1)
     ap.add_argument("--max-seq-len", type=int, default=8192)
-    ap.add_argument("--save-every", type=int, default=250)
+    ap.add_argument("--save-every-rows", type=int, default=8000)
     ap.add_argument("--n-eval", type=int, default=16)
     ap.add_argument("--max-eval-tokens", type=int, default=7000)
     ap.add_argument("--seed", type=int, default=0)
@@ -106,9 +108,8 @@ def main() -> None:
         datums.append(sdk.Datum(model_input=sdk.ModelInput.from_ints(tokens[:-1]),
                                 loss_fn_inputs={"target_tokens": tokens[1:], "weights": w[1:]}))
     eval_rows = [json.loads(line) for line in open(REPO / args.eval)][: args.n_eval]
-    steps_per_epoch = math.ceil(len(datums) / args.batch_size)
-    total = steps_per_epoch * args.epochs
-    say(event="rendered", train=len(datums), skipped=skipped, eval=len(eval_rows), steps=total)
+    total_rows = len(datums) * args.epochs
+    say(event="rendered", train=len(datums), skipped=skipped, eval=len(eval_rows), rows=total_rows)
 
     service = FiretitanServiceClient(api_key=os.environ["FIREWORKS_API_KEY"],
                                      base_url=serverless_base_url(os.environ.get("FIREWORKS_BASE_URL",
@@ -168,36 +169,82 @@ def main() -> None:
             state["base_eval"] = evaluate("base")
             state_path.write_text(json.dumps(state))
 
-        order = list(range(len(datums)))
-        start = state.get("step", 0)
-        t0, tokens_seen = time.time(), 0
-        for step in range(start, total):
-            epoch, k = divmod(step, steps_per_epoch)
-            if k == 0 or step == start:
-                order = list(range(len(datums)))
-                random.Random(args.seed + epoch).shuffle(order)
-            batch = [datums[i] for i in order[k * args.batch_size:(k + 1) * args.batch_size]]
-            progress = step / max(total - 1, 1)
-            lr = args.lr * min(1.0, (step + 1) / args.warmup) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * progress)))
-            fb_f = tc.forward_backward(batch, "cross_entropy")
-            opt_f = tc.optim_step(sdk.AdamParams(learning_rate=lr, beta1=0.9, beta2=0.999, eps=1e-8,
-                                                 weight_decay=0.0, grad_clip_norm=1.0), emit_grad_norm_metrics=True)
+        # Data position is counted in rows, so the batch size can change mid-run (trial, then the winner).
+        order = [i for e in range(args.epochs) for i in random.Random(args.seed + e).sample(range(len(datums)), len(datums))]
+        rows_done, step = state.get("rows", 0), state.get("step", 0)
+        trial = [(int(b), int(n)) for b, n in (x.split(":") for x in args.trial.split(","))] if args.trial else []
+        if state.get("batch"):
+            trial = []  # resumed after the choice was made
+        plan_iter = iter([b for b, n in trial for _ in range(n)])
+        chosen = state.get("batch")
+        timing: dict[int, list] = {}
+        pending = []  # (step, batch, rows, t_submit, fb_future, opt_future), oldest first
+        last_saved = rows_done
+        t_start = time.time()
+
+        def lr_for(batch: int, rows: int) -> float:
+            progress = rows / max(total_rows, 1)
+            warm = min(1.0, (rows + batch) / args.warmup_rows)
+            return args.lr * math.sqrt(batch / 32) * warm * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * progress)))
+
+        def finish_oldest():
+            nonlocal last_saved
+            st, b, r, t_sub, fb_f, opt_f = pending.pop(0)
             fb, opt = fb_f.result(), opt_f.result()
             m = dict(fb.metrics or {})
             n_tok = m.get("response_tokens") or 1.0
-            tokens_seen += m.get("total_tokens:sum", 0.0)
-            grad = {k2: round(v, 4) for k2, v in (opt.metrics or {}).items() if "grad" in k2}
-            rate = tokens_seen / max(time.time() - t0, 1e-9)
-            eta_h = (total - step - 1) * (time.time() - t0) / max(step + 1 - start, 1) / 3600
-            say(event="step", step=step + 1, of=total, loss=round(m.get("loss:sum", 0.0) / n_tok, 4), lr=round(lr, 7),
-                tok_s=round(rate), eta_h=round(eta_h, 2), **grad)
-            if (step + 1) % args.save_every == 0:
-                path = tc.save_state(f"{args.run_id}-step-{step + 1}").result().path
-                state.update(step=step + 1, dcp_path=path)
+            loss = m.get("loss:sum", 0.0) / n_tok
+            dt = time.time() - t_sub
+            timing.setdefault(b, []).append((time.time(), m.get("total_tokens:sum", 0.0), loss))
+            grad = {k2: round(v, 4) for k2, v in (opt.metrics or {}).items() if k2 in ("grad_norm", "grad_norm_rms")}
+            elapsed = time.time() - t_start
+            rate_rows = max(r - state.get("rows_at_start", 0), 1) / max(elapsed, 1e-9)
+            say(event="step", step=st, batch=b, rows=r, of=total_rows, loss=round(loss, 4), latency_s=round(dt, 1),
+                eta_h=round((total_rows - r) / rate_rows / 3600, 2), **grad)
+            if r - last_saved >= args.save_every_rows:
+                path = tc.save_state(f"{args.run_id}-rows-{r}").result().path
+                state.update(step=st, rows=r, dcp_path=path, batch=chosen)
                 state_path.write_text(json.dumps(state))
-                say(event="checkpoint", step=step + 1)
+                last_saved = r
+                say(event="checkpoint", step=st, rows=r)
 
-        state["step"] = total
+        def tok_rate(b: int) -> float:
+            ts = timing.get(b, [])[2:]  # skip the first steps of a phase (queue fill)
+            if len(ts) < 2:
+                return 0.0
+            return sum(t[1] for t in ts[1:]) / max(ts[-1][0] - ts[0][0], 1e-9)
+
+        state["rows_at_start"] = rows_done
+        while rows_done < total_rows:
+            batch = next(plan_iter, None)
+            if batch is None:
+                if chosen is None:  # trial over: drain, compare, decide
+                    while pending:
+                        finish_oldest()
+                    r32, r64 = tok_rate(32), tok_rate(64)
+                    l32 = sum(t[2] for t in timing.get(32, [])[-10:]) / max(len(timing.get(32, [])[-10:]), 1)
+                    l64 = sum(t[2] for t in timing.get(64, [])[-10:]) / max(len(timing.get(64, [])[-10:]), 1)
+                    # The 64 phase runs after the 32 phase on a further-trained model, so its loss is not a fair
+                    # quality comparison; it only has to show no instability (not above the 32 phase's loss).
+                    chosen = 64 if r32 and r64 >= args.faster * r32 and l64 <= l32 * 1.05 else 32
+                    state["batch"] = chosen
+                    say(event="batch_choice", tok_s_32=round(r32), tok_s_64=round(r64), speedup=round(r64 / max(r32, 1e-9), 2),
+                        loss_32_last10=round(l32, 4), loss_64_last10=round(l64, 4), chosen=chosen)
+                batch = chosen
+            idx = order[rows_done:rows_done + batch]
+            lr = lr_for(batch, rows_done)
+            fb_f = tc.forward_backward([datums[i] for i in idx], "cross_entropy")
+            opt_f = tc.optim_step(sdk.AdamParams(learning_rate=lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.0,
+                                                 grad_clip_norm=1.0), emit_grad_norm_metrics=True)
+            step += 1
+            rows_done += len(idx)
+            pending.append((step, batch, rows_done, time.time(), fb_f, opt_f))
+            if len(pending) >= args.inflight:
+                finish_oldest()
+        while pending:
+            finish_oldest()
+
+        state.update(step=step, rows=rows_done)
         state["tuned_eval"] = evaluate("tuned")
         promoted = _promote_tuned(service, os.environ.get("FIREWORKS_ACCOUNT_ID", "vvennela"), args.run_id)
         state["promoted_model"] = promoted
