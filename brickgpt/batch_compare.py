@@ -30,6 +30,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-4, help="for batch 32; scaled by sqrt(batch/32)")
     ap.add_argument("--warmup-rows", type=int, default=400)
     ap.add_argument("--inflight", type=int, default=2)
+    ap.add_argument("--shuffle-seed", type=int, default=None,
+                    help="take rows in train_serverless.py's order (Random(seed) shuffle of the whole file)")
     args = ap.parse_args()
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
 
@@ -60,7 +62,12 @@ def main() -> None:
                 return out
         return out
 
-    train = datums(args.train, args.rows)        # the file is already shuffled: same rows, same order for all
+    if args.shuffle_seed is None:
+        train = datums(args.train, args.rows)    # the file is already shuffled: same rows, same order for all
+    else:  # identical rows and order to the batch-32 phase of the earlier train_serverless.py run
+        all_rows = datums(args.train, 10 ** 9)
+        order = random.Random(args.shuffle_seed).sample(range(len(all_rows)), len(all_rows))
+        train = [all_rows[i] for i in order[: args.rows]]
     held = datums(args.heldout, args.n_heldout)
     out_dir = REPO / "runs/train/batch_compare"
     out_dir.mkdir(parents=True, exist_ok=True)
