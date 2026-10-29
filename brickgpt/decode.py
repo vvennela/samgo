@@ -37,6 +37,11 @@ class Config:
     # dropped and sampling resumes from there: the accepted bricks are distributed exactly as with one call
     # per brick (generation is left to right anyway), with several times fewer calls.
     lines_per_call: int = 8
+    # Best-of-k per part (decoder.md option 3): ask for k single-line candidates and keep the one the structure
+    # scores highest (ShapeChecked.score: still-empty target cells filled). 1 = off.
+    best_of: int = 1
+    # Times the model's end of answer is refused (structure.allow_end() is False) before it is accepted.
+    max_end_refusals: int = 30
 
 
 @dataclass
@@ -74,6 +79,13 @@ class Completions:
         c = r.choices[0]
         return c.text, c.finish_reason
 
+    def candidates(self, prompt: str, temperature: float, top_k: int, max_tokens: int, k: int) -> list:
+        """k sampled next lines; None for a sample that ended the answer."""
+        r = self.client.completions.create(
+            model=self.model, prompt=prompt, max_tokens=max_tokens, temperature=temperature, n=k,
+            stop=["\n", END], extra_body={"top_k": top_k, "prompt_cache_key": self.session})
+        return [c.text if c.text.strip() else None for c in r.choices]
+
     def lines(self, prompt: str, temperature: float, top_k: int, max_tokens: int) -> tuple[list[str], bool]:
         """Complete lines (a cut-off last line is dropped) and whether the answer ended after them."""
         r = self.client.completions.create(
@@ -104,13 +116,24 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
         if on_event:
             on_event(event)
 
+    refusals = 0
     while True:
         done = False
         while len(s.bricks) < cfg.max_bricks and not done:
             context = prompt + "".join(line + "\n" for line in s.txt().splitlines())
             for attempt in range(cfg.max_brick_rejections):
                 temp = min(cfg.temperature + cfg.temperature_increase * attempt, cfg.max_temperature)
-                if cfg.lines_per_call > 1 and callable(getattr(llm, "lines", None)):
+                if cfg.best_of > 1 and callable(getattr(llm, "candidates", None)) and hasattr(s, "score"):
+                    cands = llm.candidates(context, temp, cfg.top_k, cfg.max_line_tokens, cfg.best_of)
+                    ends = [c for c in cands if c is None]
+                    scored = sorted(((s.score(c), c) for c in cands if c is not None), reverse=True)
+                    if scored and scored[0][0] >= 0 and (scored[0][0] > 0 or not ends):
+                        batch, ended = [scored[0][1]], False
+                    elif ends:
+                        batch, ended = [], True
+                    else:
+                        batch, ended = [scored[0][1]] if scored else [], False
+                elif cfg.lines_per_call > 1 and callable(getattr(llm, "lines", None)):
                     batch, ended = llm.lines(context, temp, cfg.top_k, cfg.lines_per_call * cfg.max_line_tokens)
                 else:
                     text, finish = llm.line(context, temp, cfg.top_k, cfg.max_line_tokens)
@@ -134,6 +157,13 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
                         break
                     continue
                 if ended:
+                    if hasattr(s, "allow_end") and not s.allow_end() and refusals < cfg.max_end_refusals:
+                        refusals += 1  # too little of the target is built: keep going, like a rejected brick
+                        res.rejections += 1
+                        emit("reject", line="<end>", why="ended_early", temperature=round(temp, 2))
+                        if accepted:
+                            break
+                        continue
                     done = True
                 break
             else:

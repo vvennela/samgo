@@ -41,6 +41,20 @@ class Sampler:
             tokens = tokens[: tokens.index(self.end_id)]
         return split_lines(self.tok.decode(tokens, skip_special_tokens=True), ended)
 
+    def candidates(self, prompt: str, temperature: float, top_k: int, max_tokens: int, k: int) -> list:
+        """k sampled next lines; None for a sample that ended the answer."""
+        from fireworks.training import sdk
+
+        ids = self.tok.encode(prompt, add_special_tokens=False)
+        params = sdk.SamplingParams(max_tokens=max_tokens, temperature=temperature, top_k=top_k, stop=["\n", END])
+        out = self.client.sample(prompt=sdk.ModelInput.from_ints(ids), num_samples=k, sampling_params=params).result()
+        texts = []
+        for seq in out.sequences:
+            tokens = list(seq.tokens)
+            text = self.tok.decode([t for t in tokens if t != self.end_id], skip_special_tokens=True).strip()
+            texts.append(text or None)
+        return texts
+
     def close(self) -> None:
         for obj in (self.client, self.service):
             close = getattr(obj, "close", None)
