@@ -42,6 +42,10 @@ class Config:
     best_of: int = 1
     # Times the model's end of answer is refused (structure.allow_end() is False) before it is accepted.
     max_end_refusals: int = 30
+    # A line already rejected at this position is a repeat: it raises the temperature this much more, and after
+    # max_repeats repeats at one position the model counts as stuck and the build stops there.
+    repeat_temperature_jump: float = 0.05
+    max_repeats: int = 40
 
 
 @dataclass
@@ -121,10 +125,25 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
         done = False
         while len(s.bricks) < cfg.max_bricks and not done:
             context = prompt + "".join(line + "\n" for line in s.txt().splitlines())
+            seen_bad: set[str] = set()  # lines already rejected at this position
+            repeats = 0
             for attempt in range(cfg.max_brick_rejections):
-                temp = min(cfg.temperature + cfg.temperature_increase * attempt, cfg.max_temperature)
+                if repeats > cfg.max_repeats:
+                    res.gave_up = "stuck repeating rejected parts"
+                    emit("give_up", why=res.gave_up, at=len(s.bricks))
+                    done = True
+                    break
+                temp = min(cfg.temperature + cfg.temperature_increase * attempt + cfg.repeat_temperature_jump * repeats,
+                           cfg.max_temperature)
                 if cfg.best_of > 1 and callable(getattr(llm, "candidates", None)) and hasattr(s, "score"):
                     cands = llm.candidates(context, temp, cfg.top_k, cfg.max_line_tokens, cfg.best_of)
+                    fresh = [c for c in cands if c is None or c.strip() not in seen_bad]
+                    if not fresh:  # every candidate was already rejected here
+                        repeats += 1
+                        res.calls += 1
+                        emit("repeat", lines=[c.strip()[:40] for c in cands if c], temperature=round(temp, 2))
+                        continue
+                    cands = fresh
                     ends = [c for c in cands if c is None]
                     scored = sorted(((s.score(c), c) for c in cands if c is not None), reverse=True)
                     if scored and scored[0][0] >= 0 and (scored[0][0] > 0 or not ends):
@@ -152,6 +171,9 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
                     emit("place", brick=text.strip(), n=len(s.bricks))
                 if bad:
                     res.rejections += 1
+                    if bad[0].strip() in seen_bad:
+                        repeats += 1
+                    seen_bad.add(bad[0].strip())
                     emit("reject", line=bad[0].strip()[:40], why=bad[1], temperature=round(temp, 2))
                     if accepted:  # progress was made: the next brick starts its own attempt count
                         break

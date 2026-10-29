@@ -67,3 +67,21 @@ def test_photo_colors_follow_the_target_cells_each_part_covers():
     for line in ("2x4 (0,0,0)", "2x4 (2,0,0)"):
         s.add(parse(line))
     assert s.colors() == [4, 1]  # LDraw red, blue
+
+
+def test_a_floating_part_is_rejected_when_placed_not_rolled_back_later():
+    s = checked(box(x=4, y=4, z=3))
+    s.add(parse("2x4 (0,0,0)"))
+    assert s.reject_reason("2x4 (2,0,1)") == "floating"      # nothing under it, nothing on it
+    assert s.reject_reason("2x4 (0,0,1)") is None             # sits on the first brick
+
+
+def test_repeating_a_rejected_part_raises_temperature_and_gives_up_when_stuck():
+    from brickgpt.decode import Config, generate
+
+    rounds = [["2x4 (0,0,0)"]] + [["2x4 (9,9,0)"]] * 60
+    s = checked(box(x=2, y=4, z=1), min_coverage=0.0)
+    res = generate(Candidates(rounds), "", Config(best_of=3, max_repeats=5), structure=s, parse_line=parse)
+    temps = [e["temperature"] for e in res.events if e["kind"] in ("reject", "repeat")]
+    assert res.gave_up == "stuck repeating rejected parts" and temps == sorted(temps) and temps[-1] > temps[0] + 0.2
+    assert s.txt().splitlines() == ["2x4 (0,0,0)"]

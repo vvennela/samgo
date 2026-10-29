@@ -82,6 +82,15 @@ Put a compact encoding of the target shape in the prompt (as BrickAnything condi
 model proposes the right bricks from the start instead of being steered: fewer rejections, faster builds, and
 the route to resolution as an input and windowed large builds. A separate training run after v1.
 
+## First real check (Oct 29, base Glimmer, chair, $0.70 cap)
+
+Plumbing worked (595 calls, best-of-3, budget guard). The build failed: 75% of proposals fell outside the
+chair, the model re-proposed the same rejected brick up to 54 times, and the end-of-build stability check found
+a floating brick at #5 and rolled back 71 bricks. Fixes since: rejected lines are remembered per position
+(repeats raise temperature +0.05 and 40 repeats stop the build as stuck), and floating parts are rejected when
+placed. The outside-shape rate is the text-only model's own idea of "a chair": the real fix is giving the model
+the shape (shape-conditioned training), now the likely next training run after v1/v2.
+
 ## Still open
 
 - Add the part count to the v2 prompts (before v2 trains)?

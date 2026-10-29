@@ -2,8 +2,8 @@
 
 Wraps a decoder structure (BrickGPT's 8 bricks, or the v2 35-part palette) with a target shape from S2
 (photo -> SAM 3.1 -> SAM 3D -> voxels) and adds:
-- `reject_reason`: a part that fills a cell outside the target (allowing `tolerance` cells at its edges)
-  is rejected and resampled, like a collision;
+- `reject_reason`: a part that fills a cell outside the target (allowing `tolerance` cells at its edges), or
+  that would float (nothing below or above it), is rejected and resampled, like a collision;
 - `allow_end`: the model may only stop once the build covers `min_coverage` of the target (default 70%);
 - `score`: for best-of-k sampling, how many still-empty target cells a candidate part fills;
 - `metrics`: coverage, precision and IoU against the target;
@@ -84,9 +84,23 @@ class ShapeChecked:
         why = self.base.reject_reason(line)
         if why is not None:
             return why
-        if not self.allowed[_cells(self.parse(line))].all():
+        cells = _cells(self.parse(line))
+        if not self.allowed[cells].all():
             return "outside_shape"
+        if self._floats(cells):
+            return "floating"
         return None
+
+    def _floats(self, cells) -> bool:
+        """BrickGPT's floating rule, checked at placement: not on the ground and nothing directly below or above.
+        (BrickGPT only finds floating parts in the end-of-build stability check, where one early floater rolls
+        back everything after it.)"""
+        xs, ys, zs = cells
+        if zs.start == 0:
+            return False
+        below = self.built[xs, ys, zs.start - 1].any()
+        above = zs.stop < self.built.shape[2] and self.built[xs, ys, zs.stop].any()
+        return not (below or above)
 
     def coverage(self) -> float:
         return float((self.built & self.target).sum()) / max(self.n_target, 1)
