@@ -57,6 +57,7 @@ def main() -> None:
     ap.add_argument("--eval", type=Path, required=True)
     ap.add_argument("--rank", type=int, default=32)
     ap.add_argument("--trial", default="32:25,64:25", help="batch:steps phases timed first, on the same model")
+    ap.add_argument("--batch", type=int, default=None, help="fixed batch size; skips the trial")
     ap.add_argument("--lr", type=float, default=1e-4, help="for batch 32; scaled by sqrt(batch/32)")
     ap.add_argument("--warmup-rows", type=int, default=800)
     ap.add_argument("--faster", type=float, default=1.5, help="batch 64 must be this much faster to be chosen")
@@ -193,8 +194,10 @@ def main() -> None:
         order = [i for e in range(args.epochs) for i in random.Random(args.seed + e).sample(range(len(datums)), len(datums))]
         rows_done, step = state.get("rows", 0), state.get("step", 0)
         trial = [(int(b), int(n)) for b, n in (x.split(":") for x in args.trial.split(","))] if args.trial else []
+        if args.batch:
+            state["batch"] = args.batch
         if state.get("batch"):
-            trial = []  # resumed after the choice was made
+            trial = []  # fixed by --batch, or resumed after the choice was made
         plan_iter = iter([b for b, n in trial for _ in range(n)])
         chosen = state.get("batch")
         timing: dict[int, list] = {}
