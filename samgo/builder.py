@@ -94,8 +94,12 @@ def _score(layout: _Layout, x: int, y: int, z: int, w: int, l: int, h: int) -> f
     return w * l * (1 + 0.3 * (h == 3)) + 8 * joins + 3 * crossings + 4 * supported + 4 * grounded - 6 * aligned
 
 
-def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, given: list[dict] = ()) -> list[dict]:
+def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, given: list[dict] = (),
+            sizes: dict | None = None) -> list[dict]:
     layout = _Layout(target)
+    # Per-kind footprints, both orientations, largest first (default: the v1 palette for every kind).
+    allowed = {k: {s for a, b in (sizes or {}).get(k, FOOTPRINTS) for s in ((a, b), (b, a))} for k in ("brick", "plate")}
+    order = sorted(allowed["brick"] | allowed["plate"], key=lambda s: (-s[0] * s[1], s))
     for p in given:  # pre-placed pieces (e.g. a car's chassis) are built around, never changed
         layout.place(p["w"], p["l"], p["type"], p["x"], p["y"], p["z"], COLOR_INDEX[p["color"]])
     X, Y, Z = target.shape
@@ -110,19 +114,19 @@ def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, g
                 if color == 0 or layout.owner[ax, ay, z] >= 0:
                     continue
                 best, best_score = None, -np.inf
-                for w, l in SHAPES:
-                    # The anchor is the first unfilled cell in scan order, so it is a corner.
-                    x = ax if sx > 0 else ax - w + 1
-                    y = ay if sy > 0 else ay - l + 1
-                    for kind in kinds:
+                for w, l in order:
+                    for kind in (k for k in kinds if (w, l) in allowed[k]):
+                        # The anchor is the first unfilled cell in scan order, so it is a corner.
+                        x = ax if sx > 0 else ax - w + 1
+                        y = ay if sy > 0 else ay - l + 1
                         h = HEIGHTS[kind]
                         if not _fits(layout, x, y, z, w, l, h, color):
                             continue
-                        s = _score(layout, x, y, z, w, l, h)
+                        sc = _score(layout, x, y, z, w, l, h)
                         if rng is not None:
-                            s += rng.uniform(0, 2)
-                        if s > best_score:
-                            best, best_score = (w, l, kind, x, y), s
+                            sc += rng.uniform(0, 2)
+                        if sc > best_score:
+                            best, best_score = (w, l, kind, x, y), sc
                 w, l, kind, x, y = best  # a 1x1 plate always fits the anchor
                 layout.place(w, l, kind, x, y, z, int(color))
     return layout.pieces
@@ -138,7 +142,7 @@ def _repair(pieces: list[dict], target: np.ndarray, config: MatchConfig, keep: i
 
 
 def build(target: np.ndarray, attempts: int = 8, seed: int = 0, config: MatchConfig = MatchConfig(),
-          given: list[dict] = (), pull=None) -> Build:
+          given: list[dict] = (), pull=None, sizes: dict | None = None) -> Build:
     """Return the best of several layouts: passing first, then least stud pull, then highest IoU, then fewest pieces.
 
     `given` pieces come first in the result and are kept as they are; the target must contain their cells.
@@ -149,7 +153,7 @@ def build(target: np.ndarray, attempts: int = 8, seed: int = 0, config: MatchCon
     best: Build | None = None
     for attempt in range(attempts):
         # Attempt 0 is deterministic; later ones randomize scans and ties, and some use plates only.
-        pieces = _layout(target, None if attempt == 0 else rng, bricks=attempt % 4 != 3, given=list(given))
+        pieces = _layout(target, None if attempt == 0 else rng, bricks=attempt % 4 != 3, given=list(given), sizes=sizes)
         pieces, report = _repair(pieces, target, config, keep=len(given))
         candidate = Build(pieces, report, attempt, pull(pieces) if report.passed else np.inf)
         if best is None or _rank(candidate) > _rank(best):
