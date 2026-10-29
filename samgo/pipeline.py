@@ -2,6 +2,8 @@
 
     uv run python -m samgo.pipeline photos/beetle.jpg --prompt car --car -o runs/s6/beetle
 
+0. Muse Spark Open decides what the object must do: a vehicle (rolls) or a static object (S2.5),
+   unless --car / --static says so.
 1. SAM 3.1 segments the object, SAM 3D reconstructs it (S1).
 2. The mesh becomes a LEGO-scale target grid (S2).
 3. For a vehicle: SAM 3.1 finds the wheels, and the car builder places a Technic chassis, axles and
@@ -20,21 +22,29 @@ import numpy as np
 
 from .builder import build
 from .car import build_car
+from .function_spec import infer
 from .perceive import perceive
 from .stability import stability
 from .voxelize import SIZES, load_mesh, render, voxelize
 from .wheels import detect
 
 
-def run(photo: Path, prompt: str, out: Path, car: bool, size: str = "medium", reuse: bool = True) -> dict:
+def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str = "medium", reuse: bool = True) -> dict:
     out.mkdir(parents=True, exist_ok=True)
+    spec = None
+    if car is None:
+        spec_path = out / "function_spec.json"
+        spec = json.loads(spec_path.read_text()) if reuse and spec_path.exists() else asyncio.run(infer(photo))
+        spec_path.write_text(json.dumps(spec, indent=2))
+        car = spec.get("kind") == "vehicle"
     if not (reuse and (out / "object.glb").exists()):
         asyncio.run(perceive(photo, prompt, out))
     target = voxelize(load_mesh(out / "object.glb"), SIZES[size])
     np.savez_compressed(out / "target.npz", target=target)
     render(target, out / "target.png")
 
-    summary: dict = {"photo": str(photo), "target_shape": list(target.shape), "cells": int((target > 0).sum())}
+    summary: dict = {"photo": str(photo), "function_spec": spec, "vehicle": car, "target_shape": list(target.shape),
+                     "cells": int((target > 0).sum())}
     if car:
         wheels = json.loads((out / "wheels.json").read_text()) if reuse and (out / "wheels.json").exists() \
             else asyncio.run(detect(out))
@@ -66,7 +76,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="photo -> verified LEGO-compatible build + instructions")
     ap.add_argument("photo", type=Path)
     ap.add_argument("--prompt", required=True, help="what to segment, e.g. 'car'")
-    ap.add_argument("--car", action="store_true", help="build a rolling vehicle (chassis, axles, wheels)")
+    kind = ap.add_mutually_exclusive_group()
+    kind.add_argument("--car", dest="car", action="store_const", const=True, help="force a rolling vehicle build")
+    kind.add_argument("--static", dest="car", action="store_const", const=False, help="force a static build")
     ap.add_argument("--size", choices=SIZES, default="medium")
     ap.add_argument("-o", "--out", type=Path, required=True)
     ap.add_argument("--fresh", action="store_true", help="redo perception even if outputs exist")
