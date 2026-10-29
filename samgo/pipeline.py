@@ -7,8 +7,8 @@
 3. For a vehicle: SAM 3.1 finds the wheels, and the car builder places a Technic chassis, axles and
    wheels there with the body on top (S4f); otherwise the structural builder fills the target (S4).
 4. The verifiers check the result (S3a structure, S3b stability, S3c function for vehicles); failures are
-   reported. Instructions are written when structure and function pass; stability is reported alongside.
-5. Instructions are written (S5).
+   reported, and stability is reported alongside.
+5. Instructions are written (S5) when structure and function pass.
 """
 
 import argparse
