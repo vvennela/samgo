@@ -38,6 +38,7 @@ def main() -> None:
     ap.add_argument("--tolerance", type=int, default=1, help="cells a part may extend past the object's edge")
     ap.add_argument("--min-coverage", type=float, default=0.7, help="share of the object built before stopping")
     ap.add_argument("--caption", default=None, help="skip Spark and use this caption")
+    ap.add_argument("--budget", type=float, default=None, help="sampler: stop calling the API at this worst-case USD estimate")
     args = ap.parse_args()
     load_dotenv(REPO / ".env")
 
@@ -65,7 +66,7 @@ def main() -> None:
         llm = Replay(args.replay.read_text().splitlines())
     elif args.backend == "sampler":
         from .fw_sampler import Sampler
-        llm = Sampler(args.model)
+        llm = Sampler(args.model, budget_usd=args.budget)
     else:
         if not args.model:
             raise SystemExit("--model is required with --backend completions")
@@ -80,6 +81,9 @@ def main() -> None:
     summary = {"caption": text, "palette": args.palette, "model": args.model or "base", "best_of": args.best_of,
                "parts": len(s.bricks), "stable": res.stable, "rejections": res.rejections, "rollbacks": res.rollbacks,
                "calls": res.calls, "seconds": round(res.seconds, 1), "gave_up": res.gave_up, **s.metrics()}
+    if hasattr(llm, "cost"):
+        summary |= {"est_cost_usd_max": round(llm.cost(), 3), "prefill_tokens": llm.prefill_tokens,
+                    "sample_tokens": llm.sample_tokens, "budget_hit": llm.over_budget()}
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
     if s.bricks:
         render_build(s, out / "model.png", f"{args.folder.name}: IoU {summary['iou']}, {len(s.bricks)} parts")
