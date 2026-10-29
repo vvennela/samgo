@@ -59,10 +59,29 @@ and is rebuilt. → LDraw file + instructions → the physical build.
 - Dropped: verifier-only training, reverse curriculum, GRPO. Not needed for the demo; GRPO stays as
   future work.
 
+## Fireworks (researched Oct 29)
+
+- **Model:** `accounts/fireworks/models/muse-glimmer-30b` (29.7B dense, 131k context, Apache 2.0, image input,
+  reasoning strength low..xhigh). Tunable with LoRA (rank up to 128, firectl default 8).
+- **Training:** "Muse Glimmer 30B SFT is free via UI and Serverless Training API until 11/30", no card needed.
+  List price otherwise $3 / 1M tokens (our ~65M tokens would be ~$195). Launch from the UI to be sure the
+  promotion applies. Data: chat JSONL with `messages`, 3 to 3M lines; set `--lora-rank` explicitly (an omitted
+  rank in the API means full-parameter training). Track loss with the W&B flags.
+- **Serving:** no serverless for Glimmer after Sep 25; on-demand only, **$8 per H100- or H200-hour**, billed per
+  GPU-second while replicas run. Scale-to-zero only after 1 h idle, so delete the deployment after each session
+  (`firectl deployment delete`). `--preemptible` exists for eval.
+- **Decoding fits:** `/v1/completions` takes a raw prompt string or token ids (no chat template applied: we render
+  Glimmer's template ourselves), `stop` (up to 4), `n` up to 128, `logprobs`, `return_token_ids`. Prompt caching
+  is automatic on exact prefixes, so each brick-by-brick call reuses the growing build; cache hits show in
+  `usage.prompt_tokens_details.cached_tokens` and the `fireworks-cached-prompt-tokens` header.
+- **The LoRA can be downloaded** (listed as `HF_PEFT_ADDON`, standard PEFT files), so we can train free on
+  Fireworks and serve it ourselves with vLLM on a rented GPU (~$2.50/h) if $8/h adds up.
+- Setup: `brew tap fw-ai/firectl && brew install firectl`, `firectl signin`; API calls use `FIREWORKS_API_KEY`.
+
 ## Costs and risks
 
-- SFT: free on Fireworks until Nov 30. Serving the fine-tuned model needs an on-demand deployment
-  (dedicated GPU, billed per hour); used only for eval and the demo, a few hours. Captions on Baseten.
+- SFT: free on Fireworks until Nov 30. Serving: Fireworks on-demand at $8/h (eval + baselines about 3 h,
+  ~$25; demo sessions extra), or download the LoRA and serve with vLLM on RunPod at ~$2.50/h. Captions on Baseten.
 - Fireworks account and API key needed (`FIREWORKS_API_KEY`).
 - Risk: brick-by-brick decoding over an API is many small calls; prefix caching on a dedicated
   deployment keeps it to about a minute per build (BrickGPT: 41 s median). Fallback: vLLM with the
