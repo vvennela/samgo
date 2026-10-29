@@ -231,6 +231,13 @@ def main() -> None:
                 state_path.write_text(json.dumps(state))
                 last_saved = r
                 say(event="checkpoint", step=st, rows=r)
+                # Training-state checkpoints cannot be promoted or sampled; also export and promote a sampler
+                # copy so the decoder can be tested on this checkpoint while training continues.
+                try:
+                    tc.save_weights_for_sampler(f"{args.run_id}-s{r}").result()
+                    promote(f"{args.run_id}-s{r}", f"{args.run_id}-s{r}")
+                except Exception as e:  # noqa: BLE001
+                    say(event="promote_failed", rows=r, detail=str(e)[:200])
 
         def tok_rate(b: int) -> float:
             ts = timing.get(b, [])[2:]  # skip the first steps of a phase (queue fill)
