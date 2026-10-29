@@ -1,4 +1,4 @@
-"""The SAMgo v2 palette: 31 parts of 9 kinds (bricks, plates, tiles, 45-degree and inverted slopes, curved
+"""The SAMgo v2 palette: 35 parts of 9 kinds (bricks, plates, tiles, 45-degree and inverted slopes, curved
 slopes, round bricks and plates, arches), with what each part can connect to.
 
 Grid: x, y in studs, z in plates. A placed part has a footprint w (along x) by l (along y), a height in
@@ -33,9 +33,9 @@ class Kind:
 
 KINDS = {
     "brick": Kind(3, {(1, 1): "3005", (1, 2): "3004", (1, 3): "3622", (1, 4): "3010", (1, 6): "3009",
-                      (2, 2): "3003", (2, 3): "3002", (2, 4): "3001"}),
-    "plate": Kind(1, {(1, 1): "3024", (1, 2): "3023b", (1, 4): "3710", (1, 6): "3666", (2, 2): "3022",
-                      (2, 4): "3020", (2, 6): "3795", (4, 4): "3031"}),
+                      (1, 8): "3008", (2, 2): "3003", (2, 3): "3002", (2, 4): "3001", (2, 6): "2456"}),
+    "plate": Kind(1, {(1, 1): "3024", (1, 2): "3023b", (1, 4): "3710", (1, 6): "3666", (1, 8): "3460",
+                      (2, 2): "3022", (2, 4): "3020", (2, 6): "3795", (2, 8): "3034", (4, 4): "3031"}),
     "tile": Kind(1, {(1, 2): "3069b", (1, 4): "2431", (2, 2): "3068b"}, studs="none"),
     "slope": Kind(3, {(1, 2): "3040b", (2, 2): "3039", (4, 2): "3037"}, sloped=True, studs="high", origin="back"),
     "invslope": Kind(3, {(1, 2): "3665a"}, sloped=True, grips="high", origin="back"),

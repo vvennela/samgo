@@ -9,8 +9,8 @@ def P(line):
     return parse(line)
 
 
-def test_palette_has_31_parts_of_9_kinds():
-    assert count() == 31 and len(KINDS) == 9
+def test_palette_has_35_parts_of_9_kinds():
+    assert count() == 35 and len(KINDS) == 9
 
 
 def test_lines_round_trip_and_bad_lines_are_rejected():
