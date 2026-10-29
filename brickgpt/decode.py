@@ -33,6 +33,10 @@ class Config:
     max_bricks: int = 2000
     max_regenerations: int = 100
     max_line_tokens: int = 16
+    # Lines asked for per model call. Lines are accepted in order up to the first bad one, then the rest is
+    # dropped and sampling resumes from there: the accepted bricks are distributed exactly as with one call
+    # per brick (generation is left to right anyway), with several times fewer calls.
+    lines_per_call: int = 8
 
 
 @dataclass
@@ -70,6 +74,21 @@ class Completions:
         c = r.choices[0]
         return c.text, c.finish_reason
 
+    def lines(self, prompt: str, temperature: float, top_k: int, max_tokens: int) -> tuple[list[str], bool]:
+        """Complete lines (a cut-off last line is dropped) and whether the answer ended after them."""
+        r = self.client.completions.create(
+            model=self.model, prompt=prompt, max_tokens=max_tokens, temperature=temperature,
+            stop=[END], extra_body={"top_k": top_k, "prompt_cache_key": self.session})
+        c = r.choices[0]
+        return split_lines(c.text, ended=c.finish_reason == "stop")
+
+
+def split_lines(text: str, ended: bool) -> tuple[list[str], bool]:
+    """Whole lines of a sampled chunk; the last one counts only if a newline or the end of answer closed it."""
+    parts = text.split("\n")
+    complete = parts[:-1] + ([parts[-1]] if ended and parts[-1].strip() else [])
+    return [p for p in complete if p.strip()], ended
+
 
 def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=None, parse_line=None) -> Result:
     """structure/parse_line default to BrickGPT's 8-brick rules; pass brickgpt.v2.Structure2() and
@@ -91,19 +110,32 @@ def generate(llm, prompt: str, cfg: Config = Config(), on_event=None, structure=
             context = prompt + "".join(line + "\n" for line in s.txt().splitlines())
             for attempt in range(cfg.max_brick_rejections):
                 temp = min(cfg.temperature + cfg.temperature_increase * attempt, cfg.max_temperature)
-                text, finish = llm.line(context, temp, cfg.top_k, cfg.max_line_tokens)
+                if cfg.lines_per_call > 1 and callable(getattr(llm, "lines", None)):
+                    batch, ended = llm.lines(context, temp, cfg.top_k, cfg.lines_per_call * cfg.max_line_tokens)
+                else:
+                    text, finish = llm.line(context, temp, cfg.top_k, cfg.max_line_tokens)
+                    batch, ended = ([text] if text.strip() else []), (not text.strip() and finish == "stop")
                 res.calls += 1
-                if not text.strip() and finish == "stop":  # the model ended its answer
-                    done = True
-                    break
-                why = s.reject_reason(text)
-                if why is None:
-                    b = parse_line(text)
-                    s.add(b)
+                accepted, bad = 0, None
+                for text in batch:
+                    if len(s.bricks) >= cfg.max_bricks:
+                        break
+                    why = s.reject_reason(text)
+                    if why is not None:
+                        bad = (text, why)
+                        break
+                    s.add(parse_line(text))
+                    accepted += 1
                     emit("place", brick=text.strip(), n=len(s.bricks))
-                    break
-                res.rejections += 1
-                emit("reject", line=text.strip()[:40], why=why, temperature=round(temp, 2))
+                if bad:
+                    res.rejections += 1
+                    emit("reject", line=bad[0].strip()[:40], why=bad[1], temperature=round(temp, 2))
+                    if accepted:  # progress was made: the next brick starts its own attempt count
+                        break
+                    continue
+                if ended:
+                    done = True
+                break
             else:
                 res.gave_up = "too many rejections for one brick"
                 emit("give_up", why=res.gave_up)

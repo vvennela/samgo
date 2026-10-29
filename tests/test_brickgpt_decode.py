@@ -55,3 +55,29 @@ def test_v2_rules_plug_into_the_same_decoder():
     assert [e["why"] for e in res.events if e["kind"] == "reject"] == ["not_in_library"]
     assert res.rollbacks == 1 and res.stable
     assert res.structure.txt().splitlines() == ["brick 2x4 (0,0,0)", "slope 2x2 (0,0,3) -y", "tile 2x2 (0,2,3)"]
+
+
+class Chunked:
+    """Fake model that answers several lines per call, as llm.lines() does."""
+
+    def __init__(self, chunks):
+        self.chunks, self.i = list(chunks), 0
+
+    def lines(self, prompt, temperature, top_k, max_tokens):
+        chunk = self.chunks[self.i] if self.i < len(self.chunks) else ([], True)
+        self.i += 1
+        return chunk
+
+
+def test_several_lines_per_call_accept_up_to_the_first_bad_one():
+    chunks = [(["2x4 (0,0,0)", "2x4 (2,0,0)", "2x4 (0,0,0)", "2x4 (9,9,0)"], False),  # third collides: rest dropped
+              (["2x4 (0,0,1)"], True)]
+    res = generate(Chunked(chunks), "", Config())
+    assert res.structure.txt().splitlines() == BASE and res.calls == 2 and res.rejections == 1 and res.stable
+
+
+def test_split_lines_drops_a_cut_off_last_line():
+    from brickgpt.decode import split_lines
+
+    assert split_lines("2x4 (0,0,0)\n2x4 (2,0", ended=False) == (["2x4 (0,0,0)"], False)
+    assert split_lines("2x4 (0,0,0)\n2x4 (2,0,0)", ended=True) == (["2x4 (0,0,0)", "2x4 (2,0,0)"], True)
