@@ -28,6 +28,8 @@ def main() -> None:
     ap.add_argument("--skip-after-switch", type=int, default=2)
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--inflight", type=int, default=2)
+    ap.add_argument("--load-snapshot", action="store_true",
+                    help="load the earlier run's weights (needs a promoted model; speed does not depend on weights)")
     args = ap.parse_args()
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
 
@@ -75,9 +77,9 @@ def main() -> None:
     enable_serverless_supervised_409_retry(service)
     try:
         tc = service.create_lora_training_client(base_model=BASE_MODEL, rank=32, alpha=32)
-        if state.get("adapter_path"):
+        if args.load_snapshot and state.get("adapter_path"):
             tc.load_adapter(state["adapter_path"]).result()
-        say(event="session", session=getattr(service, "training_session_id", None), warm_start=bool(state.get("adapter_path")))
+        say(event="session", session=getattr(service, "training_session_id", None), loaded=args.load_snapshot)
         pending, done, pos, prev_tag, since_switch = [], [], 0, None, 0
         for b, tag in plan:
             since_switch = since_switch + 1 if tag == prev_tag else 1
