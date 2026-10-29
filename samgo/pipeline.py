@@ -6,7 +6,8 @@
 2. The mesh becomes a LEGO-scale target grid (S2).
 3. For a vehicle: SAM 3.1 finds the wheels, and the car builder places a Technic chassis, axles and
    wheels there with the body on top (S4f); otherwise the structural builder fills the target (S4).
-4. Both verifiers check the result (S3a structure, S3c function for vehicles); a failure is reported.
+4. The verifiers check the result (S3a structure, S3b stability, S3c function for vehicles); failures are
+   reported. Instructions are written when structure and function pass; stability is reported alongside.
 5. Instructions are written (S5).
 """
 
@@ -20,6 +21,7 @@ import numpy as np
 from .builder import build
 from .car import build_car
 from .perceive import perceive
+from .stability import stability
 from .voxelize import SIZES, load_mesh, render, voxelize
 from .wheels import detect
 
@@ -49,6 +51,9 @@ def run(photo: Path, prompt: str, out: Path, car: bool, size: str = "medium", re
         parts, structure = b.pieces, b.report
     summary |= {"parts": len(parts), "structure_passed": structure.passed,
                 "structure_issues": sorted(structure.codes), "iou": round(structure.metrics.get("iou", 0.0), 3)}
+    stands = stability(parts, vehicle=car)
+    summary |= {"stands": stands.passed, "peak_pull_per_stud": None if stands.metrics.get("peak_tension") is None
+                else round(4 * stands.metrics["peak_tension"], 1), "stability_issues": sorted(stands.codes)}
     (out / "build.json").write_text(json.dumps(parts))
     if summary["structure_passed"] and summary.get("function_passed", True):
         from .instructions import write  # matplotlib only when there is something to draw
