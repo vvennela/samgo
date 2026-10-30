@@ -265,11 +265,20 @@ function build(m) {
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(c[5], c[5], c[3], 20), mat);
     orient(mesh, c); holder(c).add(mesh);
   }
+  const spokeMat = new THREE.MeshLambertMaterial({color: 0x4a4f57});
   const tyre = new THREE.MeshLambertMaterial({color: 0x1b1b1b}), rim = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0xc9ccd1});
   for (const w of m.scene.wheels) {
     const r = w[5], tw = w[6];
     const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, tw, 40), tyre); orient(t, w); holder(w).add(t);
     const h = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, tw + 0.6, 24), rim); orient(h, w); holder(w).add(h);
+    // Spokes across the hub: a plain cylinder looks the same at every angle, so without them a spinning wheel
+    // shows no motion at all.
+    const spokes = new THREE.Group();
+    for (const turn of [0, Math.PI / 2]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(r * 1.15, tw + 1.2, r * 0.16), spokeMat);
+      bar.rotation.y = turn; spokes.add(bar);
+    }
+    orient(spokes, w); holder(w).add(spokes);
   }
   // Ground at the lowest point, so it is visible what touches the floor.
   const bb = new THREE.Box3().setFromObject(g), size = bb.getSize(new THREE.Vector3());
