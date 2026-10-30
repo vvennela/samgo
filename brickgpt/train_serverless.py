@@ -162,7 +162,10 @@ def main() -> None:
                                     stop=renderer.get_stop_sequences())
 
         def evaluate(label: str) -> dict:
-            if not eval_rows:  # the task is evaluated by its own checker after training
+            if not eval_rows:  # the task is evaluated by its own checker after training; still save the weights
+                if label == "tuned":  # (promotion looks for this snapshot)
+                    path = tc.save_weights_for_sampler(f"{args.run_id}-{label}").result().path
+                    say(event="sampler_saved", label=label, path=path)
                 summary = {"label": label, "n": 0, "skipped": True}
                 say(event="eval", **summary)
                 return summary
