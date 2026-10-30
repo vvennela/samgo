@@ -45,7 +45,8 @@ def wheel_studs(size: str) -> int:
 TOLERANCE = 0.3                  # mm; contact closer than this is not an intersection
 GROUND_CLEARANCE = 1.0           # wheels must reach this far below the lowest body part, mm
 
-FUNCTIONAL = {"technic_brick", "axle", "wheel"}
+FUNCTIONAL = {"technic_brick", "axle", "wheel", "bush"}
+# Technic bush (LDraw 3713): a 1-stud collar that grips an axle, used to hold a wheel in place along it.
 
 
 @dataclass(frozen=True)
@@ -90,7 +91,7 @@ def _holes(p: dict) -> list[tuple[str, float, float, float, float]]:
 def _line(a: dict) -> tuple[str, float, float, float, float]:
     """(axis, edge mm, z mm, span start mm, span end mm) of an axle or wheel."""
     edge, start = (a["x"], a["y"]) if a["axis"] == "y" else (a["y"], a["x"])
-    size = a.get("length", a.get("width"))
+    size = a.get("length", a.get("width", 1 if a.get("type") == "bush" else None))
     return a["axis"], edge * STUD, a["z"] * PLATE + HOLE_HEIGHT, start * STUD, (start + size) * STUD
 
 
@@ -118,6 +119,9 @@ def _validate(p: dict) -> str | None:
             if p["axis"] not in ("x", "y") or int(p["length"]) not in lengths:
                 kind = "stop axles come" if p.get("stop") else "axles come"
                 return f"axle needs axis x or y; {kind} in lengths {', '.join(map(str, lengths))}"
+        elif t == "bush":
+            if p["axis"] not in ("x", "y") or int(p.get("width", 1)) != 1:
+                return "bush needs axis x or y and is 1 stud wide"
         elif t == "wheel":
             size = p.get("size", DEFAULT_WHEEL)
             if p["axis"] not in ("x", "y") or size not in WHEELS:
@@ -176,6 +180,27 @@ def verify_function(parts: list[dict]) -> Report:
                                               "on both ends", [ai]))
         if mine and not locked:
             wheeled.append((ai, axis, (axis, round(edge, 2), round(z, 2)), len(mine)))
+
+    # Each wheel must be held on both sides along its axle: by a beam's hole, a bush, another wheel, or the axle
+    # ending there. A gap lets it slide along the axle (real builds fill it with bushes).
+    bushes = [p for p in parts if isinstance(p, dict) and p.get("type") == "bush"]
+    for wi, w in wheels:
+        axis, edge, z, s0, s1 = _line(w)
+        line_axles = [_line(a) for _, a in axles if _line(a)[:3] == (axis, edge, z)]
+        stops = [(l[3], l[4]) for l in line_axles]
+        neighbours = [(_line(b)[3], _line(b)[4]) for b in bushes if _line(b)[:3] == (axis, edge, z)]
+        neighbours += [(_line(o)[3], _line(o)[4]) for oi, o in wheels if oi != wi and _line(o)[:3] == (axis, edge, z)]
+        for _, t in technic:
+            neighbours += [(h0, h1) for h_axis, h_edge, h_z, h0, h1 in _holes(t)
+                           if h_axis == axis and abs(h_edge - edge) < 0.01 and abs(h_z - z) < 0.01]
+        for face, side in ((s0, "start"), (s1, "end")):
+            ends_here = any(abs((a0 if side == "start" else a1) - face) < 0.01 or
+                            ((a0 > face - 0.01) if side == "start" else (a1 < face + 0.01)) for a0, a1 in stops)
+            held = any(abs((n1 if side == "start" else n0) - face) < 0.01 for n0, n1 in neighbours)
+            if line_axles and not (ends_here or held):
+                issues.append(Issue("wheel_slides", f"wheel {wi} can slide along its axle: nothing holds its "
+                                                    "one side (add a bush)", [wi]))
+                break
 
     for wi, w in wheels:
         r = WHEELS[w.get("size", DEFAULT_WHEEL)][0] / 2

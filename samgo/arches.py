@@ -192,8 +192,11 @@ def _build(target: np.ndarray, seed: int, attempts: int, beam: int) -> ArchedCar
                 shaped[edge - beam // 2:edge + beam // 2, y, zb:zb + 3] = COLOR_INDEX[CHASSIS_COLOR]
                 chassis.append({"type": "technic_brick", "w": beam, "l": 1, "x": edge - beam // 2, "y": y, "z": zb,
                                 "color": CHASSIS_COLOR, "hole": "round"})
-            gear.append({"type": "axle", "axis": "y", "x": edge, "z": zb, "y": Y0 - (through - W) // 2,
-                         "length": through})
+            a0 = Y0 - (through - W) // 2
+            gear.append({"type": "axle", "axis": "y", "x": edge, "z": zb, "y": a0, "length": through})
+            # Bushes (3713) on any axle sticking out past a wheel, so each wheel is held on both sides.
+            for y in list(range(a0, Y0)) + list(range(Y1, a0 + through)):
+                gear.append({"type": "bush", "axis": "y", "x": edge, "z": zb, "y": y})
             wheels.append(Wheel(edge, size, zb))
             continue
         stop = min(L for L in STOP_AXLE_LENGTHS if L >= w + 2) if w + 2 <= max(STOP_AXLE_LENGTHS) else None

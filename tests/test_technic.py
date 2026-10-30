@@ -123,3 +123,15 @@ def test_bigger_wheels_need_their_own_clearance():
             p.pop("width")
             p["size"] = "43.2x22"
     assert "wheel_blocked" in codes(parts)
+
+
+def test_a_wheel_with_a_gap_along_its_axle_slides_and_a_bush_holds_it():
+    parts = car()
+    for p in parts:
+        if p["type"] == "axle":
+            p["y"], p["length"] = -2, 8          # longer axle: it now sticks out past the outer wheel faces
+        if p["type"] == "wheel" and p["y"] == -1:
+            p["y"] = -1                          # left wheels stay against the beam
+    assert "wheel_slides" in codes(parts)
+    bushes = [{"type": "bush", "axis": "y", "x": x, "z": 0, "y": y} for x in (1, 7) for y in (-2, 5)]
+    assert "wheel_slides" not in codes(parts + bushes), verify_function(parts + bushes).issues
