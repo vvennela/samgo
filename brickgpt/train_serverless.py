@@ -226,18 +226,22 @@ def main() -> None:
             say(event="step", step=st, batch=b, rows=r, of=total_rows, loss=round(loss, 4), latency_s=round(dt, 1),
                 eta_h=round((total_rows - r) / rate_rows / 3600, 2), **grad)
             if r - last_saved >= args.save_every_rows:
-                path = tc.save_state(f"{args.run_id}-rows-{r}").result().path
-                state.update(step=st, rows=r, dcp_path=path, batch=chosen)
-                state_path.write_text(json.dumps(state))
-                last_saved = r
-                say(event="checkpoint", step=st, rows=r)
-                # Training-state checkpoints cannot be promoted or sampled; also export and promote a sampler
-                # copy so the decoder can be tested on this checkpoint while training continues.
+                # Training-state checkpoints cannot be promoted or sampled, so the checkpoint is a promoted sampler
+                # copy: testable mid-run, and the resume point if this process dies without its cleanup. state.json
+                # is only rewritten once that copy exists, so rows and weights on disk always match.
                 try:
                     tc.save_weights_for_sampler(f"{args.run_id}-s{r}").result()
-                    promote(f"{args.run_id}-s{r}", f"{args.run_id}-s{r}")
+                    model = promote(f"{args.run_id}-s{r}", f"{args.run_id}-s{r}")
                 except Exception as e:  # noqa: BLE001
+                    model = None
                     say(event="promote_failed", rows=r, detail=str(e)[:200])
+                if model:
+                    state.update(step=st, rows=r, adapter_path=model, batch=chosen)
+                    state_path.write_text(json.dumps(state))
+                    last_saved = r
+                    say(event="checkpoint", step=st, rows=r, model=model)
+                else:
+                    say(event="checkpoint_failed", rows=r)  # retried at the next step
 
         def tok_rate(b: int) -> float:
             ts = timing.get(b, [])[2:]  # skip the first steps of a phase (queue fill)
