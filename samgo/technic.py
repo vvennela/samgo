@@ -72,7 +72,10 @@ LIFTARM_LENGTHS = (3, 5, 7, 9, 11, 15)
 TECHNIC_LDRAW = {("pin", 2, True): "2780", ("pin", 2, False): "3673", ("pin", 3, True): "6558",
                  "axle_pin": "43093", "axle_joiner": "6538a", "half_bush": "32123a", "cross_block": "6536",
                  ("liftarm", 3): "32523", ("liftarm", 5): "32316", ("liftarm", 7): "32524", ("liftarm", 9): "40490",
-                 ("liftarm", 11): "32525", ("liftarm", 15): "32278"}
+                 ("liftarm", 11): "32525", ("liftarm", 15): "32278", ("liftarm", 2): "60483"}
+# Thick liftarms with an axle hole, so they lock onto an axle (a crank arm): length -> LDraw. 60483 is a 1x2 thick
+# beam with a pin hole and an axle hole; "axle_hole": "start" or "end" says which end hole is the axle hole.
+AXLE_HOLE_LIFTARMS = {2: "60483"}
 PIN_RADIUS = 2.4                 # pin shaft, 6 LDU
 TUBE_RADIUS = 3.6                # outside of joiners, bushes and the liftarm's rounded ends, 9 LDU
 BEAM_HEIGHT = 7.2                # thick liftarm, 18 LDU
@@ -205,7 +208,10 @@ def _validate(p: dict) -> str | None:
         elif t in ("axle_joiner", "half_bush", "cross_block", "liftarm"):
             if p["axis"] not in ("x", "y"):
                 return f"{t} needs axis x or y"
-            if t == "liftarm" and int(p["length"]) not in LIFTARM_LENGTHS:
+            if t == "liftarm" and "axle_hole" in p:
+                if int(p["length"]) not in AXLE_HOLE_LIFTARMS or p["axle_hole"] not in ("start", "end"):
+                    return "a liftarm with an axle hole is 2 long (60483), axle_hole start or end"
+            elif t == "liftarm" and int(p["length"]) not in LIFTARM_LENGTHS:
                 return f"liftarms come with {', '.join(map(str, LIFTARM_LENGTHS))} holes"
             if t == "cross_block" and p.get("pin_at", "+z") not in [s + k for s in "+-" for k in "xyz" if k != p["axis"]]:
                 return "pin_at must be +/- one of the two directions across the axle hole (e.g. +z)"

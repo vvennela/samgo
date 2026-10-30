@@ -41,6 +41,13 @@ class Body:
 
 
 def box(p: dict) -> tuple[np.ndarray, np.ndarray]:
+    if p["type"] == "wheel":  # the tyre's bounding box
+        r = WHEELS[p.get("size", DEFAULT_WHEEL)][0] / 2
+        w = wheel_studs(p.get("size", DEFAULT_WHEEL)) * STUD
+        c = _start(p)
+        along = AXES[p.get("axis", "y")]
+        lo = c - r * (1 - along)
+        return lo, lo + 2 * r * (1 - along) + w * along
     if p["type"] in BEAMS:
         lo, hi = extent(p)
         return np.array(lo), np.array(hi)
@@ -75,7 +82,10 @@ def connectors(p: dict) -> list[Connector]:
         return [Connector("axle_hole", _start(p), AXES[p["axis"]], (0.0, LENGTH[t] * STUD))]
     if t == "liftarm":  # thick beam: a round hole across it on every stud edge along it
         along, across = AXES[p["axis"]], AXES["y" if p["axis"] == "x" else "x"]
-        return [Connector("round_hole", _start(p) + i * STUD * along, across, (0.0, STUD)) for i in range(p["length"])]
+        n = p["length"]
+        axle_at = {"start": 0, "end": n - 1}.get(p.get("axle_hole"))  # 60483: one end hole is an axle hole
+        return [Connector("axle_hole" if i == axle_at else "round_hole", _start(p) + i * STUD * along, across,
+                          (0.0, STUD)) for i in range(n)]
     if t == "cross_block":  # 6536: the axle hole on the axis line, a pin hole 1 stud toward pin_at, across both
         ax = AXES[p["axis"]]
         side = p.get("pin_at", "+z")
@@ -233,11 +243,14 @@ def analyse(parts: list[dict]):
 
 def _corners(p: dict) -> np.ndarray:
     lo, hi = box(p)
-    if p["type"] == "wheel":
+    if p["type"] == "wheel":  # points on and inside the tyre's outline, across its width
         r = WHEELS[p.get("size", DEFAULT_WHEEL)][0] / 2
-        c = np.array([p["x"] * STUD, p["y"] * STUD, p["z"] * PLATE + HOLE_HEIGHT])
-        w = wheel_studs(p.get("size", DEFAULT_WHEEL)) * STUD
-        lo, hi = c - [r, 0, r], c + [r, w, r]
+        along = AXES[p.get("axis", "y")]
+        u, v = (AXES["x"], AXES["z"]) if p.get("axis", "y") == "y" else (AXES["y"], AXES["z"])
+        c, w = _start(p), wheel_studs(p.get("size", DEFAULT_WHEEL)) * STUD
+        th = np.linspace(0, 2 * np.pi, 32, endpoint=False)
+        ring = [c + k * r * (np.cos(t) * u + np.sin(t) * v) for k in (1.0, 0.66, 0.33) for t in th] + [c]
+        return np.array([q + s * w * along for q in ring for s in np.linspace(0, 1, 4)])
     xs, ys, zs = np.meshgrid(*[np.linspace(lo[k], hi[k], 4) for k in range(3)], indexing="ij")
     return np.c_[xs.ravel(), ys.ravel(), zs.ravel()]
 
@@ -248,10 +261,11 @@ def _inside(pts: np.ndarray, p: dict) -> bool:
 
 
 def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndarray, degrees: float,
-          steps: int = 18, ignore: set = frozenset()) -> float | None:
+          steps: int = 18, ignore: set = frozenset(), wheels: bool = False) -> float | None:
     """Turn the parts `moving` about the axis through `point`; the first angle where they hit a fixed part
-    (None if the whole sweep is clear). `ignore`: the joint's own parts, which turn past each other."""
-    solid = HEIGHT.keys() | BEAMS
+    (None if the whole sweep is clear). `ignore`: the joint's own parts, which turn past each other. With
+    `wheels`, tyres count too (as their bounding boxes): a steered wheel must clear the frame."""
+    solid = HEIGHT.keys() | BEAMS | ({"wheel"} if wheels else set())
     fixed = [p for k, p in enumerate(parts) if k not in moving and k not in ignore and p["type"] in solid]
     pts = np.vstack([_corners(parts[k]) for k in moving if parts[k]["type"] in solid])
     a = axis / np.linalg.norm(axis)
