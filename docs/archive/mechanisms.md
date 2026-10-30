@@ -1,4 +1,4 @@
-> **Superseded (Oct 29):** history only. The current plan is `spec.md` section 0.
+> **Superseded (Oct 29):** history only. The current plan is `spec.md` (repo root) section 0.
 
 # Mechanisms: the model makes the build *work*
 

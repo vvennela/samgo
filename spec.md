@@ -11,8 +11,8 @@ Submission: **Wed Nov 4, 6:00 PM PT**
 
 ## 0. Current plan (frozen Oct 29; changes only by the user's decision)
 
-This section is the single source of truth. `plan.md` (BrickGPT replication), `decoder.md` (shape-checked
-decoding) and `mechanisms.md` (design discussion) are history; sections 1-6 below are the original spec, kept for
+This section is the single source of truth. `docs/archive/plan.md` (BrickGPT replication),
+`docs/archive/decoder.md` (shape-checked decoding) and `docs/archive/mechanisms.md` (design discussion) are history; sections 1-6 below are the original spec, kept for
 its stage results (S1-S6 are what step 1 here reuses).
 
 ### Pipeline
