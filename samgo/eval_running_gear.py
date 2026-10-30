@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .running_gear_task import FEEDBACK, apply, axles_of, check, edits_from, explain, pose, pose_open
+from .running_gear_task import FEEDBACK, apply, axles_of, check, edits_from, explain, frame_problem, pose, pose_open
 
 REPO = Path(__file__).resolve().parent.parent
 MODEL = "accounts/fireworks/models/muse-glimmer-30b"
@@ -34,13 +34,18 @@ def problems(n: int, data: str = "data/running_gear", split: str = "val") -> lis
             spread.append(r)
     rows = (spread + [r for r in rows if r not in spread])[:n]
     out = []
+    bases = "runs/bases_shell" if "frame" in data else "runs/bases"
     for r in rows:
-        parts = json.loads((REPO / f"runs/bases/{r['base']}.json").read_text())
-        target = np.load(REPO / f"runs/bases/{r['base']}.npz")["target"]
-        edges = axles_of(parts)
-        strip = {"front": [edges[0]], "rear": [edges[-1]], "both": edges}[r["task"]]
-        problem = (pose_open if "open" in data else pose)(parts, target, strip)
-        out.append({"row": r, "problem": problem, "target": target})
+        parts = json.loads((REPO / f"{bases}/{r['base']}.json").read_text())
+        target = np.load(REPO / f"{bases}/{r['base']}.npz")["target"]
+        if "frame" in data:
+            problem, partial = frame_problem(parts, target, r["task"])
+        else:
+            edges = axles_of(parts)
+            strip = {"front": [edges[0]], "rear": [edges[-1]], "both": edges}[r["task"]]
+            problem, partial = (pose_open if "open" in data else pose)(parts, target, strip), False
+        if problem is not None:
+            out.append({"row": r, "problem": problem, "target": target, "partial": partial})
     return out
 
 
@@ -94,7 +99,7 @@ def main() -> None:
                 text = get_text_content(msg)
                 chats[k].append({"role": "assistant", "content": text})
                 edits = edits_from(text)
-                ok, issues = explain(p["problem"], edits)  # the same actionable messages the model trains on
+                ok, issues = explain(p["problem"], edits, partial=p["partial"])  # the messages the model trains on
                 rec |= {"valid_format": True, "passed": ok, "issues": issues[:3], "edits": len(edits), "answer": edits,
                         "reference": p["problem"]["answer"], "round": rnd if ok else None}
             except Exception as e:  # noqa: BLE001

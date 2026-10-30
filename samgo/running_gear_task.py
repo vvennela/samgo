@@ -401,16 +401,17 @@ def realistic_mistake(answer: list[dict], rng: random.Random) -> list[dict]:
     return bad
 
 
-def step_problem(full: list[dict], target: np.ndarray, edge: int, size: str) -> dict:
+def step_problem(full: list[dict], target: np.ndarray, edge: int, size: str, frame: bool = False) -> dict:
     """One step of building running gear: the current build (with whatever is already done), the parts near the
     axle line at stud edge `edge`, and that tire's position and size. No reference answer: the checker decides."""
     from .arches import _axle_row
 
     zb = _axle_row(WHEELS[size][0] / 2)
     local = [i for i, p in enumerate(full) if p.get("type") not in GEAR and p["x"] <= edge + 5 and
-             p["x"] + p["w"] >= edge - 5 and zb - 3 <= p["z"] <= zb + 3]
+             p["x"] + p["w"] >= edge - 5 and zb - 3 <= p["z"] <= zb + (4 if frame else 3)]
     tires = f"- tire centered on stud edge x={edge}, outline about {WHEELS[size][0]:.0f} mm across"
-    return {"full": full, "local": local, "tires": tires, "answer": [], "target": target}
+    return {"full": full, "local": local, "tires": tires, "answer": [], "target": target} | (
+        {"task": TASK_FRAME} if frame else {})
 
 
 def pose_frame(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict | None:
@@ -459,3 +460,20 @@ def frame_mistake(answer: list[dict], rng: random.Random) -> list[dict]:
     else:
         bad = flawed(bad, rng)
     return bad
+
+
+def frame_problem(parts: list[dict], target: np.ndarray, label: str) -> tuple[dict | None, bool]:
+    """One step of the frame task, as the step-by-step loop poses it: "front" (the rear already done), "rear" (the
+    front done) or "front_first" (the rear still missing, so the car cannot roll yet: checked as partial)."""
+    edges = axles_of(parts)
+    if len(edges) < 2:
+        return None, False
+    if label in ("front", "rear"):
+        return pose_frame(parts, target, [edges[0] if label == "front" else edges[-1]]), False
+    both = pose_frame(parts, target, edges)
+    if both is None:
+        return None, True
+    first = [e for e in both["answer"] if e["part"]["x"] < edges[0] < e["part"]["x"] + e["part"].get("w", 0)
+             or (e["part"]["type"] in GEAR and e["part"]["x"] == edges[0])]
+    pr = both | {"answer": first, "tires": both["tires"].split("\n")[0]}
+    return (pr if explain(pr, first, partial=True)[0] else None), True

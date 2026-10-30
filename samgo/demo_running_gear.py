@@ -14,7 +14,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .running_gear_task import FEEDBACK, apply, axles_of, check, edits_from, explain, pose_open, prompt, step_problem
+from .running_gear_task import (FEEDBACK, apply, axles_of, check, edits_from, explain, pose_frame, pose_open, prompt,
+                                step_problem)
 
 REPO = Path(__file__).resolve().parent.parent
 MODEL = "accounts/fireworks/models/muse-glimmer-30b"
@@ -54,7 +55,7 @@ def main() -> None:
         from .voxelize import load_mesh, voxelize
         car = build_arched_car(voxelize(load_mesh(folder / "object.glb"), 20), attempts=6)
         parts, target = car.parts, car.target
-        problem = pose_open(parts, target, axles_of(parts))
+        problem = pose_frame(parts, target, axles_of(parts))  # frame-and-shell car: the gear is only added
         out = REPO / "runs/demo" / folder.name
         out.mkdir(parents=True, exist_ok=True)
         (out / "input.json").write_text(json.dumps(problem["full"]))
@@ -99,7 +100,7 @@ def main() -> None:
             build = problem["full"]
             edges = axles_of(parts)
             for k, edge in enumerate(edges):
-                step = step_problem(build, target, edge, sizes[edge])
+                step = step_problem(build, target, edge, sizes[edge], frame=True)
                 new, ok = solve(step, partial=k < len(edges) - 1, tag=f"axle at x={edge}")
                 if not ok or new is None:
                     break
