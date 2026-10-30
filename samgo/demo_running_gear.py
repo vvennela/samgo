@@ -48,7 +48,6 @@ def main() -> None:
                                      base_url=serverless_base_url("https://api.fireworks.ai"))
     client = service.create_sampling_client(tokenizer=tok, **({"model_path": args.model} if args.model
                                                                else {"base_model": MODEL}))
-    params = sdk.SamplingParams(max_tokens=args.max_tokens, temperature=0.0, stop=renderer.get_stop_sequences())
     for folder in args.folders:
         folder = REPO / folder if not folder.is_absolute() else folder
         from .arches import build_arched_car
@@ -67,11 +66,18 @@ def main() -> None:
             """Ask, check, feed errors back; returns the build after the best answer and whether it passed."""
             chat = prompt(prob)
             result = None
+            seen = set()
             for rnd in range(1, args.rounds + 1):
-                toks = list(client.sample(prompt=renderer.build_generation_prompt(chat), num_samples=1,
-                                          sampling_params=params).result(timeout=900).sequences[0].tokens)
-                msg, _ = renderer.parse_response(toks)
-                text = get_text_content(msg)
+                for temp in (0.0, 0.7, 0.7):  # an answer it already gave is resampled with some randomness
+                    p = sdk.SamplingParams(max_tokens=args.max_tokens, temperature=temp,
+                                           stop=renderer.get_stop_sequences())
+                    toks = list(client.sample(prompt=renderer.build_generation_prompt(chat), num_samples=1,
+                                              sampling_params=p).result(timeout=900).sequences[0].tokens)
+                    msg, _ = renderer.parse_response(toks)
+                    text = get_text_content(msg)
+                    if text not in seen:
+                        break
+                seen.add(text)
                 chat.append({"role": "assistant", "content": text})
                 try:
                     edits = edits_from(text)
