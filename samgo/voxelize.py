@@ -88,7 +88,11 @@ def nearest_color(rgb: np.ndarray) -> np.ndarray:
 
 
 MIRROR_ERROR = 0.02     # mean mirror mismatch below this share of the object's size counts as symmetric
-SLICE_SYMMETRIC = 0.85  # a cross-section whose cells match their mirror this often is made exactly symmetric
+ONE_SIDED = 0.03        # a connected one-sided region this big (share of the object's cells) is a real feature
+SMOOTH_IOU = 0.95       # shape smoothing: the largest blur that keeps this much overlap with the raw shape
+COLOR_KEEP = 0.90       # color smoothing: the strongest smoothing that keeps this share of cells on their color
+SIGMAS_MM = (2.0, 4.0, 6.0, 8.0)
+LAMBDAS = (0.3, 0.6, 1.0, 1.5)
 
 
 def mirror_plane(mesh: trimesh.Trimesh, samples: int = 4000) -> tuple[float, float, float] | None:
@@ -177,25 +181,85 @@ def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric
     # Interior cells take the color of the nearest surface cell.
     _, nearest = ndimage.distance_transform_edt(~surface, return_indices=True)
     grid = np.where(solid, surface_color[tuple(nearest)], 0).astype(np.int32)
+    grid = smooth_shape(grid)
+    votes = votes.reshape(*shape, len(COLORS))
     if plane is not None:
-        grid = _mirror_slices(grid, votes.reshape(*shape, len(COLORS)))
-    return grid
+        grid = _mirror(grid, votes)
+    return smooth_colors(grid, mirrored=plane is not None)
 
 
-def _mirror_slices(grid: np.ndarray, votes: np.ndarray) -> np.ndarray:
-    """Make each cross-section along x that nearly matches its mirror (across the grid's middle) exactly
-    symmetric: a cell is filled if it or its mirror is, and the pair takes the color with more surface votes."""
-    out = grid.copy()
-    mirrored = grid[:, ::-1, :]
+CELL_MM = (8.0, 8.0, 3.2)
+
+
+def smooth_shape(grid: np.ndarray) -> np.ndarray:
+    """Blur the shape's signed distance (in mm, so plates and studs weigh right) and re-threshold, with the largest
+    blur (SIGMAS_MM) that keeps IoU with the raw shape >= SMOOTH_IOU. New cells take the nearest cell's color."""
+    occ = grid > 0
+    if not occ.any():
+        return grid
+    sdf = ndimage.distance_transform_edt(~occ, sampling=CELL_MM) - ndimage.distance_transform_edt(occ, sampling=CELL_MM)
+    best = occ
+    for sigma in SIGMAS_MM:
+        new = ndimage.gaussian_filter(sdf, [sigma / c for c in CELL_MM]) < 0
+        if (new & occ).sum() / max((new | occ).sum(), 1) < SMOOTH_IOU:
+            break
+        best = new
+    if best is occ:
+        return grid
+    best = best.copy()
+    best[:, :, :3] = occ[:, :, :3]  # the bottom brick layer as voxelized: never bridge the gaps between tires/feet
+    _, nearest = ndimage.distance_transform_edt(~occ, return_indices=True)
+    return np.where(best, grid[tuple(nearest)], 0).astype(np.int32)
+
+
+def _mirror(grid: np.ndarray, votes: np.ndarray) -> np.ndarray:
+    """Make the grid symmetric across the middle of y, except connected one-sided regions of at least ONE_SIDED of
+    the object (an open door, a spare wheel), which stay as they are. Pairs take the color with more votes."""
+    occ = grid > 0
+    mocc = occ[:, ::-1, :]
+    one_sided = occ ^ mocc
+    labels, n = ndimage.label(one_sided)
+    keep = np.zeros_like(occ)
+    if n:
+        sizes = ndimage.sum(one_sided, labels, range(1, n + 1))
+        for i, size in enumerate(sizes, 1):
+            if size >= ONE_SIDED * occ.sum():
+                keep |= labels == i
+    keep = keep | keep[:, ::-1, :]                      # the region and the empty space it faces stay as is
     pair_votes = votes + votes[:, ::-1, :, :]
-    pair_color = pair_votes.argmax(-1) + 1
-    for x in range(grid.shape[0]):
-        occ, mocc = grid[x] > 0, mirrored[x] > 0
-        union = occ | mocc
-        if union.any() and (occ & mocc).sum() / union.sum() >= SLICE_SYMMETRIC:
-            fill = np.where(pair_votes[x].sum(-1) > 0, pair_color[x], np.maximum(grid[x], mirrored[x]))
-            out[x] = np.where(union, fill, 0)
-    return out
+    pair_color = np.where(pair_votes.sum(-1) > 0, pair_votes.argmax(-1) + 1, np.maximum(grid, grid[:, ::-1, :]))
+    sym = np.where(occ | mocc, pair_color, 0)
+    return np.where(keep, grid, sym).astype(np.int32)
+
+
+def smooth_colors(grid: np.ndarray, mirrored: bool) -> np.ndarray:
+    """Potts smoothing: each cell takes the color minimizing [differs from its photo color] + lambda x (face
+    neighbours of another color), by repeated local updates. The largest lambda (LAMBDAS) keeping COLOR_KEEP of
+    cells on their photo color wins. With `mirrored`, mirror pairs are decided together, so it stays symmetric."""
+    occ = grid > 0
+    if not occ.any():
+        return grid
+    k = len(COLORS)
+    best = grid
+    for lam in LAMBDAS:
+        cur = grid.copy()
+        for _ in range(4):
+            counts = np.zeros(grid.shape + (k,))
+            pad = np.pad(cur, 1)
+            for axis in range(3):
+                for shift in (1, -1):
+                    nb = np.roll(pad, shift, axis=axis)[1:-1, 1:-1, 1:-1]
+                    for c in range(1, k + 1):
+                        counts[..., c - 1] += nb == c
+            cost = lam * (counts.sum(-1, keepdims=True) - counts)          # neighbours of another color
+            cost += (np.arange(1, k + 1) != grid[..., None])               # leaving the photo color
+            if mirrored:
+                cost = cost + cost[:, ::-1, :, :]
+            cur = np.where(occ, cost.argmin(-1) + 1, 0)
+        if (cur[occ] == grid[occ]).mean() < COLOR_KEEP:
+            break
+        best = cur
+    return best.astype(np.int32)
 
 
 def render(target: np.ndarray, path: Path, cell: int = 10) -> None:

@@ -95,7 +95,9 @@ def _score(layout: _Layout, x: int, y: int, z: int, w: int, l: int, h: int) -> f
 
 
 def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, given: list[dict] = (),
-            sizes: dict | None = None) -> list[dict]:
+            sizes: dict | None = None, mirror: bool = False) -> list[dict]:
+    """With `mirror` (a target symmetric across the middle of y), every part gets its mirror twin and a part
+    that crosses the middle must be centered on it, so the brickwork itself is symmetric."""
     layout = _Layout(target)
     # Per-kind footprints, both orientations, largest first (default: the v1 palette for every kind).
     allowed = {k: {s for a, b in (sizes or {}).get(k, FOOTPRINTS) for s in ((a, b), (b, a))} for k in ("brick", "plate")}
@@ -122,13 +124,23 @@ def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, g
                         h = HEIGHTS[kind]
                         if not _fits(layout, x, y, z, w, l, h, color):
                             continue
+                        if mirror:
+                            ym = Y - y - l
+                            if ym != y and y < ym + l and ym < y + l:
+                                continue  # crosses the middle off-center: its twin would overlap it
                         sc = _score(layout, x, y, z, w, l, h)
                         if rng is not None:
                             sc += rng.uniform(0, 2)
                         if sc > best_score:
                             best, best_score = (w, l, kind, x, y), sc
+                if best is None:  # in mirror mode a middle cell can only take a centered part; fall back
+                    best = (1, 1, "plate", ax, ay)
                 w, l, kind, x, y = best  # a 1x1 plate always fits the anchor
                 layout.place(w, l, kind, x, y, z, int(color))
+                ym = Y - y - l
+                if mirror and ym != y and _fits(layout, x, ym, z, w, l, HEIGHTS[kind], int(target[x, ym, z])) \
+                        and target[x, ym, z] == color:
+                    layout.place(w, l, kind, x, ym, z, int(color))
     return layout.pieces
 
 
@@ -153,14 +165,21 @@ def build(target: np.ndarray, attempts: int = 8, seed: int = 0, config: MatchCon
     pull = pull or _ground_pull
     rng = np.random.default_rng(seed)
     best: Build | None = None
-    for attempt in range(attempts):
-        # Attempt 0 is deterministic; later ones randomize scans and ties, and some use plates only.
-        pieces = _layout(target, None if attempt == 0 else rng, bricks=attempt % 4 != 3, given=list(given), sizes=sizes)
-        pieces, report = _repair(pieces, target, config, keep=len(given),
-                                 anchors=frozenset(range(len(given))) if anchored else frozenset())
-        candidate = Build(pieces, report, attempt, pull(pieces) if report.passed else np.inf)
-        if best is None or _rank(candidate) > _rank(best):
-            best = candidate
+    occ = target > 0
+    mirror = bool((target == target[:, ::-1, :]).all()) and occ.any()  # exactly symmetric: mirrored brickwork
+    # A symmetric target gets mirrored brickwork; plain layouts are only the fallback if no mirrored one passes.
+    for mirrored in ([True, False] if mirror else [False]):
+        for attempt in range(attempts):
+            # Attempt 0 is deterministic; later ones randomize scans and ties, and some use plates only.
+            pieces = _layout(target, None if attempt == 0 else rng, bricks=attempt % 4 != 3, given=list(given),
+                             sizes=sizes, mirror=mirrored)
+            pieces, report = _repair(pieces, target, config, keep=len(given),
+                                     anchors=frozenset(range(len(given))) if anchored else frozenset())
+            candidate = Build(pieces, report, attempt, pull(pieces) if report.passed else np.inf)
+            if best is None or _rank(candidate) > _rank(best):
+                best = candidate
+        if best is not None and best.report.passed and np.isfinite(best.pull):
+            break
     return best
 
 
