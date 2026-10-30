@@ -240,8 +240,9 @@ def main() -> None:
                     state_path.write_text(json.dumps(state))
                     last_saved = r
                     say(event="checkpoint", step=st, rows=r, model=model)
-                else:
-                    say(event="checkpoint_failed", rows=r)  # retried at the next step
+                else:  # retry at the next checkpoint, not every step: a failing save blocks training for minutes
+                    last_saved = r
+                    say(event="checkpoint_failed", rows=r, next_try=r + args.save_every_rows)
 
         def tok_rate(b: int) -> float:
             ts = timing.get(b, [])[2:]  # skip the first steps of a phase (queue fill)
