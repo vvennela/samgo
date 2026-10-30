@@ -54,6 +54,21 @@ Answer with a JSON list of edits, and nothing after it:
 Parts:
 {parts}"""
 
+TASK_FRAME = """This car is built as a frame and a shell: a plate floor, a hollow body on top, and an empty layer under
+the floor (only a rim) where the running gear goes. Its length runs along x, its width along y. Below are its parts
+near the tires (the rest of the car stays as it is).
+
+Add running gear for these tires (wheel arches are already cut into the body):
+{tires}
+
+Make the car roll: hang Technic bricks under the floor where an axle must pass (they hold by sharing studs with the
+floor above), and add axles, wheels and bushes. Nothing needs to be removed.
+Answer with a JSON list of edits, and nothing after it:
+[{{"op": "add", "part": {{...}}}}, ...]
+
+Parts:
+{parts}"""
+
 FEEDBACK = """The verifiers checked your edited model:
 {issues}
 Fix these problems. Answer with the complete JSON list of edits again (it replaces your previous answer; edits
@@ -108,7 +123,7 @@ def pose(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict:
 def prompt(problem: dict) -> list[dict]:
     numbered = "\n".join(f"{k}: {json.dumps(problem['full'][i])}" for k, i in enumerate(problem["local"]))
     return [{"role": "system", "content": RULES},
-            {"role": "user", "content": TASK.format(tires=problem["tires"], parts=numbered)}]
+            {"role": "user", "content": problem.get("task", TASK).format(tires=problem["tires"], parts=numbered)}]
 
 
 def apply(problem: dict, edits: list[dict]) -> list[dict]:
@@ -382,3 +397,32 @@ def step_problem(full: list[dict], target: np.ndarray, edge: int, size: str) -> 
              p["x"] + p["w"] >= edge - 5 and zb - 3 <= p["z"] <= zb + 3]
     tires = f"- tire centered on stud edge x={edge}, outline about {WHEELS[size][0]:.0f} mm across"
     return {"full": full, "local": local, "tires": tires, "answer": [], "target": target}
+
+
+def pose_frame(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict | None:
+    """The running-gear problem on a frame-and-shell car (arches.frame_and_shell): the Technic bricks and gear of
+    the axle lines at stud edges `strip` are taken out; the layer under the floor is empty apart from its rim, so
+    nothing marks where they went. The reference answer only adds parts. None if it does not pass the checks."""
+    def on(p, e):
+        return (p.get("type") in GEAR and p["x"] == e) or \
+            (p.get("type") == "technic_brick" and p["x"] < e < p["x"] + p["w"])
+
+    out = [p for p in parts if any(on(p, e) for e in strip)]
+    full = [p for p in parts if not any(on(p, e) for e in strip)]
+    beams = [p for p in out if p.get("type") == "technic_brick"]
+    gear = [p for p in out if p.get("type") in GEAR]
+    if not beams or not gear:
+        return None
+    zs = {(e, b["z"]) for e in strip for b in beams if b["x"] < e < b["x"] + b["w"]}
+
+    def near(p):
+        return any(p["x"] <= e + 5 and p["x"] + p["w"] >= e - 5 and z - 3 <= p["z"] <= z + 4 for e, z in zs)
+
+    local = [i for i, p in enumerate(full) if p.get("type") not in GEAR and near(p)]
+    answer = [{"op": "add", "part": p} for p in beams + gear]
+    tires = [f"- tire centered on stud edge x={e}, outline about "
+             f"{WHEELS[next(g['size'] for g in gear if g['type'] == 'wheel' and g['x'] == e)][0]:.0f} mm across"
+             for e in strip]
+    problem = {"full": full, "local": local, "tires": "\n".join(tires), "answer": answer, "target": target,
+               "task": TASK_FRAME}
+    return problem if explain(problem, answer)[0] else None

@@ -150,7 +150,26 @@ def _axle_row(radius: float) -> int:
     return max(0, int(np.floor((radius - HOLE_HEIGHT - 1.0) / PLATE)))
 
 
-def _build(target: np.ndarray, seed: int, attempts: int, beam: int) -> ArchedCar | None:
+def frame_and_shell(shaped: np.ndarray, chassis: list[dict], floor: int) -> np.ndarray:
+    """Build it the way cars (and LEGO cars) are built: a frame and a shell, not a solid block.
+
+    Under the floor (the Technic row layer, plates floor..floor+2) only a 1-stud rim and the Technic bricks stay;
+    a solid plate floor sits on them; above it the body is a shell 1 stud thick with a 2-plate roof. The Technic
+    bricks hang under the floor, held by its studs, so running gear is added without digging through anything."""
+    from scipy.ndimage import binary_erosion
+
+    occ = shaped > 0
+    inner = binary_erosion(occ, np.ones((3, 3, 5), bool), border_value=0)
+    out = shaped.copy()
+    out[inner] = 0
+    deck = floor + 3                                         # the plate floor right on top of the Technic rows
+    out[:, :, deck] = shaped[:, :, deck]
+    for c in chassis:                                        # the frame itself
+        out[c["x"]:c["x"] + c["w"], c["y"]:c["y"] + c["l"], c["z"]:c["z"] + 3] = COLOR_INDEX[CHASSIS_COLOR]
+    return out
+
+
+def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool = True) -> ArchedCar | None:
     """None if no two tire outlines are found or the car is too narrow for wheels and chassis."""
     if target.shape[1] > target.shape[0]:
         target = target.transpose(1, 0, 2)[::-1].copy()  # length along x (a rotation, not a mirror)
@@ -225,6 +244,8 @@ def _build(target: np.ndarray, seed: int, attempts: int, beam: int) -> ArchedCar
     # A smooth underside: nothing below the axle rows. The mesh's tires leave lumps under the body between the
     # wheels; real LEGO cars have a flat floor with the axle in its bottom layer.
     shaped[:, :, :min(w.z for w in wheels)] = 0
+    if hollow:
+        shaped = frame_and_shell(shaped, chassis, min(w.z for w in wheels))
 
     def pull_on_wheels(pieces: list[dict]) -> float:
         peak = stability(pieces + gear, vehicle=True).metrics.get("peak_tension")
