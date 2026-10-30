@@ -23,6 +23,7 @@ run() {  # run_id palette train eval
   local id=$1 metrics="$REPO/runs/train/$1/metrics.jsonl"
   for try in $(seq 1 $TRIES); do
     until online; do sleep 60; done
+    mkdir -p "$(dirname "$metrics")" && touch "$metrics"  # silence is measured from this try's start
     $PY -u "$REPO/brickgpt/train_serverless.py" --run-id "$id" --palette "$2" --batch 64 --save-every-rows 4000 \
         --train "$3" --eval "$4" &
     local pid=$!
