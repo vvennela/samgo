@@ -102,6 +102,7 @@ def check(parts: list[dict], target: np.ndarray) -> tuple[bool, list[str], dict]
 
 
 _CHAT = None
+SAMPLER_MODEL = None  # a sampler checkpoint path (<account>/<run_id>/<name>) to test a fine-tuned model; None = base
 
 
 def ask(messages: list[dict], max_tokens: int) -> tuple[str, dict]:
@@ -120,7 +121,8 @@ def ask(messages: list[dict], max_tokens: int) -> tuple[str, dict]:
         service = FiretitanServiceClient(api_key=os.environ["FIREWORKS_API_KEY"],
                                          base_url=serverless_base_url("https://api.fireworks.ai"))
         _CHAT = (tok, build_renderer(tok, HF_MODEL, "muse_glimmer"),
-                 service.create_sampling_client(base_model=MODEL, tokenizer=tok))
+                 service.create_sampling_client(tokenizer=tok, **({"model_path": SAMPLER_MODEL} if SAMPLER_MODEL
+                                                                  else {"base_model": MODEL})))
     tok, renderer, client = _CHAT
     from training.renderer import get_text_content
 
@@ -186,7 +188,10 @@ def main() -> None:
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--max-tokens", type=int, default=24000)
     ap.add_argument("-o", "--out", type=Path, default=Path("runs/agent/running_gear"))
+    ap.add_argument("--model", default=None, help="sampler checkpoint path of a fine-tuned model (default: base)")
     args = ap.parse_args()
+    global SAMPLER_MODEL
+    SAMPLER_MODEL = args.model
     args.out.mkdir(parents=True, exist_ok=True)
     logs = [run(f, args.rounds, args.max_tokens, args.out) for f in args.folders]
     (args.out / "results.json").write_text(json.dumps(logs, indent=2))

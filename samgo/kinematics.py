@@ -234,3 +234,51 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
                 return True, f"turns {req['degrees']} degrees clear"
             best = f"hits something at {abs(hit):.0f} degrees"
     return False, best
+
+
+def connected(parts: list[dict]) -> bool:
+    """One structure through rigid links and joints together, standing on the ground (z = 0) or on wheels: the
+    structural check for builds with moving parts, where a hinged lid hangs on its hinge, not on studs."""
+    n = len(parts)
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    bodies, joints = analyse(parts)
+    for members in bodies.values():
+        for k in members[1:]:
+            parent[find(k)] = find(members[0])
+    for a, b, *_ in joints:
+        parent[find(a)] = find(b)
+    roots = {find(i) for i in range(n)}
+    grounded = any(parts[i].get("z", 0) == 0 or parts[i].get("type") == "wheel" for i in range(n))
+    return len(roots) == 1 and grounded
+
+
+def locked(parts: list[dict], as_type: dict) -> list[dict]:
+    """The build with every joint held in its current pose, for the static force check: the two halves of a
+    hinge lying side by side at one height become one plate (click hinges hold their angle; swivel hinges by
+    friction); other pivoting parts become the plain parts they occupy."""
+    out, used = [], set()
+    for i, p in enumerate(parts):
+        if i in used or p.get("type") not in as_type:
+            continue
+        for j in range(i + 1, len(parts)):
+            q = parts[j]
+            if j in used or q.get("type") not in as_type or q["z"] != p["z"]:
+                continue
+            xs = sorted((p["x"], p["x"] + p["w"], q["x"], q["x"] + q["w"]))
+            ys = sorted((p["y"], p["y"] + p["l"], q["y"], q["y"] + q["l"]))
+            side_by_side = (p["x"] == q["x"] and p["w"] == q["w"] and (p["y"] + p["l"] == q["y"] or q["y"] + q["l"] == p["y"])) \
+                or (p["y"] == q["y"] and p["l"] == q["l"] and (p["x"] + p["w"] == q["x"] or q["x"] + q["w"] == p["x"]))
+            if side_by_side:
+                used |= {i, j}
+                out.append({"type": as_type[p["type"]], "w": xs[-1] - xs[0], "l": ys[-1] - ys[0], "x": xs[0],
+                            "y": ys[0], "z": p["z"], "color": p.get("color", "dark_gray")})
+                break
+    return out + [p if p.get("type") not in as_type else p | {"type": as_type[p["type"]]}
+                  for k, p in enumerate(parts) if k not in used]
