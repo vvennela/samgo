@@ -132,21 +132,23 @@ def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, g
     return layout.pieces
 
 
-def _repair(pieces: list[dict], target: np.ndarray, config: MatchConfig, keep: int = 0) -> tuple[list[dict], Report]:
-    report = verify(pieces, target, config=config)
+def _repair(pieces: list[dict], target: np.ndarray, config: MatchConfig, keep: int = 0,
+            anchors: frozenset[int] = frozenset()) -> tuple[list[dict], Report]:
+    report = verify(pieces, target, config=config, anchors=anchors)
     drop = {i for issue in report.issues if issue.code in ("floating", "disconnected") for i in issue.pieces if i >= keep}
     if not drop or "overlap" in report.codes:
         return pieces, report
     kept = [p for i, p in enumerate(pieces) if i not in drop]
-    return kept, verify(kept, target, config=config)
+    return kept, verify(kept, target, config=config, anchors=anchors)
 
 
 def build(target: np.ndarray, attempts: int = 8, seed: int = 0, config: MatchConfig = MatchConfig(),
-          given: list[dict] = (), pull=None, sizes: dict | None = None) -> Build:
+          given: list[dict] = (), pull=None, sizes: dict | None = None, anchored: bool = False) -> Build:
     """Return the best of several layouts: passing first, then least stud pull, then highest IoU, then fewest pieces.
 
     `given` pieces come first in the result and are kept as they are; the target must contain their cells.
     `pull(pieces)` measures stress (default: S3b peak tension standing on the ground; inf if it can't balance).
+    `anchored`: the `given` pieces count as supported (a car's chassis, which stands on its wheels).
     """
     pull = pull or _ground_pull
     rng = np.random.default_rng(seed)
@@ -154,7 +156,8 @@ def build(target: np.ndarray, attempts: int = 8, seed: int = 0, config: MatchCon
     for attempt in range(attempts):
         # Attempt 0 is deterministic; later ones randomize scans and ties, and some use plates only.
         pieces = _layout(target, None if attempt == 0 else rng, bricks=attempt % 4 != 3, given=list(given), sizes=sizes)
-        pieces, report = _repair(pieces, target, config, keep=len(given))
+        pieces, report = _repair(pieces, target, config, keep=len(given),
+                                 anchors=frozenset(range(len(given))) if anchored else frozenset())
         candidate = Build(pieces, report, attempt, pull(pieces) if report.passed else np.inf)
         if best is None or _rank(candidate) > _rank(best):
             best = candidate

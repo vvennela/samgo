@@ -45,8 +45,11 @@ class Report:
 
 
 def verify(raw_pieces: list, target: np.ndarray | None = None, bounds: tuple[int, int, int] | None = None,
-           config: MatchConfig = MatchConfig()) -> Report:
+           config: MatchConfig = MatchConfig(), anchors: frozenset[int] = frozenset()) -> Report:
     """Check a build. `target` is an (X, Y, Z) int grid of COLOR_INDEX values, 0 = empty.
+
+    `anchors`: indices of pieces that count as supported even off the ground (a car's axle-holding Technic
+    bricks, which stand on the wheels).
 
     Without a target, `bounds` limits the grid; without either, only z >= 0 and
     non-negative x/y are enforced and the target check is skipped.
@@ -92,7 +95,7 @@ def verify(raw_pieces: list, target: np.ndarray | None = None, bounds: tuple[int
         issues.append(Issue("overlap", f"{int((count > 1).sum())} cell(s) occupied twice", overlapping))
 
     components = _components(pieces, owner, shape)
-    grounded = [c for c in components if any(pieces[i].z == 0 for i in c)]
+    grounded = [c for c in components if any(pieces[i].z == 0 or i in anchors for i in c)]
     floating = sorted(i for c in components if c not in grounded for i in c)
     metrics["components"] = len(components)
     if floating:

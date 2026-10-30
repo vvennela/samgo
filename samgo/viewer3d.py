@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from .parts import COLORS
-from .technic import HOLE_HEIGHT, PLATE, STUD, WHEEL_DIAMETER
+from .technic import DEFAULT_WHEEL, HOLE_HEIGHT, PLATE, STUD, WHEELS, wheel_studs
 
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3}
 EXTRA = {"trans_clear": (230, 240, 245), "trans_black": (40, 50, 60)}
@@ -33,12 +33,15 @@ def scene(parts: list[dict]) -> dict:
             boxes.append([p["x"] * STUD, p["z"] * PLATE, p["y"] * STUD, p["w"] * STUD, HEIGHT[t] * PLATE,
                           p["l"] * STUD, _hex(rgb), 1 if t == "technic_brick" else 0])
         elif t in ("axle", "wheel"):
-            span = p.get("length", p.get("width", 2)) * STUD
+            size = p.get("size", DEFAULT_WHEEL)
+            span = (p["length"] if t == "axle" else wheel_studs(size)) * STUD
             centre_h = p["z"] * PLATE + HOLE_HEIGHT
-            along = p.get("axis", "y")
-            rec = [p["x"] * STUD, centre_h, p["y"] * STUD, span, along]
+            rec = [p["x"] * STUD, centre_h, p["y"] * STUD, span, p.get("axis", "y")]
+            if t == "wheel":
+                rec.append(WHEELS[size][0] / 2)       # radius
+                rec.append(WHEELS[size][1])           # tyre width, mm
             (axles if t == "axle" else wheels).append(rec)
-    return {"boxes": boxes, "axles": axles, "wheels": wheels, "wheel_r": WHEEL_DIAMETER / 2}
+    return {"boxes": boxes, "axles": axles, "wheels": wheels}
 
 
 PAGE = """<title>SAMgo Build Viewer</title>
@@ -120,10 +123,10 @@ function build(m) {
     orient(c, a); g.add(c);
   }
   const tyre = new THREE.MeshLambertMaterial({color: 0x1b1b1b}), rim = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0xc9ccd1});
-  const r = m.scene.wheel_r;
   for (const w of m.scene.wheels) {
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w[3] - 1, 40), tyre); orient(t, w); g.add(t);
-    const h = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.55, w[3] - 0.4, 24), rim); orient(h, w); g.add(h);
+    const r = w[5], tw = w[6];
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, tw, 40), tyre); orient(t, w); g.add(t);
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, tw + 0.6, 24), rim); orient(h, w); g.add(h);
   }
   // Ground at the lowest point, so it is visible what touches the floor.
   const bb = new THREE.Box3().setFromObject(g), size = bb.getSize(new THREE.Vector3());
