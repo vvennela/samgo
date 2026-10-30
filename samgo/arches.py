@@ -150,7 +150,7 @@ def _axle_row(radius: float) -> int:
     return max(0, int(np.floor((radius - HOLE_HEIGHT - 1.0) / PLATE)))
 
 
-def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> ArchedCar | None:
+def _build(target: np.ndarray, seed: int, attempts: int, beam: int) -> ArchedCar | None:
     """None if no two tire outlines are found or the car is too narrow for wheels and chassis."""
     if target.shape[1] > target.shape[0]:
         target = target.transpose(1, 0, 2)[::-1].copy()  # length along x (a rotation, not a mirror)
@@ -173,7 +173,7 @@ def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> Ar
         w = wheel_studs(size)
         r = WHEELS[size][0] / 2
         edge = int(round((a + b + 1) / 2))
-        edge = min(max(edge, 2), X - 2)
+        edge = min(max(edge, beam // 2), X - beam // 2)
         zb = _axle_row(r)
         centre = zb * PLATE + HOLE_HEIGHT
         through = min((L for L in AXLE_LENGTHS if W <= L <= 16), default=None)
@@ -189,8 +189,8 @@ def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> Ar
                             shaped[x, y_wheel:y_wheel + w, z] = 0
                 gear.append({"type": "wheel", "axis": "y", "x": edge, "z": zb, "y": y_wheel, "size": size})
             for y in range(Y0 + w, Y1 - w):
-                shaped[edge - 2:edge + 2, y, zb:zb + 3] = COLOR_INDEX[CHASSIS_COLOR]
-                chassis.append({"type": "technic_brick", "w": 4, "l": 1, "x": edge - 2, "y": y, "z": zb,
+                shaped[edge - beam // 2:edge + beam // 2, y, zb:zb + 3] = COLOR_INDEX[CHASSIS_COLOR]
+                chassis.append({"type": "technic_brick", "w": beam, "l": 1, "x": edge - beam // 2, "y": y, "z": zb,
                                 "color": CHASSIS_COLOR, "hole": "round"})
             gear.append({"type": "axle", "axis": "y", "x": edge, "z": zb, "y": Y0 - (through - W) // 2,
                          "length": through})
@@ -212,8 +212,8 @@ def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> Ar
                         shaped[x, y_wheel:y_wheel + w, z] = 0
             # Technic bricks (1x4, holes at edge-1, edge, edge+1) that hold the stop axle, in the body's place.
             for y in rows:
-                shaped[edge - 2:edge + 2, y, zb:zb + 3] = COLOR_INDEX[CHASSIS_COLOR]
-                chassis.append({"type": "technic_brick", "w": 4, "l": 1, "x": edge - 2, "y": y, "z": zb,
+                shaped[edge - beam // 2:edge + beam // 2, y, zb:zb + 3] = COLOR_INDEX[CHASSIS_COLOR]
+                chassis.append({"type": "technic_brick", "w": beam, "l": 1, "x": edge - beam // 2, "y": y, "z": zb,
                                 "color": CHASSIS_COLOR, "hole": "round"})
             y0 = y_wheel if side == "left" else Y1 - w - rows_in
             gear.append({"type": "axle", "axis": "y", "x": edge, "z": zb, "y": y0, "length": stop, "stop": True})
@@ -230,3 +230,18 @@ def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> Ar
     return ArchedCar(parts, shaped, wheels, verify(structural(parts), shaped, config=MatchConfig(),
                             anchors=frozenset(range(len(chassis)))),
                      verify_function(parts), sym)
+
+
+def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> ArchedCar | None:
+    """The car on Technic beams 1x4, else 1x6, else 1x8 (longer beams spread the car's weight over more studs):
+    the first that passes structure, function and stability, else the last one tried."""
+    from .stability import stability
+
+    car = None
+    for beam in (4, 6, 8):
+        car = _build(target, seed, attempts, beam)
+        if car is None:
+            return None
+        if car.structure.passed and car.function.passed and stability(car.parts, vehicle=True).passed:
+            return car
+    return car
