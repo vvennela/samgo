@@ -286,7 +286,9 @@ def explain(problem: dict, edits: list[dict]) -> tuple[bool, list[str]]:
                 for y in range(p["y"], p["y"] + p["l"]):
                     for z in range(p["z"], p["z"] + HGT[p["type"]]):
                         owners.setdefault((x, y, z), []).append(n)
-    pairs = sorted({tuple(sorted(o)) for o in owners.values() if len(o) > 1})
+    from itertools import combinations
+
+    pairs = sorted({pair for o in owners.values() if len(o) > 1 for pair in combinations(sorted(o), 2)})
     for a, b in pairs[:6]:
         la, lb = tagged[a][1], tagged[b][1]
         hint = ""
