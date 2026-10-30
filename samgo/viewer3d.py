@@ -10,14 +10,19 @@ function verifier puts them: on stud edges at Technic hole height.
 
 import json
 import sys
+import time
 from pathlib import Path
 
+import numpy as np
+
+from .kinematics import _sides, analyse, sweep
 from .parts import COLORS
 from .technic import (BEAM_HEIGHT, DEFAULT_WHEEL, HOLE_HEIGHT, LENGTH, PIN_RADIUS, PLATE, STUD, TUBE_RADIUS, WHEELS,
                       extent, wheel_studs)
 
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "tile": 1, "slope": 3, "invslope": 3, "curve": 2,
-          "roundbrick": 3, "roundplate": 1, "arch": 3, "hinge_base": 1, "hinge_top": 1}
+          "roundbrick": 3, "roundplate": 1, "arch": 3, "hinge_base": 1, "hinge_top": 1, "car_door": 3, "click_a": 1,
+          "click_b": 1, "turntable_base": 1, "turntable_top": 1}
 EXTRA = {"trans_clear": (205, 225, 240), "trans_black": (45, 60, 75)}
 SHAPE = {"slope": 1, "curve": 2, "invslope": 3, "roundbrick": 4, "roundplate": 4}  # 0 = box
 # Usual colours of the Technic connectors (LDraw/BrickLink): 2780 black, 3673 gray, 6558 and 43093 blue.
@@ -71,25 +76,80 @@ def scene(parts: list[dict]) -> dict:
     """Boxes, axles and wheels in mm, y up (LEGO z), grouped for the page; Technic connectors as boxes and
     cylinders ([x, start height, y, span, axis, radius, colour])."""
     boxes, axles, wheels, cyls = [], [], [], []
-    for p in parts:
-        t = p.get("type")
-        if t in ("liftarm", "cross_block", "pin", "axle_pin", "axle_joiner", "half_bush"):
-            _technic(p, boxes, cyls)
-        elif t in HEIGHT:
-            rgb = COLORS.get(p.get("color", "light_gray"), (None, EXTRA.get(p.get("color"), (150, 150, 150))))[1]
-            boxes.append([p["x"] * STUD, p["z"] * PLATE, p["y"] * STUD, p["w"] * STUD, HEIGHT[t] * PLATE,
-                          p["l"] * STUD, _hex(rgb), 1 if t == "technic_brick" else 0, SHAPE.get(t, 0),
-                          p.get("facing") or "", 1 if str(p.get("color", "")).startswith("trans") else 0])
-        elif t in ("axle", "wheel"):
-            size = p.get("size", DEFAULT_WHEEL)
-            span = (p["length"] if t == "axle" else wheel_studs(size)) * STUD
-            centre_h = p["z"] * PLATE + HOLE_HEIGHT
-            rec = [p["x"] * STUD, centre_h, p["y"] * STUD, span, p.get("axis", "y")]
-            if t == "wheel":
-                rec.append(WHEELS[size][0] / 2)       # radius
-                rec.append(WHEELS[size][1])           # tyre width, mm
-            (axles if t == "axle" else wheels).append(rec)
+    for k, p in enumerate(parts):
+        sizes = [len(boxes), len(axles), len(wheels), len(cyls)]
+        _part(p, boxes, axles, wheels, cyls)
+        for lst, n in zip((boxes, axles, wheels, cyls), sizes):
+            for rec in lst[n:]:
+                rec.append(k)  # last field: the part it draws, so the page can move it with its joint
     return {"boxes": boxes, "axles": axles, "wheels": wheels, "cyls": cyls}
+
+
+def _part(p: dict, boxes: list, axles: list, wheels: list, cyls: list) -> None:
+    """One part's records (see scene)."""
+    t = p.get("type")
+    if t in ("liftarm", "cross_block", "pin", "axle_pin", "axle_joiner", "half_bush"):
+        _technic(p, boxes, cyls)
+    elif t in HEIGHT:
+        rgb = COLORS.get(p.get("color", "light_gray"), (None, EXTRA.get(p.get("color"), (150, 150, 150))))[1]
+        boxes.append([p["x"] * STUD, p["z"] * PLATE, p["y"] * STUD, p["w"] * STUD, HEIGHT[t] * PLATE,
+                      p["l"] * STUD, _hex(rgb), 1 if t == "technic_brick" else 0, SHAPE.get(t, 0),
+                      p.get("facing") or "", 1 if str(p.get("color", "")).startswith("trans") else 0])
+    elif t in ("axle", "wheel"):
+        size = p.get("size", DEFAULT_WHEEL)
+        span = (p["length"] if t == "axle" else wheel_studs(size)) * STUD
+        centre_h = p["z"] * PLATE + HOLE_HEIGHT
+        rec = [p["x"] * STUD, centre_h, p["y"] * STUD, span, p.get("axis", "y")]
+        if t == "wheel":
+            rec.append(WHEELS[size][0] / 2)       # radius
+            rec.append(WHEELS[size][1])           # tyre width, mm
+        (axles if t == "axle" else wheels).append(rec)
+
+
+SPIN_PARTS = {"wheel", "axle", "half_bush", "axle_joiner", "pin", "axle_pin"}  # a wheel with its axle and hub
+SWINGS = (360, 180, 120, 90, 60, 30, 15)
+
+
+def motions(parts: list[dict], budget: float = 20.0) -> list[dict]:
+    """The build's joints for the page's Simulate mode, outermost first (largest moving set first).
+
+    Each: {"moving": part indices that turn, "point"/"axis": the pivot in the page's mm y-up frame, "spin": a
+    wheel turning continuously, "degrees": swing range (signed, in the page's frame) for other joints}. What
+    turns is the smaller side of the joint with everything hanging off it (kinematics.requirement_met's rule).
+    The swing range is the largest of SWINGS clear in one direction (kinematics.sweep); after `budget` seconds
+    the sweeps are skipped and joints swing 60 degrees."""
+    t0 = time.monotonic()
+    try:
+        bodies, joints = analyse(parts)
+    except Exception:
+        return []
+    floor = min((p.get("z", 0) for p in parts), default=0)
+    low = {i for i, p in enumerate(parts) if p.get("z", 0) == floor}
+    out = []
+    for k, (_, _, _, point, axis, partners) in enumerate(joints):
+        sides = _sides(bodies, joints, k)
+        if sides is None:
+            continue
+        # On a tie the side resting lowest (on the ground) stays put.
+        small = min(sides, key=lambda g: (sum(len(bodies[r]) for r in g), any(i in low for r in g for i in bodies[r])))
+        moving = sorted(i for r in small for i in bodies[r])
+        types = {parts[i].get("type") for i in moving}
+        spin = "wheel" in types and types <= SPIN_PARTS
+        deg = 0 if spin else 60
+        if not spin and time.monotonic() - t0 < budget:
+            deg = next((sign * d for d in SWINGS for sign in (1, -1)
+                        if time.monotonic() - t0 < budget
+                        and sweep(parts, moving, point, axis, sign * d, ignore=partners) is None), None)
+            if deg is None:
+                deg = 60 if time.monotonic() - t0 >= budget else 0
+        if not spin and deg == 0:
+            continue  # blocked both ways at the smallest swing: nothing to show
+        p, a = np.asarray(point, float), np.asarray(axis, float)
+        # LEGO (x, y, z up) -> page (x, z, y): a mirror, so a turn of +d about axis a is -d about the mapped axis.
+        out.append({"moving": moving, "point": [round(float(p[0]), 3), round(float(p[2]), 3), round(float(p[1]), 3)],
+                    "axis": [float(a[0]), float(a[2]), float(a[1])], "spin": spin, "degrees": -float(deg)})
+    out.sort(key=lambda j: -len(j["moving"]))
+    return out
 
 
 PAGE = """<title>SAMgo Build Viewer</title>
@@ -130,6 +190,7 @@ h1 b { color: var(--accent); }
 <div class="bar">
   <label><input type="checkbox" id="hl"> Highlight running gear (Technic bricks, axles, wheels)</label>
   <label><input type="checkbox" id="xray"> See-through body</label>
+  <button type="button" id="sim" aria-pressed="false" hidden>Simulate</button>
   <button type="button" id="side">Side view</button><button type="button" id="three">3/4 view</button><button type="button" id="under">Underside</button>
 </div>
 <div id="stage"></div>
@@ -149,16 +210,30 @@ controls.enableDamping = true;
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75));
 const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(300, 600, 400); scene.add(sun);
 let group = null, current = 0;
+// Simulate: each part rides in the group of the joints that move it (outermost first); per frame only those
+// groups' matrices change. With Simulate off they stay identity, so the static model is untouched.
+let movers = [], simOn = MODELS.map(() => false), simStart = 0;
 
 function build(m) {
   const g = new THREE.Group();
+  const chainOf = {}, holders = {"": g};
+  (m.joints || []).forEach((j, n) => j.moving.forEach(i => { chainOf[i] = i in chainOf ? chainOf[i] + "," + n : String(n); }));
+  movers = [];
+  const holder = rec => {
+    const key = chainOf[rec[rec.length - 1]] || "";
+    if (!holders[key]) {
+      const h = new THREE.Group(); h.matrixAutoUpdate = false; h.userData.chain = key.split(",").map(Number);
+      holders[key] = h; movers.push(h); g.add(h);
+    }
+    return holders[key];
+  };
   const hl = document.getElementById("hl").checked, xray = document.getElementById("xray").checked;
   const geo = {0: new THREE.BoxGeometry(1, 1, 1), 1: wedge(false), 2: wedge(true), 3: wedge(false, true),
                4: new THREE.CylinderGeometry(0.5, 0.5, 1, 20)};
   const groups = {};
   for (const b of m.scene.boxes) {
     const col = (hl && b[7]) ? "#ffb000" : b[6];
-    (groups[[col, b[8], b[10]].join("|")] ||= []).push(b);
+    (groups[[col, b[8], b[10], chainOf[b[11]] || ""].join("|")] ||= []).push(b);
   }
   for (const [key, list] of Object.entries(groups)) {
     const [col, shape, glass] = key.split("|");
@@ -177,24 +252,24 @@ function build(m) {
       mtx.setPosition(b[0] + b[3] / 2, b[1] + b[4] / 2, b[2] + b[5] / 2);
       inst.setMatrixAt(i, mtx);
     });
-    g.add(inst);
+    holder(list[0]).add(inst);
   }
   const axleMat = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0x7a7f86});
   for (const a of m.scene.axles) {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, a[3], 16), axleMat);
-    orient(c, a); g.add(c);
+    orient(c, a); holder(a).add(c);
   }
   for (const c of m.scene.cyls || []) {
     const hole = c[6] === "#16191c";
     const mat = new THREE.MeshLambertMaterial({color: (hl && !hole) ? 0xffb000 : c[6]});
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(c[5], c[5], c[3], 20), mat);
-    orient(mesh, c); g.add(mesh);
+    orient(mesh, c); holder(c).add(mesh);
   }
   const tyre = new THREE.MeshLambertMaterial({color: 0x1b1b1b}), rim = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0xc9ccd1});
   for (const w of m.scene.wheels) {
     const r = w[5], tw = w[6];
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, tw, 40), tyre); orient(t, w); g.add(t);
-    const h = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, tw + 0.6, 24), rim); orient(h, w); g.add(h);
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, tw, 40), tyre); orient(t, w); holder(w).add(t);
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, tw + 0.6, 24), rim); orient(h, w); holder(w).add(h);
   }
   // Ground at the lowest point, so it is visible what touches the floor.
   const bb = new THREE.Box3().setFromObject(g), size = bb.getSize(new THREE.Vector3());
@@ -229,7 +304,32 @@ function show(i, keepView) {
   document.querySelectorAll("#models button").forEach((b, j) => b.setAttribute("aria-pressed", j === i));
   const s = MODELS[i].scene;
   document.getElementById("facts").innerHTML = MODELS[i].facts.map(f => `<span>${f[0]} <b>${f[1]}</b></span>`).join("");
+  const n = (MODELS[i].joints || []).length, sim = document.getElementById("sim");
+  sim.hidden = n === 0;
+  sim.setAttribute("aria-pressed", simOn[i]);
+  const spins = (MODELS[i].joints || []).filter(j => j.spin).length;
+  sim.title = `${spins} spinning, ${n - spins} swinging joint(s)`;
   if (!keepView) view("three");
+}
+const jm = new THREE.Matrix4(), jr = new THREE.Matrix4(), jt = new THREE.Matrix4(), jv = new THREE.Vector3();
+function jointMatrix(j, t, out) {  // turn about the pivot line: T(p) R(axis, angle) T(-p)
+  let a;
+  if (j.spin) a = t * Math.PI * 1.4;
+  else { const period = 2.5 + Math.abs(j.degrees) / 120; a = j.degrees * Math.PI / 180 * (1 - Math.cos(2 * Math.PI * t / period)) / 2; }
+  jr.makeRotationAxis(jv.set(j.axis[0], j.axis[1], j.axis[2]).normalize(), a);
+  out.makeTranslation(j.point[0], j.point[1], j.point[2]).multiply(jr);
+  return out.multiply(jt.makeTranslation(-j.point[0], -j.point[1], -j.point[2]));
+}
+function animate() {
+  const on = simOn[current], joints = MODELS[current].joints || [];
+  const t = (performance.now() - simStart) / 1000, cache = {};
+  for (const h of movers) {
+    if (!on && h.userData.rest) continue;  // off: back at rest once, then left alone
+    h.userData.rest = !on;
+    h.matrix.identity();
+    if (on) for (const n of h.userData.chain) h.matrix.multiply(cache[n] ||= jointMatrix(joints[n], t, new THREE.Matrix4()));
+    h.matrixWorldNeedsUpdate = true;
+  }
 }
 function view(kind) {
   const bb = new THREE.Box3().setFromObject(group), c = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3());
@@ -240,6 +340,10 @@ function view(kind) {
 }
 MODELS.forEach((m, i) => { const b = document.createElement("button"); b.type = "button"; b.textContent = m.name; b.onclick = () => show(i); document.getElementById("models").appendChild(b); });
 ["hl", "xray"].forEach(id => document.getElementById(id).onchange = () => show(current, true));
+document.getElementById("sim").onclick = () => {
+  simOn[current] = !simOn[current]; simStart = performance.now();
+  document.getElementById("sim").setAttribute("aria-pressed", simOn[current]);
+};
 document.getElementById("side").onclick = () => view("side");
 document.getElementById("three").onclick = () => view("three");
 document.getElementById("under").onclick = () => view("under");
@@ -249,13 +353,14 @@ new ResizeObserver(resize).observe(stage);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", bg);
 new MutationObserver(bg).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
 bg(); show(0); resize();
-(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+(function loop() { controls.update(); animate(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
 </script>
 """
 
 
-def page(models: list[tuple[str, list[dict], list[tuple[str, str]]]]) -> str:
-    data = [{"name": n, "scene": scene(parts), "facts": facts} for n, parts, facts in models]
+def page(models: list[tuple[str, list[dict], list[tuple[str, str]]]], simulate: bool = True) -> str:
+    data = [{"name": n, "scene": scene(parts), "facts": facts, "joints": motions(parts) if simulate else []}
+            for n, parts, facts in models]
     return PAGE.replace("__MODELS__", json.dumps(data, separators=(",", ":")))
 
 
