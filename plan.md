@@ -1,3 +1,5 @@
+> **Superseded (Oct 29):** history only. The current plan is `spec.md` section 0.
+
 # SAMgo build plan: replicate BrickGPT with a Meta model, then make it work
 
 **Goal.** The model is the builder. Muse Glimmer places every brick, one at a time, in a real 3D grid; a

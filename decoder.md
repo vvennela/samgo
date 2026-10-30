@@ -1,3 +1,5 @@
+> **Superseded (Oct 29):** history only. The current plan is `spec.md` section 0.
+
 # Decoder proposal: building *your* object, not just *an* object
 
 Status: **decided Oct 29 and built** (`brickgpt/shape.py`, `brickgpt/decode.py`, `brickgpt/build_photo.py`).

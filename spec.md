@@ -9,6 +9,64 @@ Submission: **Wed Nov 4, 6:00 PM PT**
 
 ---
 
+## 0. Current plan (frozen Oct 29; changes only by the user's decision)
+
+This section is the single source of truth. `plan.md` (BrickGPT replication), `decoder.md` (shape-checked
+decoding) and `mechanisms.md` (design discussion) are history; sections 1-6 below are the original spec, kept for
+its stage results (S1-S6 are what step 1 here reuses).
+
+### Pipeline
+1. **Photo → body.** SAM 3.1 cuts out the object, SAM 3D makes the mesh, the algorithmic builder (S4) makes a
+   faithful, buildable body. Spark's existing function spec (S2.5: "car, 4 wheels, 2 axles, rolls along x") says
+   which tasks apply. Done (Camry at 20 and 60 studs).
+2. **Glimmer makes it work, by editing the build.** Input: the spec, the region code supplies (wheel positions,
+   window cells, door area) and the local parts. Output: edits (`set` / `add` / `remove`). Four tasks for Nov 4:
+   1. real Technic running gear;
+   2. glass windows (transparent parts);
+   3. clean colors;
+   4. preset doors (3821/3822, 3188/3189) on a small car.
+3. **Code verifiers check every edit** (structure S3a, stability S3b, function S3c, door swing); errors go back to
+   Glimmer, up to 3 retries.
+4. **Demo:** photo → LEGO car that rolls, has glass and clean colors, and has doors that open, every mechanism
+   placed by Glimmer and verified.
+
+**Out:** Spark writing detailed instructions; Glimmer finding regions itself (views/zoom tools); built hinge doors,
+ball joints, stability repair; v2. v1 (BrickGPT replication on Glimmer) finishes as a reported result only.
+
+### Training data (generated, verified)
+1. **Bases.** Vehicle meshes (Objaverse LVIS vehicles, no gating; our photo cars are held out for testing) are
+   voxelized at ~16-24 studs and built by the car builder (`samgo/car.py`), giving complete builds whose running
+   gear passes S3c. Only builds that pass are kept.
+2. **One example per task per base.** Remove the mechanism from the complete build; the input is the build without
+   it, the answer is the edits that restore it:
+   - running gear: axles and wheels removed, Technic chassis bricks turned into plain bricks → edits that swap
+     the Technic bricks back and add the axles and wheels;
+   - glass: window cells as ordinary dark parts → recolor to transparent parts;
+   - colors: noise added to the colors → edits back to the clean colors;
+   - doors: closed side panel → cut the door gap and place preset door parts (a door-placement script, verified by
+     the swing check).
+3. **Format.** Chat rows: system = parts-and-rules sheet; user = spec + region + numbered local parts + task;
+   assistant = the edit list. About 20% get a second turn (a flawed first fix, the verifier's error, the
+   correction) so the model learns to use feedback.
+4. **Every answer is checked** by applying it and running the verifiers; anything that fails is dropped.
+
+### Training
+- **SFT on base Glimmer** (Fireworks LoRA, free through Nov 30): run 1 running gear; run 2 + glass and colors;
+  run 3 + preset doors. ~5-10k examples each, held-out test set fixed before training.
+- **Evaluation** after each run on the held-out photo cars and held-out generated cars: pass rate on the first try
+  and with 3 retries, against base Glimmer.
+- **GRPO** only if SFT's first-try pass rate is 20-80% and retries don't already reach ~95%: a ~$10 test run, then
+  ~100-300 steps, max $200. Reward: 0 if the edits don't parse or apply; else 0.5 × checks passed + 0.5 × match to
+  the complete build. Details: `reports/SAMgo mechanism RL training plan.md`.
+
+### Order of work
+1. Running-gear data generator → SFT run 1 → evaluation.
+2. Glass and colors in the same generator → SFT run 2.
+3. Preset doors (parts, swing check, placement script) → SFT run 3.
+4. Demo video.
+
+---
+
 ## 1. Problem
 
 Turning a real object into something you can physically build takes a designer: someone who can judge shape, pick parts, and make sure the result holds together. AI models can describe objects and generate pictures and meshes of them, but they are bad at producing **physically valid assemblies**: parts that exist, fit, connect, and stand up. The output looks right and falls apart.

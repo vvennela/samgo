@@ -1,3 +1,5 @@
+> **Superseded (Oct 29):** history only. The current plan is `spec.md` section 0.
+
 # Mechanisms: the model makes the build *work*
 
 Status: **design for review (Oct 29)**. Nothing here is built yet. It replaces "the model builds the shape" (decoder.md),
