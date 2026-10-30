@@ -17,7 +17,7 @@ from scipy import ndimage
 from .parts import COLOR_INDEX, COLORS
 
 # Longest dimension of the model, in studs (height counted in studs too).
-SIZES = {"small": 12, "medium": 20, "large": 32}
+SIZES = {"small": 12, "medium": 20, "large": 32, "xlarge": 60}
 PLATE_PER_STUD = 8.0 / 3.2
 SAMPLES_PER_CELL_AREA = 16  # surface points per unit^2 of grid area, ~0.25-cell spacing
 
