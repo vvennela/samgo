@@ -13,24 +13,69 @@ import sys
 from pathlib import Path
 
 from .parts import COLORS
-from .technic import DEFAULT_WHEEL, HOLE_HEIGHT, PLATE, STUD, WHEELS, wheel_studs
+from .technic import (BEAM_HEIGHT, DEFAULT_WHEEL, HOLE_HEIGHT, LENGTH, PIN_RADIUS, PLATE, STUD, TUBE_RADIUS, WHEELS,
+                      extent, wheel_studs)
 
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "tile": 1, "slope": 3, "invslope": 3, "curve": 2,
           "roundbrick": 3, "roundplate": 1, "arch": 3, "hinge_base": 1, "hinge_top": 1}
 EXTRA = {"trans_clear": (205, 225, 240), "trans_black": (45, 60, 75)}
 SHAPE = {"slope": 1, "curve": 2, "invslope": 3, "roundbrick": 4, "roundplate": 4}  # 0 = box
+# Usual colours of the Technic connectors (LDraw/BrickLink): 2780 black, 3673 gray, 6558 and 43093 blue.
+PIN_COLOR = {(2, True): "black", (2, False): "light_gray", (3, True): "blue"}
+HOLE = "#16191c"
 
 
 def _hex(rgb) -> str:
     return "#%02x%02x%02x" % tuple(rgb)
 
 
+def _rgb(p: dict, default: str = "light_gray") -> str:
+    c = p.get("color", default)
+    return _hex(COLORS.get(c, (None, EXTRA.get(c, (150, 150, 150))))[1])
+
+
+def _technic(p: dict, boxes: list, cyls: list) -> None:
+    """Liftarms as a bar with a rounded end and a dark hole at every hole; cross blocks as their block; pins,
+    joiners and bushes as cylinders on their axis line."""
+    t, col = p["type"], _rgb(p)
+    h = p["z"] * PLATE + HOLE_HEIGHT
+    if t == "liftarm":
+        lo, hi = extent(p)
+        along = 0 if p["axis"] == "x" else 1
+        lo, hi = list(lo), list(hi)
+        lo[along], hi[along] = lo[along] + STUD / 2, hi[along] - STUD / 2   # bar between the end hole centres
+        boxes.append([lo[0], lo[2], lo[1], hi[0] - lo[0], hi[2] - lo[2], hi[1] - lo[1], col, 1, 0, "", 0])
+        across = "y" if p["axis"] == "x" else "x"
+        for i in range(p["length"]):
+            e = p[p["axis"]] + i
+            x, y = (e, p["y"]) if p["axis"] == "x" else (p["x"], e)
+            cyls.append([x * STUD, h, y * STUD, STUD, across, BEAM_HEIGHT / 2, col])
+            dx, dy = (0, 0.15) if across == "y" else (0.15, 0)  # a little longer than the beam, so it shows
+            cyls.append([x * STUD - dx, h, y * STUD - dy, STUD + 0.3, across, PIN_RADIUS, HOLE])
+        return
+    if t == "cross_block":
+        lo, hi = extent(p)
+        boxes.append([lo[0], lo[2], lo[1], hi[0] - lo[0], hi[2] - lo[2], hi[1] - lo[1], col, 1, 0, "", 0])
+        return
+    start = p["z"] * PLATE if p["axis"] == "z" else h
+    if t == "pin":
+        n, fr = p.get("length", 2), bool(p.get("friction", True))
+        cyls.append([p["x"] * STUD, start, p["y"] * STUD, n * STUD, p["axis"], PIN_RADIUS, _rgb(p, PIN_COLOR[(n, fr)])])
+    elif t == "axle_pin":
+        cyls.append([p["x"] * STUD, start, p["y"] * STUD, 2 * STUD, p["axis"], PIN_RADIUS, _rgb(p, "blue")])
+    else:  # axle joiner, half bush: a tube round the axle
+        cyls.append([p["x"] * STUD, start, p["y"] * STUD, LENGTH[t] * STUD, p["axis"], TUBE_RADIUS, col])
+
+
 def scene(parts: list[dict]) -> dict:
-    """Boxes, axles and wheels in mm, y up (LEGO z), grouped for the page."""
-    boxes, axles, wheels = [], [], []
+    """Boxes, axles and wheels in mm, y up (LEGO z), grouped for the page; Technic connectors as boxes and
+    cylinders ([x, start height, y, span, axis, radius, colour])."""
+    boxes, axles, wheels, cyls = [], [], [], []
     for p in parts:
         t = p.get("type")
-        if t in HEIGHT:
+        if t in ("liftarm", "cross_block", "pin", "axle_pin", "axle_joiner", "half_bush"):
+            _technic(p, boxes, cyls)
+        elif t in HEIGHT:
             rgb = COLORS.get(p.get("color", "light_gray"), (None, EXTRA.get(p.get("color"), (150, 150, 150))))[1]
             boxes.append([p["x"] * STUD, p["z"] * PLATE, p["y"] * STUD, p["w"] * STUD, HEIGHT[t] * PLATE,
                           p["l"] * STUD, _hex(rgb), 1 if t == "technic_brick" else 0, SHAPE.get(t, 0),
@@ -44,7 +89,7 @@ def scene(parts: list[dict]) -> dict:
                 rec.append(WHEELS[size][0] / 2)       # radius
                 rec.append(WHEELS[size][1])           # tyre width, mm
             (axles if t == "axle" else wheels).append(rec)
-    return {"boxes": boxes, "axles": axles, "wheels": wheels}
+    return {"boxes": boxes, "axles": axles, "wheels": wheels, "cyls": cyls}
 
 
 PAGE = """<title>SAMgo Build Viewer</title>
@@ -139,6 +184,12 @@ function build(m) {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, a[3], 16), axleMat);
     orient(c, a); g.add(c);
   }
+  for (const c of m.scene.cyls || []) {
+    const hole = c[6] === "#16191c";
+    const mat = new THREE.MeshLambertMaterial({color: (hl && !hole) ? 0xffb000 : c[6]});
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(c[5], c[5], c[3], 20), mat);
+    orient(mesh, c); g.add(mesh);
+  }
   const tyre = new THREE.MeshLambertMaterial({color: 0x1b1b1b}), rim = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0xc9ccd1});
   for (const w of m.scene.wheels) {
     const r = w[5], tw = w[6];
@@ -166,8 +217,9 @@ function wedge(curved, inverted) {
   g.translate(0, 0, -0.5);
   return g;
 }
-function orient(mesh, a) {  // a = [x, centre height, y, span, axis]; LEGO y -> three z
-  if (a[4] === "y") { mesh.rotation.x = Math.PI / 2; mesh.position.set(a[0], a[1], a[2] + a[3] / 2); }
+function orient(mesh, a) {  // a = [x, centre height, y, span, axis]; LEGO y -> three z; axis z: from that height up
+  if (a[4] === "z") { mesh.position.set(a[0], a[1] + a[3] / 2, a[2]); }
+  else if (a[4] === "y") { mesh.rotation.x = Math.PI / 2; mesh.position.set(a[0], a[1], a[2] + a[3] / 2); }
   else { mesh.rotation.z = Math.PI / 2; mesh.position.set(a[0] + a[3] / 2, a[1], a[2]); }
 }
 function show(i, keepView) {

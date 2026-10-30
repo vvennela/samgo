@@ -11,6 +11,20 @@ the brick. Parts, as the model writes them:
 
 An axle with axis "y" lies on the stud edge x (between columns x-1 and x) at the hole height of
 bricks whose bottom is at plate z, spanning y..y+length; axis "x" swaps the roles of x and y.
+
+Technic connection parts follow the axle's convention (a line along `axis` at Technic hole height, from y to
+y+length for axis "y"); x, y, z may be half steps (0.5) since pins and blocks sit between grid lines:
+
+    {"type": "pin", "axis": "y", "x": 1, "y": 0, "z": 0, "length": 2, "friction": True}   # 2780; False: 3673; 3: 6558
+    {"type": "axle_pin", "axis": "y", "x": 1, "y": 0, "z": 0, "axle_end": "end"}          # 43093, pin at y..y+1
+    {"type": "axle_joiner", "axis": "y", "x": 1, "y": 2, "z": 0}                          # 6538a, 2 long
+    {"type": "half_bush", "axis": "y", "x": 1, "y": 2, "z": 0}                            # 32123a, half a stud
+    {"type": "cross_block", "axis": "y", "x": 1, "y": 2, "z": 0, "pin_at": "+z"}          # 6536, pin hole 1 stud up
+    {"type": "liftarm", "axis": "x", "x": 1, "y": 0, "z": 0, "length": 5}                 # 32316
+
+A liftarm (thick beam) lies along `axis` with `length` round holes, one on each stud edge x..x+length-1 (axis x;
+for axis y swap x and y), across it in the row y..y+1, at the hole height of a Technic brick at plate z: pinned to the side of a Technic brick, its
+holes line up with the brick's. A pin with axis "z" stands upright at stud point (x, y), from plate z up.
 Dimensions are standard LEGO Technic; they are constants here so they can be changed in one place.
 """
 
@@ -45,8 +59,26 @@ def wheel_studs(size: str) -> int:
 TOLERANCE = 0.3                  # mm; contact closer than this is not an intersection
 GROUND_CLEARANCE = 1.0           # wheels must reach this far below the lowest body part, mm
 
-FUNCTIONAL = {"technic_brick", "axle", "wheel", "bush"}
+FUNCTIONAL = {"technic_brick", "axle", "wheel", "bush", "pin", "axle_pin", "axle_joiner", "half_bush", "cross_block",
+              "liftarm"}
 # Technic bush (LDraw 3713): a 1-stud collar that grips an axle, used to hold a wheel in place along it.
+
+# Technic connection parts, measured from the official LDraw library (20 LDU = 1 stud = 8 mm). Pins: a 1-stud
+# shaft each side of the collar (2780, 3673); 6558 is 3 long (1 + 2). 43093: a 1-stud pin and a 1-stud axle end.
+# 6538a joins two axles in line in a 2-stud tube of axle holes. 32123a: axle hole, 10 LDU (half a stud) long.
+# 6536: 1x1x2 block, an axle hole and a pin hole 20 LDU apart with perpendicular axes. Thick liftarms: 20 LDU
+# thick, 18 LDU (7.2 mm) tall, round holes 20 LDU apart across the beam, as long as their hole count.
+LIFTARM_LENGTHS = (3, 5, 7, 9, 11, 15)
+TECHNIC_LDRAW = {("pin", 2, True): "2780", ("pin", 2, False): "3673", ("pin", 3, True): "6558",
+                 "axle_pin": "43093", "axle_joiner": "6538a", "half_bush": "32123a", "cross_block": "6536",
+                 ("liftarm", 3): "32523", ("liftarm", 5): "32316", ("liftarm", 7): "32524", ("liftarm", 9): "40490",
+                 ("liftarm", 11): "32525", ("liftarm", 15): "32278"}
+PIN_RADIUS = 2.4                 # pin shaft, 6 LDU
+TUBE_RADIUS = 3.6                # outside of joiners, bushes and the liftarm's rounded ends, 9 LDU
+BEAM_HEIGHT = 7.2                # thick liftarm, 18 LDU
+LENGTH = {"axle_pin": 2, "axle_joiner": 2, "half_bush": 0.5, "cross_block": 1}  # studs along the axis
+# Parts that live in holes or on axles and hold by pins, not studs: never stud-grid cells.
+OFF_GRID = {"axle", "wheel", "bush", "pin", "axle_pin", "axle_joiner", "half_bush", "cross_block", "liftarm"}
 
 
 @dataclass(frozen=True)
@@ -62,11 +94,12 @@ class Box:  # an axis-aligned part volume in mm
 def structural(parts: list[dict]) -> list[dict]:
     """The pieces the structural verifier (S3a) sees: plates, bricks, and Technic bricks as plain bricks.
 
-    Axles live inside holes and wheels outside the grid, so neither occupies grid cells.
+    Axles live inside holes and wheels outside the grid, so neither occupies grid cells; pins, liftarms and the
+    other Technic connectors hold by pins, not studs, so they are left out too (kinematics.connected links them).
     """
     out = []
     for p in parts:
-        if not isinstance(p, dict) or p.get("type") in ("axle", "wheel", "bush"):
+        if not isinstance(p, dict) or p.get("type") in OFF_GRID:
             continue
         if p.get("type") == "technic_brick":
             p = {k: v for k, v in p.items() if k != "hole"} | {"type": "brick"}
@@ -74,7 +107,28 @@ def structural(parts: list[dict]) -> list[dict]:
     return out
 
 
+def extent(p: dict) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """(low corner, high corner) in mm of a liftarm or cross block, the Technic connectors with a body."""
+    h = p["z"] * PLATE + HOLE_HEIGHT
+    if p["type"] == "liftarm":  # rounded ends reach half a stud past the end holes
+        along, row = (p["x"], p["y"]) if p["axis"] == "x" else (p["y"], p["x"])
+        a0, a1, b0, b1 = (along - 0.5) * STUD, (along + p["length"] - 0.5) * STUD, row * STUD, (row + 1) * STUD
+        x0, x1, y0, y1 = (a0, a1, b0, b1) if p["axis"] == "x" else (b0, b1, a0, a1)
+        return (x0, y0, h - BEAM_HEIGHT / 2), (x1, y1, h + BEAM_HEIGHT / 2)
+    # cross block: a 1-stud cube round the axle hole, and one round the pin hole beside it
+    e, s = (p["x"], p["y"]) if p["axis"] == "y" else (p["y"], p["x"])
+    c = [e * STUD, (s + 0.5) * STUD, h] if p["axis"] == "y" else [(s + 0.5) * STUD, e * STUD, h]
+    k = "xyz".index(p.get("pin_at", "+z")[1])
+    d = STUD if p.get("pin_at", "+z")[0] == "+" else -STUD
+    lo, hi = [v - STUD / 2 for v in c], [v + STUD / 2 for v in c]
+    lo[k], hi[k] = min(lo[k], lo[k] + d), max(hi[k], hi[k] + d)
+    return tuple(lo), tuple(hi)
+
+
 def _box(p: dict) -> Box:
+    if p["type"] in ("liftarm", "cross_block"):
+        lo, hi = extent(p)
+        return Box(lo[0], hi[0], lo[1], hi[1], lo[2], hi[2])
     h = 3 if p["type"] in ("brick", "technic_brick") else 1
     return Box(p["x"] * STUD, (p["x"] + p["w"]) * STUD, p["y"] * STUD, (p["y"] + p["l"]) * STUD,
                p["z"] * PLATE, (p["z"] + h) * PLATE)
@@ -88,10 +142,22 @@ def _holes(p: dict) -> list[tuple[str, float, float, float, float]]:
     return [("y", (p["x"] + i) * STUD, z, p["y"] * STUD, (p["y"] + 1) * STUD) for i in range(1, p["w"])]
 
 
+def _beam_holes(p: dict) -> list[tuple[str, float, float, float, float]]:
+    """The same for a liftarm: a round hole across it on each stud edge along its length."""
+    z = p["z"] * PLATE + HOLE_HEIGHT
+    across = "y" if p["axis"] == "x" else "x"
+    along, row = (p["x"], p["y"]) if p["axis"] == "x" else (p["y"], p["x"])
+    return [(across, (along + i) * STUD, z, row * STUD, (row + 1) * STUD) for i in range(p["length"])]
+
+
+def _round_holes(p: dict) -> list[tuple[str, float, float, float, float]]:
+    return _holes(p) if p["type"] == "technic_brick" else _beam_holes(p)
+
+
 def _line(a: dict) -> tuple[str, float, float, float, float]:
-    """(axis, edge mm, z mm, span start mm, span end mm) of an axle or wheel."""
+    """(axis, edge mm, z mm, span start mm, span end mm) of an axle, wheel, bush or half bush."""
     edge, start = (a["x"], a["y"]) if a["axis"] == "y" else (a["y"], a["x"])
-    size = a.get("length", a.get("width", 1 if a.get("type") == "bush" else None))
+    size = a.get("length", a.get("width", 1 if a.get("type") == "bush" else LENGTH.get(a.get("type"))))
     return a["axis"], edge * STUD, a["z"] * PLATE + HOLE_HEIGHT, start * STUD, (start + size) * STUD
 
 
@@ -128,8 +194,27 @@ def _validate(p: dict) -> str | None:
                 return f"wheel needs axis x or y and a size from {', '.join(WHEELS)}"
             if int(p.get("width", wheel_studs(size))) != wheel_studs(size):
                 return f"a {size} wheel is {wheel_studs(size)} studs wide"
+        elif t in ("pin", "axle_pin"):
+            if p["axis"] not in ("x", "y", "z"):
+                return f"{t} needs axis x, y or z"
+            if t == "pin" and (int(p.get("length", 2)), bool(p.get("friction", True))) not in \
+                    ((2, True), (2, False), (3, True)):
+                return "pins are 2 long (with friction 2780, without 3673) or 3 long with friction (6558)"
+            if t == "axle_pin" and p.get("axle_end", "end") not in ("start", "end"):
+                return "axle_end must be start or end"
+        elif t in ("axle_joiner", "half_bush", "cross_block", "liftarm"):
+            if p["axis"] not in ("x", "y"):
+                return f"{t} needs axis x or y"
+            if t == "liftarm" and int(p["length"]) not in LIFTARM_LENGTHS:
+                return f"liftarms come with {', '.join(map(str, LIFTARM_LENGTHS))} holes"
+            if t == "cross_block" and p.get("pin_at", "+z") not in [s + k for s in "+-" for k in "xyz" if k != p["axis"]]:
+                return "pin_at must be +/- one of the two directions across the axle hole (e.g. +z)"
         for k in ("x", "y", "z"):
-            int(p[k])
+            if t in OFF_GRID - {"axle", "wheel", "bush"}:  # connectors may sit half a step off the grid
+                if float(p[k]) * 2 != int(float(p[k]) * 2):
+                    return f"{k} must be a whole or half step"
+            else:
+                int(p[k])
     except (KeyError, TypeError, ValueError):
         return "missing or bad fields"
     return None
@@ -144,19 +229,20 @@ def verify_function(parts: list[dict]) -> Report:
             issues.append(Issue("invalid_part", f"part {i}: {err}", [i]))
     if issues:
         return Report(False, issues, {})
-    technic = [(i, p) for i, p in enumerate(parts) if isinstance(p, dict) and p.get("type") == "technic_brick"]
+    # Technic bricks and liftarms: the parts with round holes an axle can turn in.
+    technic = [(i, p) for i, p in enumerate(parts) if isinstance(p, dict) and p.get("type") in ("technic_brick", "liftarm")]
     axles = [(i, p) for i, p in enumerate(parts) if isinstance(p, dict) and p.get("type") == "axle"]
     wheels = [(i, p | {"width": wheel_studs(p.get("size", DEFAULT_WHEEL))}) for i, p in enumerate(parts)
               if isinstance(p, dict) and p.get("type") == "wheel"]
     solids = [(i, p, _box(p)) for i, p in enumerate(parts)
-              if isinstance(p, dict) and p.get("type") in ("brick", "plate", "technic_brick")]
+              if isinstance(p, dict) and p.get("type") in ("brick", "plate", "technic_brick", "liftarm", "cross_block")]
 
     wheeled = []  # (axle index, axis) for axles that turn and carry wheels
     for ai, a in axles:
         axis, edge, z, s0, s1 = _line(a)
         through = []  # Technic bricks whose hole this axle passes through
         for ti, t in technic:
-            for h_axis, h_edge, h_z, h0, h1 in _holes(t):
+            for h_axis, h_edge, h_z, h0, h1 in _round_holes(t):
                 if h_axis == axis and abs(h_edge - edge) < 0.01 and abs(h_z - z) < 0.01 and h0 >= s0 - 0.01 \
                         and h1 <= s1 + 0.01:
                     through.append(ti)
@@ -183,7 +269,7 @@ def verify_function(parts: list[dict]) -> Report:
 
     # Each wheel must be held on both sides along its axle: by a beam's hole, a bush, another wheel, or the axle
     # ending there. A gap lets it slide along the axle (real builds fill it with bushes).
-    bushes = [p for p in parts if isinstance(p, dict) and p.get("type") == "bush"]
+    bushes = [p for p in parts if isinstance(p, dict) and p.get("type") in ("bush", "half_bush")]
     for wi, w in wheels:
         axis, edge, z, s0, s1 = _line(w)
         line_axles = [_line(a) for _, a in axles if _line(a)[:3] == (axis, edge, z)]
@@ -191,7 +277,7 @@ def verify_function(parts: list[dict]) -> Report:
         neighbours = [(_line(b)[3], _line(b)[4]) for b in bushes if _line(b)[:3] == (axis, edge, z)]
         neighbours += [(_line(o)[3], _line(o)[4]) for oi, o in wheels if oi != wi and _line(o)[:3] == (axis, edge, z)]
         for _, t in technic:
-            neighbours += [(h0, h1) for h_axis, h_edge, h_z, h0, h1 in _holes(t)
+            neighbours += [(h0, h1) for h_axis, h_edge, h_z, h0, h1 in _round_holes(t)
                            if h_axis == axis and abs(h_edge - edge) < 0.01 and abs(h_z - z) < 0.01]
         for face, side in ((s0, "start"), (s1, "end")):
             ends_here = any(abs((a0 if side == "start" else a1) - face) < 0.01 or
@@ -223,6 +309,11 @@ def verify_function(parts: list[dict]) -> Report:
     elif len({line[0] for line in lines}) > 1:
         issues.append(Issue("axles_misaligned", "wheeled axles are not parallel, so it cannot roll straight",
                             [ai for ai, _, _, _ in wheeled]))
+
+    from .kinematics import unseated  # kinematics builds on this module
+
+    for i, why in unseated(parts):
+        issues.append(Issue("connector_loose", f"part {i} ({parts[i]['type']}) {why}", [i]))
 
     if wheels and solids:
         wheel_bottom = min(_line(w)[2] - WHEELS[w.get("size", DEFAULT_WHEEL)][0] / 2 for _, w in wheels)
