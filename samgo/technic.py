@@ -19,10 +19,29 @@ from dataclasses import dataclass
 from samgo.verifier import Issue, Report
 
 STUD, PLATE = 8.0, 3.2           # mm
-HOLE_HEIGHT = 5.8                # hole axis above the bottom of a Technic brick, mm
+HOLE_HEIGHT = 5.6                # hole axis above the bottom of a Technic brick: 14 LDU in the LDraw parts
 AXLE_RADIUS = 2.4
-WHEEL_DIAMETER = 30.4            # LEGO 30.4 x 14 wheel with tire
 TECHNIC_LENGTHS = (2, 4, 6, 8)
+# Real Technic axle lengths (studs) and the ones made with a stop at one end (LDraw 3704...3708, 50451, 50450;
+# stop axles 24316, 87083, 15462, 55013).
+AXLE_LENGTHS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 16, 32)
+STOP_AXLE_LENGTHS = (3, 4, 5, 8)
+# Wheel-with-tyre sizes measured from the LDraw tyres: name -> (outer diameter mm, tyre width mm, LDraw tyre, rim).
+WHEELS = {
+    "30.4x14": (30.4, 14, "6578", "6014"),
+    "43.2x22": (43.2, 22, "44309", "56145"),
+    "56x28": (56.0, 28, "41897", "41896"),
+    "62.4x20": (62.4, 20, "32019", "86652"),
+    "68.8x36": (68.8, 36, "44771", "44772"),
+    "81.6x38": (81.6, 38, "56907", "56908"),
+}
+DEFAULT_WHEEL = "30.4x14"
+WHEEL_DIAMETER = WHEELS[DEFAULT_WHEEL][0]
+
+
+def wheel_studs(size: str) -> int:
+    """Studs of axle a wheel of this size takes up (its tyre width, rounded up)."""
+    return -(-int(WHEELS[size][1]) // int(STUD))
 TOLERANCE = 0.3                  # mm; contact closer than this is not an intersection
 GROUND_CLEARANCE = 1.0           # wheels must reach this far below the lowest body part, mm
 
@@ -95,11 +114,16 @@ def _validate(p: dict) -> str | None:
             if p.get("hole", "round") not in ("round", "axle"):
                 return "hole must be round or axle"
         elif t == "axle":
-            if p["axis"] not in ("x", "y") or not 2 <= int(p["length"]) <= 16:
-                return "axle needs axis x or y and length 2-16"
+            lengths = STOP_AXLE_LENGTHS if p.get("stop") else AXLE_LENGTHS
+            if p["axis"] not in ("x", "y") or int(p["length"]) not in lengths:
+                kind = "stop axles come" if p.get("stop") else "axles come"
+                return f"axle needs axis x or y; {kind} in lengths {', '.join(map(str, lengths))}"
         elif t == "wheel":
-            if p["axis"] not in ("x", "y") or int(p.get("width", 2)) != 2:
-                return "wheel needs axis x or y and width 2"
+            size = p.get("size", DEFAULT_WHEEL)
+            if p["axis"] not in ("x", "y") or size not in WHEELS:
+                return f"wheel needs axis x or y and a size from {', '.join(WHEELS)}"
+            if int(p.get("width", wheel_studs(size))) != wheel_studs(size):
+                return f"a {size} wheel is {wheel_studs(size)} studs wide"
         for k in ("x", "y", "z"):
             int(p[k])
     except (KeyError, TypeError, ValueError):
@@ -118,7 +142,7 @@ def verify_function(parts: list[dict]) -> Report:
         return Report(False, issues, {})
     technic = [(i, p) for i, p in enumerate(parts) if isinstance(p, dict) and p.get("type") == "technic_brick"]
     axles = [(i, p) for i, p in enumerate(parts) if isinstance(p, dict) and p.get("type") == "axle"]
-    wheels = [(i, p | {"width": p.get("width", 2)}) for i, p in enumerate(parts)
+    wheels = [(i, p | {"width": wheel_studs(p.get("size", DEFAULT_WHEEL))}) for i, p in enumerate(parts)
               if isinstance(p, dict) and p.get("type") == "wheel"]
     solids = [(i, p, _box(p)) for i, p in enumerate(parts)
               if isinstance(p, dict) and p.get("type") in ("brick", "plate", "technic_brick")]
@@ -144,11 +168,17 @@ def verify_function(parts: list[dict]) -> Report:
             issues.append(Issue("axle_blocked", f"axle {ai} passes through solid parts", [ai, *blocked]))
         mine = [wi for wi, w in wheels if _line(w)[:3] == (axis, edge, z)
                 and _line(w)[3] >= s0 - 0.01 and _line(w)[4] <= s1 + 0.01]
+        # A wheel on each end clamps an axle in place; an axle carrying one wheel (a stub) needs a stop at its end,
+        # or it slides out of the holes.
+        if len(mine) == 1 and not a.get("stop"):
+            issues.append(Issue("axle_loose", f"axle {ai} carries one wheel and has no stop, so it slides out; use a "
+                                              f"stop axle ({', '.join(map(str, STOP_AXLE_LENGTHS))} long) or wheels "
+                                              "on both ends", [ai]))
         if mine and not locked:
-            wheeled.append((ai, axis, len(mine)))
+            wheeled.append((ai, axis, (axis, round(edge, 2), round(z, 2)), len(mine)))
 
-    r = WHEEL_DIAMETER / 2
     for wi, w in wheels:
+        r = WHEELS[w.get("size", DEFAULT_WHEEL)][0] / 2
         axis, edge, z, s0, s1 = _line(w)
         on_axle = any(_line(a)[:3] == (axis, edge, z) and _line(a)[3] <= s0 + 0.01 and _line(a)[4] >= s1 - 0.01
                       for _, a in axles)
@@ -158,15 +188,19 @@ def verify_function(parts: list[dict]) -> Report:
         if hit := [si for si, _, b in solids if _circle_hits_box(axis, edge, z, r, s0, s1, b)]:
             issues.append(Issue("wheel_blocked", f"wheel {wi} would hit parts when it turns", [wi, *hit]))
 
-    if len(wheeled) < 2 or any(n < 2 for _, _, n in wheeled):
-        issues.append(Issue("too_few_wheels", f"{len(wheeled)} turning axle(s) with wheels; a car needs 2 axles "
-                                              "with a wheel on each side"))
-    elif len({axis for _, axis, _ in wheeled}) > 1:
+    # Axles on one line (a through axle, or two stub axles facing each other) form one wheel pair.
+    lines: dict[tuple, int] = {}
+    for _, _, line, n in wheeled:
+        lines[line] = lines.get(line, 0) + n
+    if len(lines) < 2 or any(n < 2 for n in lines.values()):
+        issues.append(Issue("too_few_wheels", f"{len(lines)} turning axle line(s) with wheels; a car needs 2 axle "
+                                              "lines with a wheel on each side"))
+    elif len({line[0] for line in lines}) > 1:
         issues.append(Issue("axles_misaligned", "wheeled axles are not parallel, so it cannot roll straight",
-                            [ai for ai, _, _ in wheeled]))
+                            [ai for ai, _, _, _ in wheeled]))
 
     if wheels and solids:
-        wheel_bottom = min(_line(w)[2] - r for _, w in wheels)
+        wheel_bottom = min(_line(w)[2] - WHEELS[w.get("size", DEFAULT_WHEEL)][0] / 2 for _, w in wheels)
         body_bottom = min(b.z0 for _, _, b in solids)
         clearance = body_bottom - wheel_bottom
         if clearance < GROUND_CLEARANCE:

@@ -80,3 +80,46 @@ def test_axles_that_are_not_parallel_cannot_roll():
     turned += [{"type": "axle", "axis": "x", "y": 1, "z": 0, "x": 18, "length": 6}]
     turned += [{"type": "wheel", "axis": "x", "y": 1, "z": 0, "x": x, "width": 2} for x in (18, 22)]
     assert "axles_misaligned" in codes(front + turned)
+
+
+def test_only_real_axle_lengths_and_wheel_sizes_exist():
+    parts = car()
+    parts[4]["length"] = 13
+    assert codes(parts) == {"invalid_part"}
+    parts = car()
+    parts[6]["size"] = "50x10"
+    assert codes(parts) == {"invalid_part"}
+
+
+def stub_car():
+    """Wide car on stub axles: each wheel on its own short axle through two Technic bricks, a stop on the outside."""
+    chassis = [{"type": "technic_brick", "w": 8, "l": 1, "x": 0, "y": y, "z": 0, "color": "black", "hole": "round"}
+               for y in (0, 1, 18, 19)]
+    body = [{"type": "plate", "w": 8, "l": 20, "x": 0, "y": 0, "z": 3, "color": "red"}]
+    gear = []
+    for x in (1, 7):
+        gear += [{"type": "axle", "axis": "y", "x": x, "z": 0, "y": -2, "length": 4, "stop": True},
+                 {"type": "wheel", "axis": "y", "x": x, "z": 0, "y": -2},
+                 {"type": "axle", "axis": "y", "x": x, "z": 0, "y": 18, "length": 4, "stop": True},
+                 {"type": "wheel", "axis": "y", "x": x, "z": 0, "y": 20}]
+    return chassis + body + gear
+
+
+def test_stub_axles_with_stops_make_a_wide_car_roll_and_without_stops_they_slide_out():
+    parts = stub_car()
+    assert verify_function(parts).passed, verify_function(parts).issues
+    for p in parts:
+        p.pop("stop", None)
+    assert "axle_loose" in codes(parts)
+
+
+def test_bigger_wheels_need_their_own_clearance():
+    # A plate 25.6 mm up over the wheels' path clears a 30.4 mm wheel (top at 20.8 mm) but not a 43.2 mm one.
+    shelf = {"type": "plate", "w": 8, "l": 1, "x": 0, "y": -1, "z": 8, "color": "red"}
+    assert verify_function(car() + [shelf]).passed
+    parts = car() + [shelf]
+    for p in parts:
+        if p["type"] == "wheel":
+            p.pop("width")
+            p["size"] = "43.2x22"
+    assert "wheel_blocked" in codes(parts)
