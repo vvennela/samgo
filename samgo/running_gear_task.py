@@ -257,6 +257,14 @@ def describe(p: dict) -> str:
     return f'{t} {p.get("w")}x{p.get("l")} at (x={p.get("x")}, y={p.get("y")}, z={p.get("z")})'
 
 
+def _stud_linked(p: dict, q: dict) -> bool:
+    """Whether two parts hold each other by studs: footprints overlap and one sits directly on the other."""
+    if p.get("type") not in HGT or q.get("type") not in HGT:
+        return False
+    overlap = p["x"] < q["x"] + q["w"] and q["x"] < p["x"] + p["w"] and p["y"] < q["y"] + q["l"] and q["y"] < p["y"] + p["l"]
+    return overlap and (p["z"] + HGT[p["type"]] == q["z"] or q["z"] + HGT[q["type"]] == p["z"])
+
+
 def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bool, list[str]]:
     """Check an answer and say exactly what is wrong in terms the model can act on: which of its parts overlap which
     input part (by number), which part rests on nothing, which axle or wheel fails and how."""
@@ -308,9 +316,14 @@ def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bo
             try:
                 s = verify(structural(parts), problem["target"], config=MatchConfig(),
                            anchors=frozenset(k for k, n in enumerate(solid_idx) if parts[n].get("type") == "technic_brick"))
+                gone = [(k, problem["full"][i]) for i, k in local_of.items() if k in removed]
                 for i in next(x for x in s.issues if x.code == "floating").pieces[:4]:
-                    msgs.append(f"loose: {tagged[solid_idx[i]][1]} rests on nothing - put a part under or over it "
-                                "that shares a stud, or leave it out")
+                    p = parts[solid_idx[i]]
+                    held = [k for k, q in gone if _stud_linked(p, q)]
+                    why = (f" - it was held by input part {held[0]}, which you removed; put a part over or under it "
+                           "that also reaches a part that stays (e.g. a plate across it and your new beam), or leave "
+                           "it out" if held else " - put a part under or over it that shares a stud, or leave it out")
+                    msgs.append(f"loose: {tagged[solid_idx[i]][1]} rests on nothing{why}")
             except Exception:  # noqa: BLE001
                 msgs.append(issue)
             continue
