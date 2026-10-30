@@ -66,7 +66,7 @@ def structural(parts: list[dict]) -> list[dict]:
     """
     out = []
     for p in parts:
-        if not isinstance(p, dict) or p.get("type") in ("axle", "wheel"):
+        if not isinstance(p, dict) or p.get("type") in ("axle", "wheel", "bush"):
             continue
         if p.get("type") == "technic_brick":
             p = {k: v for k, v in p.items() if k != "hole"} | {"type": "brick"}

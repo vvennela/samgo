@@ -19,10 +19,12 @@ from pathlib import Path
 import numpy as np
 
 FEEDBACK_SHARE = 0.2
+CORRECTION_SHARE = 0.4  # open task: wrong answers of the kinds the model really makes, explained, then fixed
 
 
-def _rows(name: str, bases: str, seed: int) -> list[dict]:
-    from .running_gear_task import FEEDBACK, apply, axles_of, check, flawed, pose, prompt
+def _rows(name: str, bases: str, seed: int, open_task: bool = False) -> list[dict]:
+    from .running_gear_task import (FEEDBACK, apply, axles_of, check, explain, flawed, pose, pose_open, prompt,
+                                    realistic_mistake)
 
     parts = json.loads((Path(bases) / f"{name}.json").read_text())
     target = np.load(Path(bases) / f"{name}.npz")["target"]
@@ -32,13 +34,21 @@ def _rows(name: str, bases: str, seed: int) -> list[dict]:
     rng = random.Random(f"{seed}-{name}")
     out = []
     for strip, label in (([edges[0]], "front"), ([edges[-1]], "rear"), (edges, "both")):
-        problem = pose(parts, target, strip)
+        problem = (pose_open if open_task else pose)(parts, target, strip)
+        if problem is None:
+            continue
         ok, _ = check(apply(problem, problem["answer"]), target)
         if not ok:
             continue
         messages = prompt(problem)
         answer = json.dumps(problem["answer"])
-        if rng.random() < FEEDBACK_SHARE:
+        if open_task and rng.random() < CORRECTION_SHARE:
+            bad = realistic_mistake(problem["answer"], rng)
+            bad_ok, issues = explain(problem, bad)
+            if not bad_ok and issues:
+                messages += [{"role": "assistant", "content": json.dumps(bad)},
+                             {"role": "user", "content": FEEDBACK.format(issues="\n".join(f"- {i}" for i in issues))}]
+        elif rng.random() < FEEDBACK_SHARE:
             bad = flawed(problem["answer"], rng)
             bad_ok, issues = check(apply(problem, bad), target)
             if not bad_ok and issues:
@@ -60,11 +70,15 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=Path("data/running_gear"))
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--open", action="store_true", help="the open task: no beam positions given (pose_open)")
+    ap.add_argument("--limit", type=int, default=0, help="first N bases only (0 = all)")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     names = sorted(p.stem for p in args.bases.glob("*.json") if (args.bases / f"{p.stem}.npz").exists())
+    names = names[: args.limit or None]
     with ProcessPoolExecutor(args.workers) as pool:
-        results = list(pool.map(_rows, names, [str(args.bases)] * len(names), [args.seed] * len(names)))
+        results = list(pool.map(_rows, names, [str(args.bases)] * len(names), [args.seed] * len(names),
+                                [args.open] * len(names)))
     files = {s: (args.out / f"{s}.jsonl").open("w") for s in ("train", "val")}
     counts = Counter()
     for name, rows in zip(names, results):

@@ -59,7 +59,7 @@ FEEDBACK = """The verifiers checked your edited model:
 Fix these problems. Answer with the complete JSON list of edits again (it replaces your previous answer; edits
 still refer to the original numbered parts)."""
 
-GEAR = ("axle", "wheel")
+GEAR = ("axle", "wheel", "bush")
 
 
 def axles_of(parts: list[dict]) -> list[int]:
@@ -165,4 +165,181 @@ def flawed(answer: list[dict], rng: random.Random) -> list[dict]:
     elif axles:
         for a in axles:
             a["part"]["z"] += 3
+    return bad
+
+
+def pose_open(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict | None:
+    """The harder problem: the body is tiled by the builder with no running gear at all, so nothing in it marks
+    where the Technic beams go; the prompt gives only each tire's center along the car and its outline size.
+
+    The reference answer removes the parts in the beams' way, adds the beams, refills the cells those parts covered
+    outside the beams, and adds the axles, wheels and bushes. None if the refill cannot be laid out.
+    """
+    from .builder import _layout
+
+    def on(p, e):
+        return (p.get("type") in GEAR and p["x"] == e) or \
+            (p.get("type") == "technic_brick" and p["x"] < e < p["x"] + p["w"])
+
+    beams = [p for p in parts if p.get("type") == "technic_brick" and any(on(p, e) for e in strip)]
+    gear = [p for p in parts if p.get("type") in GEAR and any(on(p, e) for e in strip)]
+    keep = [p for p in parts if p not in beams and p not in gear]
+    from .parts import COLOR_INDEX
+
+    # Re-tile only the chassis band around the stripped axle lines (the beam layer, 2 studs either side of the
+    # beams, the whole width), keeping the rest of the verified body as built: the band's new parts sit between
+    # unchanged layers, so the body still holds together, and nothing in it marks where the beams go.
+    hgt = {"plate": 1, "brick": 3, "technic_brick": 3}
+    band = np.zeros(target.shape, bool)
+    for b in beams:
+        band[max(b["x"] - 2, 0):b["x"] + b["w"] + 2, :, b["z"]:b["z"] + 3] = True
+
+    def cells(p):
+        return (slice(p["x"], p["x"] + p["w"]), slice(p["y"], p["y"] + p["l"]), slice(p["z"], p["z"] + hgt[p["type"]]))
+
+    solid = [p for p in keep if p.get("type") in hgt]
+    in_band = [p for p in solid if band[cells(p)].any()]
+    outside = [p for p in solid if p not in in_band]
+    region = np.zeros_like(target)
+    for p in in_band + beams:
+        region[cells(p)] = COLOR_INDEX.get(p.get("color"), COLOR_INDEX["black"])
+    fixed = [p | {"type": "brick"} if p.get("type") == "technic_brick" else p for p in in_band
+             if p.get("type") == "technic_brick"]  # the other axle line's beams stay
+    mirror = bool((region == region[:, ::-1, :]).all())
+    tiled = _layout(region, None, bricks=True, given=fixed, mirror=mirror)
+    tiled = [p | {"type": "technic_brick", "hole": "round"} if k < len(fixed) else p for k, p in enumerate(tiled)]
+    body_target = region
+    full = outside + tiled + [p for p in keep if p.get("type") in GEAR]
+    # Which input parts are in the beams' way, and what refills the rest of their cells.
+    beam_cells = np.zeros(target.shape, bool)
+    for b in beams:
+        beam_cells[b["x"]:b["x"] + b["w"], b["y"]:b["y"] + b["l"], b["z"]:b["z"] + 3] = True
+    h = {"plate": 1, "brick": 3, "technic_brick": 3}
+    hit = [i for i, p in enumerate(full) if p.get("type") in h and
+           beam_cells[p["x"]:p["x"] + p["w"], p["y"]:p["y"] + p["l"], p["z"]:p["z"] + h[p["type"]]].any()]
+    if any(full[i].get("type") == "technic_brick" for i in hit):
+        return None
+    refill = np.zeros_like(target)
+    for i in hit:
+        p = full[i]
+        sl = (slice(p["x"], p["x"] + p["w"]), slice(p["y"], p["y"] + p["l"]), slice(p["z"], p["z"] + h[p["type"]]))
+        refill[sl] = np.where(beam_cells[sl], 0, body_target[sl])
+    fillers = _layout(refill, None, bricks=True) if refill.any() else []
+    zs = {(e, b["z"]) for e in strip for b in beams if b["x"] < e < b["x"] + b["w"]}
+
+    def near(p):
+        return any(p["x"] <= e + 5 and p["x"] + p["w"] >= e - 5 and z - 3 <= p["z"] <= z + 3 for e, z in zs)
+
+    local = [i for i, p in enumerate(full) if p.get("type") not in GEAR and near(p)]
+    if not set(hit) <= set(local):
+        return None
+    pos = {i: k for k, i in enumerate(local)}
+    answer = [{"op": "remove", "index": pos[i]} for i in sorted(hit)]
+    answer += [{"op": "add", "part": b} for b in beams] + [{"op": "add", "part": f} for f in fillers]
+    answer += [{"op": "add", "part": g} for g in gear]
+    tires = [f"- tire centered on stud edge x={e}, outline about "
+             f"{WHEELS[next(g['size'] for g in gear if g['type'] == 'wheel' and g['x'] == e)][0]:.0f} mm across"
+             for e in strip]
+    return {"full": full, "local": local, "tires": "\n".join(tires), "answer": answer, "target": target}
+
+
+HGT = {"plate": 1, "brick": 3, "technic_brick": 3}
+
+
+def describe(p: dict) -> str:
+    t = p.get("type")
+    if t == "axle":
+        return f'{"stop " if p.get("stop") else ""}axle {p["length"]} long at x={p["x"]}, z={p["z"]}, y={p["y"]}..{p["y"] + p["length"]}'
+    if t == "wheel":
+        return f'{p.get("size", "30.4x14")} wheel at x={p["x"]}, z={p["z"]}, y={p["y"]}'
+    if t == "bush":
+        return f'bush at x={p["x"]}, z={p["z"]}, y={p["y"]}'
+    return f'{t} {p.get("w")}x{p.get("l")} at (x={p.get("x")}, y={p.get("y")}, z={p.get("z")})'
+
+
+def explain(problem: dict, edits: list[dict]) -> tuple[bool, list[str]]:
+    """Check an answer and say exactly what is wrong in terms the model can act on: which of its parts overlap which
+    input part (by number), which part rests on nothing, which axle or wheel fails and how."""
+    removed = {int(e["index"]) for e in edits if e.get("op") == "remove"}
+    set_at = {int(e["index"]): e["part"] for e in edits if e.get("op") == "set"}
+    tagged = []  # (part, label)
+    local_of = {i: k for k, i in enumerate(problem["local"])}
+    for i, p in enumerate(problem["full"]):
+        k = local_of.get(i)
+        if k is not None and k in removed:
+            continue
+        if k is not None and k in set_at:
+            tagged.append((set_at[k], f"your changed part {k} ({describe(set_at[k])})"))
+        else:
+            tagged.append((p, f"input part {k} ({describe(p)})" if k is not None else f"the body's {describe(p)}"))
+    tagged += [(e["part"], f"your added {describe(e['part'])}") for e in edits if e.get("op") == "add"]
+    parts = [p for p, _ in tagged]
+    ok, issues = check(parts, problem["target"])
+    if ok:
+        return True, []
+    msgs = []
+    # Overlaps, by the pair of parts involved.
+    owners: dict = {}
+    for n, (p, _) in enumerate(tagged):
+        if p.get("type") in HGT:
+            for x in range(p["x"], p["x"] + p["w"]):
+                for y in range(p["y"], p["y"] + p["l"]):
+                    for z in range(p["z"], p["z"] + HGT[p["type"]]):
+                        owners.setdefault((x, y, z), []).append(n)
+    pairs = sorted({tuple(sorted(o)) for o in owners.values() if len(o) > 1})
+    for a, b in pairs[:6]:
+        la, lb = tagged[a][1], tagged[b][1]
+        hint = ""
+        for label in (la, lb):
+            if label.startswith("input part "):
+                hint = f": remove {label.split(' (')[0].replace('input ', '')} first"
+        msgs.append(f"overlap: {la} and {lb} fill the same cells{hint}")
+    # Everything else from the verifiers, with part numbers turned into descriptions.
+    for issue in issues:
+        if "occupied twice" in issue:
+            continue
+        if "not supported from the ground" in issue:
+            solid_idx = [n for n, (p, _) in enumerate(tagged) if p.get("type") not in GEAR]
+            try:
+                s = verify(structural(parts), problem["target"], config=MatchConfig(),
+                           anchors=frozenset(k for k, n in enumerate(solid_idx) if parts[n].get("type") == "technic_brick"))
+                for i in next(x for x in s.issues if x.code == "floating").pieces[:4]:
+                    msgs.append(f"loose: {tagged[solid_idx[i]][1]} rests on nothing - put a part under or over it "
+                                "that shares a stud, or leave it out")
+            except Exception:  # noqa: BLE001
+                msgs.append(issue)
+            continue
+        named = re.sub(r"(axle|wheel|part) (\d+)", lambda m: f"{m.group(1)} [{describe(parts[int(m.group(2))])}]"
+                       if int(m.group(2)) < len(parts) else m.group(0), issue)
+        msgs.append(named)
+    return False, msgs[:12]
+
+
+def realistic_mistake(answer: list[dict], rng: random.Random) -> list[dict]:
+    """A wrong answer of the kinds the trained model actually makes (run 1's failures): a brick in the beams' way
+    not removed, a refill piece moved or missing, a beam one stud or plate off, the second axle left half-done."""
+    bad = json.loads(json.dumps(answer))
+    removes = [e for e in bad if e["op"] == "remove"]
+    fillers = [e for e in bad if e["op"] == "add" and e["part"]["type"] in ("brick", "plate")]
+    beams = [e for e in bad if e["op"] == "add" and e["part"]["type"] == "technic_brick"]
+    gear_x = sorted({e["part"]["x"] for e in bad if e["op"] == "add" and e["part"]["type"] == "axle"})
+    kinds = [k for k, ok in (("keep_in_way", removes), ("move_filler", fillers), ("drop_filler", fillers),
+                             ("shift_beam", beams), ("half_second_axle", len(gear_x) > 1)) if ok]
+    if not kinds:
+        return bad
+    kind = rng.choice(kinds)
+    if kind == "keep_in_way":
+        for e in rng.sample(removes, min(len(removes), rng.choice([1, 1, 2, 3]))):
+            bad.remove(e)
+    elif kind == "move_filler":
+        e = rng.choice(fillers)["part"]
+        e[rng.choice(["x", "y", "z"])] += rng.choice([-1, 1])
+    elif kind == "drop_filler":
+        bad.remove(rng.choice(fillers))
+    elif kind == "shift_beam":
+        e = rng.choice(beams)["part"]
+        e[rng.choice(["x", "z"])] += rng.choice([-1, 1])
+    else:
+        x = gear_x[-1]
+        bad = [e for e in bad if not (e["op"] == "add" and e["part"].get("type") in GEAR and e["part"]["x"] == x)]
     return bad
