@@ -87,12 +87,71 @@ def nearest_color(rgb: np.ndarray) -> np.ndarray:
     return distance.argmin(-1) + 1
 
 
-def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0) -> np.ndarray:
+MIRROR_ERROR = 0.02     # mean mirror mismatch below this share of the object's size counts as symmetric
+SLICE_SYMMETRIC = 0.85  # a cross-section whose cells match their mirror this often is made exactly symmetric
+
+
+def mirror_plane(mesh: trimesh.Trimesh, samples: int = 4000) -> tuple[float, float, float] | None:
+    """The object's left-right mirror plane, as (angle about z in degrees, offset along the rotated y, error).
+
+    Tries vertical planes along the long horizontal axis, turned by a few degrees and shifted a little,
+    and keeps the one where mirrored surface points land closest to real ones. None if no plane fits within
+    MIRROR_ERROR of the object's size (the object is not left-right symmetric).
+    """
+    from scipy.spatial import cKDTree
+
+    pts, _ = trimesh.sample.sample_surface(mesh, samples, seed=0)
+    xy = pts[:, :2] - pts[:, :2].mean(axis=0)
+    evals, evecs = np.linalg.eigh(np.cov(xy.T))
+    base = np.degrees(np.arctan2(evecs[1, -1], evecs[0, -1]))  # long axis
+    base = (base + 90) % 180 - 90                    # never turn the object around front-to-back
+    size = float(np.ptp(pts, axis=0).max())
+    best = None
+    for axis_turn in (0.0,):                         # left-right symmetry: the plane contains the long axis
+        for turn in np.arange(-6, 7, 1.5):
+            a = np.radians(base + axis_turn + turn)
+            rot = np.array([[np.cos(a), np.sin(a)], [-np.sin(a), np.cos(a)]])
+            q = np.c_[xy @ rot.T, pts[:, 2]]
+            tree = cKDTree(q)
+            mid = (q[:, 1].min() + q[:, 1].max()) / 2
+            for off in np.linspace(mid - 0.04 * size, mid + 0.04 * size, 9):
+                m = q.copy()
+                m[:, 1] = 2 * off - m[:, 1]
+                err = tree.query(m)[0].mean() / size
+                if best is None or err < best[2]:
+                    best = (float(base + axis_turn + turn), float(off), float(err))
+    if not best or best[2] >= MIRROR_ERROR:
+        return None
+    angle = best[0] if abs(best[0]) > 1.0 else 0.0   # snap a hair off square to square: no needless turning
+    return angle, best[1], best[2]
+
+
+def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric: bool = True) -> np.ndarray:
+    """Mesh -> grid of COLOR_INDEX values (x, y studs; z plates).
+
+    With `symmetric`, a left-right symmetric object is first turned so its mirror plane runs along x through the
+    middle of the grid, and every cross-section that nearly matches its mirror is made exactly symmetric
+    (one-sided features, like an open door, are kept as they are).
+    """
     mesh = mesh.copy()
+    plane = mirror_plane(mesh) if symmetric else None
+    if plane is not None:
+        angle, offset, _ = plane
+        centre = mesh.bounds.mean(axis=0)
+        mesh.apply_translation([-centre[0], -centre[1], 0])
+        mesh.apply_transform(trimesh.transformations.rotation_matrix(-np.radians(angle), [0, 0, 1]))
+        mesh.apply_translation([0, -offset, 0])     # mirror plane at y = 0
+        half = np.abs(mesh.bounds[:, 1]).max()
+        mesh.apply_translation([0, half - (mesh.bounds[0, 1] + half), 0])  # y symmetric about 0
     mesh.apply_translation(-mesh.bounds[0])
     scale = longest_studs / mesh.extents.max()
     mesh.apply_transform(np.diag([scale, scale, scale * PLATE_PER_STUD, 1.0]))
     shape = np.maximum(np.ceil(mesh.extents - 1e-9).astype(int), 1)
+    if plane is not None:  # the mirror plane (at the middle of y) exactly on the grid's middle (odd widths: the
+        width = mesh.extents[1]                        # middle column mirrors onto itself)
+        studs = max(int(np.ceil(width - 0.1)), 1)      # a hair over a whole stud still rounds down
+        mesh.apply_translation([0, (studs - width) / 2, 0])
+        shape[1] = studs
 
     count = int(np.clip(mesh.area * SAMPLES_PER_CELL_AREA, 20_000, 2_000_000))
     points, faces = trimesh.sample.sample_surface(mesh, count, seed=seed)
@@ -117,7 +176,26 @@ def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0) -> np.nda
 
     # Interior cells take the color of the nearest surface cell.
     _, nearest = ndimage.distance_transform_edt(~surface, return_indices=True)
-    return np.where(solid, surface_color[tuple(nearest)], 0).astype(np.int32)
+    grid = np.where(solid, surface_color[tuple(nearest)], 0).astype(np.int32)
+    if plane is not None:
+        grid = _mirror_slices(grid, votes.reshape(*shape, len(COLORS)))
+    return grid
+
+
+def _mirror_slices(grid: np.ndarray, votes: np.ndarray) -> np.ndarray:
+    """Make each cross-section along x that nearly matches its mirror (across the grid's middle) exactly
+    symmetric: a cell is filled if it or its mirror is, and the pair takes the color with more surface votes."""
+    out = grid.copy()
+    mirrored = grid[:, ::-1, :]
+    pair_votes = votes + votes[:, ::-1, :, :]
+    pair_color = pair_votes.argmax(-1) + 1
+    for x in range(grid.shape[0]):
+        occ, mocc = grid[x] > 0, mirrored[x] > 0
+        union = occ | mocc
+        if union.any() and (occ & mocc).sum() / union.sum() >= SLICE_SYMMETRIC:
+            fill = np.where(pair_votes[x].sum(-1) > 0, pair_color[x], np.maximum(grid[x], mirrored[x]))
+            out[x] = np.where(union, fill, 0)
+    return out
 
 
 def render(target: np.ndarray, path: Path, cell: int = 10) -> None:
