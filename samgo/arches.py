@@ -160,21 +160,27 @@ def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> Ar
     if len(tires) < 2:
         return None
     tires = [tires[0], tires[-1]]                     # front and rear
+    occ = target > 0
     shaped = target.copy()
     chassis, gear, wheels = [], [], []
     for a, b, diameter in tires:
-        size = pick_wheel(diameter, Y)
+        # Wheels go against the body's sides where this wheel is (the lower body around the tire), centered on
+        # it: the whole body can be wider on one side (mirrors, spoilers) and the grid wider still.
+        local = np.nonzero(occ[max(a - 1, 0):b + 2, :, : max(3, Z // 2)].any(axis=(0, 2)))[0]
+        Y0, Y1 = int(local.min()), int(local.max()) + 1
+        W = Y1 - Y0
+        size = pick_wheel(diameter, W)
         w = wheel_studs(size)
         r = WHEELS[size][0] / 2
         edge = int(round((a + b + 1) / 2))
         edge = min(max(edge, 2), X - 2)
         zb = _axle_row(r)
         centre = zb * PLATE + HOLE_HEIGHT
-        through = min((L for L in AXLE_LENGTHS if Y <= L <= 16), default=None)
-        if through is not None and Y - 2 * w >= 2:
+        through = min((L for L in AXLE_LENGTHS if W <= L <= 16), default=None)
+        if through is not None and W - 2 * w >= 2:
             # One axle straight across, as small LEGO cars do: Technic bricks in every row between the wheels.
             for side in ("left", "right"):
-                y_wheel = 0 if side == "left" else Y - w
+                y_wheel = Y0 if side == "left" else Y1 - w
                 for x in range(X):
                     for z in range(Z):
                         dx = max(x * STUD - edge * STUD, 0, edge * STUD - (x + 1) * STUD)
@@ -182,20 +188,21 @@ def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> Ar
                         if dx * dx + dz * dz < (r + ARCH_CLEARANCE) ** 2:
                             shaped[x, y_wheel:y_wheel + w, z] = 0
                 gear.append({"type": "wheel", "axis": "y", "x": edge, "z": zb, "y": y_wheel, "size": size})
-            for y in range(w, Y - w):
+            for y in range(Y0 + w, Y1 - w):
                 shaped[edge - 2:edge + 2, y, zb:zb + 3] = COLOR_INDEX[CHASSIS_COLOR]
                 chassis.append({"type": "technic_brick", "w": 4, "l": 1, "x": edge - 2, "y": y, "z": zb,
                                 "color": CHASSIS_COLOR, "hole": "round"})
-            gear.append({"type": "axle", "axis": "y", "x": edge, "z": zb, "y": -((through - Y) // 2), "length": through})
+            gear.append({"type": "axle", "axis": "y", "x": edge, "z": zb, "y": Y0 - (through - W) // 2,
+                         "length": through})
             wheels.append(Wheel(edge, size, zb))
             continue
         stop = min(L for L in STOP_AXLE_LENGTHS if L >= w + 2) if w + 2 <= max(STOP_AXLE_LENGTHS) else None
-        if stop is None or 2 * stop > Y:
+        if stop is None or 2 * stop > W:
             return None
         rows_in = stop - w                            # Technic rows the axle passes through inside the wheel
         for side in ("left", "right"):
-            y_wheel = 0 if side == "left" else Y - w
-            rows = range(w, w + rows_in) if side == "left" else range(Y - w - rows_in, Y - w)
+            y_wheel = Y0 if side == "left" else Y1 - w
+            rows = range(Y0 + w, Y0 + w + rows_in) if side == "left" else range(Y1 - w - rows_in, Y1 - w)
             # Arch: clear every body cell the tire could touch while turning, plus clearance.
             for x in range(X):
                 for z in range(Z):
@@ -208,7 +215,7 @@ def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> Ar
                 shaped[edge - 2:edge + 2, y, zb:zb + 3] = COLOR_INDEX[CHASSIS_COLOR]
                 chassis.append({"type": "technic_brick", "w": 4, "l": 1, "x": edge - 2, "y": y, "z": zb,
                                 "color": CHASSIS_COLOR, "hole": "round"})
-            y0 = y_wheel if side == "left" else Y - w - rows_in
+            y0 = y_wheel if side == "left" else Y1 - w - rows_in
             gear.append({"type": "axle", "axis": "y", "x": edge, "z": zb, "y": y0, "length": stop, "stop": True})
             gear.append({"type": "wheel", "axis": "y", "x": edge, "z": zb, "y": y_wheel, "size": size})
         wheels.append(Wheel(edge, size, zb))
