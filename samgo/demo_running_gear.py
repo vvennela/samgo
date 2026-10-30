@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .running_gear_task import FEEDBACK, apply, axles_of, edits_from, explain, pose_open, prompt
+from .running_gear_task import FEEDBACK, apply, axles_of, check, edits_from, explain, pose_open, prompt, step_problem
 
 REPO = Path(__file__).resolve().parent.parent
 MODEL = "accounts/fireworks/models/muse-glimmer-30b"
@@ -31,6 +31,8 @@ def main() -> None:
     ap.add_argument("--label", default="base")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--max-tokens", type=int, default=8000)
+    ap.add_argument("--sequential", action="store_true",
+                    help="one axle per step, each on the build as it stands after the previous step")
     args = ap.parse_args()
 
     from fireworks.training import sdk
@@ -58,30 +60,53 @@ def main() -> None:
         out.mkdir(parents=True, exist_ok=True)
         (out / "input.json").write_text(json.dumps(problem["full"]))
         (out / "reference.json").write_text(json.dumps(parts))
-        chat = prompt(problem)
-        log = {"car": folder.name, "model": args.label, "rounds": []}
-        for rnd in range(1, args.rounds + 1):
-            toks = list(client.sample(prompt=renderer.build_generation_prompt(chat), num_samples=1,
-                                      sampling_params=params).result(timeout=900).sequences[0].tokens)
-            msg, _ = renderer.parse_response(toks)
-            text = get_text_content(msg)
-            chat.append({"role": "assistant", "content": text})
-            try:
-                edits = edits_from(text)
-                ok, issues = explain(problem, edits)
-                result = apply(problem, edits)
-            except Exception as e:  # noqa: BLE001
-                ok, issues, edits, result = False, [f"could not use the answer: {e}"], [], None
-            log["rounds"].append({"round": rnd, "passed": ok, "edits": len(edits), "tokens": len(toks),
-                                  "issues": issues[:4]})
-            print(json.dumps({"car": folder.name, "model": args.label, "round": rnd, "passed": ok,
-                              "edits": len(edits), "issues": issues[:2]})[:400], flush=True)
-            if result is not None:
-                (out / f"{args.label}.json").write_text(json.dumps(result))
-            if ok:
-                break
-            chat.append({"role": "user", "content": FEEDBACK.format(issues="\n".join(f"- {i}" for i in issues))})
-        (out / f"{args.label}_log.json").write_text(json.dumps(log, indent=2))
+        label = args.label + ("_seq" if args.sequential else "")
+        log = {"car": folder.name, "model": label, "steps": []}
+
+        def solve(prob, partial, tag):
+            """Ask, check, feed errors back; returns the build after the best answer and whether it passed."""
+            chat = prompt(prob)
+            result = None
+            for rnd in range(1, args.rounds + 1):
+                toks = list(client.sample(prompt=renderer.build_generation_prompt(chat), num_samples=1,
+                                          sampling_params=params).result(timeout=900).sequences[0].tokens)
+                msg, _ = renderer.parse_response(toks)
+                text = get_text_content(msg)
+                chat.append({"role": "assistant", "content": text})
+                try:
+                    edits = edits_from(text)
+                    ok, issues = explain(prob, edits, partial=partial)
+                    result = apply(prob, edits)
+                except Exception as e:  # noqa: BLE001
+                    ok, issues, edits = False, [f"could not use the answer: {e}"], []
+                log["steps"].append({"step": tag, "round": rnd, "passed": ok, "edits": len(edits), "tokens": len(toks),
+                                     "issues": issues[:4]})
+                print(json.dumps({"car": folder.name, "model": label, "step": tag, "round": rnd, "passed": ok,
+                                  "edits": len(edits), "issues": issues[:2]})[:400], flush=True)
+                if ok:
+                    return result, True
+                chat.append({"role": "user", "content": FEEDBACK.format(issues="\n".join(f"- {i}" for i in issues))})
+            return result, False
+
+        if args.sequential:
+            sizes = {p["x"]: p["size"] for p in parts if p.get("type") == "wheel"}
+            build = problem["full"]
+            edges = axles_of(parts)
+            for k, edge in enumerate(edges):
+                step = step_problem(build, target, edge, sizes[edge])
+                new, ok = solve(step, partial=k < len(edges) - 1, tag=f"axle at x={edge}")
+                if not ok or new is None:
+                    break
+                build = new                                  # the next step sees what this one built
+            final_ok = check(build, target)[0] if build is not problem["full"] else False
+            (out / f"{label}.json").write_text(json.dumps(build))
+        else:
+            build, final_ok = solve(problem, partial=False, tag="both axles")
+            if build is not None:
+                (out / f"{label}.json").write_text(json.dumps(build))
+        log["passed"] = bool(final_ok)
+        print(json.dumps({"car": folder.name, "model": label, "final_passed": bool(final_ok)}), flush=True)
+        (out / f"{label}_log.json").write_text(json.dumps(log, indent=2))
 
 
 if __name__ == "__main__":

@@ -257,7 +257,7 @@ def describe(p: dict) -> str:
     return f'{t} {p.get("w")}x{p.get("l")} at (x={p.get("x")}, y={p.get("y")}, z={p.get("z")})'
 
 
-def explain(problem: dict, edits: list[dict]) -> tuple[bool, list[str]]:
+def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bool, list[str]]:
     """Check an answer and say exactly what is wrong in terms the model can act on: which of its parts overlap which
     input part (by number), which part rests on nothing, which axle or wheel fails and how."""
     removed = {int(e["index"]) for e in edits if e.get("op") == "remove"}
@@ -275,6 +275,9 @@ def explain(problem: dict, edits: list[dict]) -> tuple[bool, list[str]]:
     tagged += [(e["part"], f"your added {describe(e['part'])}") for e in edits if e.get("op") == "add"]
     parts = [p for p, _ in tagged]
     ok, issues = check(parts, problem["target"])
+    if partial:  # a step that adds one axle line: the car cannot roll on one line yet, which is fine here
+        issues = [i for i in issues if "turning axle line" not in i and not i.startswith("stability")]
+        ok = not issues
     if ok:
         return True, []
     msgs = []
@@ -345,3 +348,15 @@ def realistic_mistake(answer: list[dict], rng: random.Random) -> list[dict]:
         x = gear_x[-1]
         bad = [e for e in bad if not (e["op"] == "add" and e["part"].get("type") in GEAR and e["part"]["x"] == x)]
     return bad
+
+
+def step_problem(full: list[dict], target: np.ndarray, edge: int, size: str) -> dict:
+    """One step of building running gear: the current build (with whatever is already done), the parts near the
+    axle line at stud edge `edge`, and that tire's position and size. No reference answer: the checker decides."""
+    from .arches import _axle_row
+
+    zb = _axle_row(WHEELS[size][0] / 2)
+    local = [i for i, p in enumerate(full) if p.get("type") not in GEAR and p["x"] <= edge + 5 and
+             p["x"] + p["w"] >= edge - 5 and zb - 3 <= p["z"] <= zb + 3]
+    tires = f"- tire centered on stud edge x={edge}, outline about {WHEELS[size][0]:.0f} mm across"
+    return {"full": full, "local": local, "tires": tires, "answer": [], "target": target}
