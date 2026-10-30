@@ -33,6 +33,12 @@ its stage results (S1-S6 are what step 1 here reuses).
 **Out:** Spark writing detailed instructions; Glimmer finding regions itself (views/zoom tools); built hinge doors,
 ball joints, stability repair; v2. v1 (BrickGPT replication on Glimmer) finishes as a reported result only.
 
+**Scope change (user decision, Oct 30):** Nov 4 also covers bicycles (wheels in a line + pedal crank), hinged
+doors/lids/levers (microwave, laptop, espresso machine, car doors) and TV turntables, built on one general rotation
+checker (sweep the moving part through its range: no collisions, stable in each pose). Car interiors (seats,
+steering wheel) move to after Nov 4. Builds must first be exactly symmetric (mirrored brick layout; only large
+one-sided regions kept), with shape smoothing (largest sigma keeping IoU >= 0.95) and Potts color smoothing.
+
 ### Training data (generated, verified)
 1. **Bases.** Vehicle meshes (Objaverse LVIS vehicles, no gating; our photo cars are held out for testing) are
    voxelized at ~16-24 studs and built by the car builder (`samgo/car.py`), giving complete builds whose running
