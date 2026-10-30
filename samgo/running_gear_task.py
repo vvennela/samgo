@@ -329,7 +329,9 @@ def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bo
         hint = ""
         for label in (la, lb):
             if label.startswith("input part "):
-                hint = f": remove {label.split(' (')[0].replace('input ', '')} first"
+                hint = (": move your part - nothing in the input needs removing; Technic bricks hang right under the "
+                        "floor" if problem.get("task") == TASK_FRAME
+                        else f": remove {label.split(' (')[0].replace('input ', '')} first")
         msgs.append(f"overlap: {la} and {lb} fill the same cells{hint}")
     # Everything else from the verifiers, with part numbers turned into descriptions.
     for issue in issues:
@@ -350,6 +352,18 @@ def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bo
                     msgs.append(f"loose: {tagged[solid_idx[i]][1]} rests on nothing{why}")
             except Exception:  # noqa: BLE001
                 msgs.append(issue)
+            continue
+        if "passes through solid parts" in issue:
+            for ax in (p for p in parts if p.get("type") == "axle"):
+                e, z0 = ax["x"], ax["z"]
+                for q, label in tagged:
+                    if q.get("type") not in HGT or not (q["x"] < e < q["x"] + q["w"]):
+                        continue
+                    if not (q["y"] < ax["y"] + ax["length"] and ax["y"] < q["y"] + q["l"]):
+                        continue
+                    if q["z"] <= z0 < q["z"] + HGT[q["type"]] and not (q["type"] == "technic_brick" and q["z"] == z0):
+                        msgs.append(f"blocked: the axle at x={e}, z={z0} runs into {label}: only Technic bricks with "
+                                    f"their bottom at z={z0} let it through")
             continue
         named = re.sub(r"(axle|wheel|part) (\d+)", lambda m: f"{m.group(1)} [{describe(parts[int(m.group(2))])}]"
                        if int(m.group(2)) < len(parts) else m.group(0), issue)
@@ -426,3 +440,22 @@ def pose_frame(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict 
     problem = {"full": full, "local": local, "tires": "\n".join(tires), "answer": answer, "target": target,
                "task": TASK_FRAME}
     return problem if explain(problem, answer)[0] else None
+
+
+def frame_mistake(answer: list[dict], rng: random.Random) -> list[dict]:
+    """A wrong answer to the frame task (add-only): one of the mistakes of placing the gear itself - a Technic row
+    one stud or plate off, a row or bush left out, a wrong axle length, a wheel moved or missing, the axle too high."""
+    bad = json.loads(json.dumps(answer))
+    beams = [e for e in bad if e["part"]["type"] == "technic_brick"]
+    bushes = [e for e in bad if e["part"]["type"] == "bush"]
+    kinds = ["flawed"] + ["shift_beam", "drop_beam"] * bool(beams) + ["drop_bush"] * bool(bushes)
+    kind = rng.choice(kinds)
+    if kind == "shift_beam":
+        rng.choice(beams)["part"][rng.choice(["x", "z"])] += rng.choice([-1, 1])
+    elif kind == "drop_beam":
+        bad.remove(rng.choice(beams))
+    elif kind == "drop_bush":
+        bad.remove(rng.choice(bushes))
+    else:
+        bad = flawed(bad, rng)
+    return bad
