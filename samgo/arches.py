@@ -222,8 +222,10 @@ def _build(target: np.ndarray, seed: int, attempts: int, beam: int) -> ArchedCar
             gear.append({"type": "axle", "axis": "y", "x": edge, "z": zb, "y": y0, "length": stop, "stop": True})
             gear.append({"type": "wheel", "axis": "y", "x": edge, "z": zb, "y": y_wheel, "size": size})
         wheels.append(Wheel(edge, size, zb))
-    # Nothing solid may sit on the axle line between the two sides at hole height: the stop axles end inside the
-    # Technic rows, so only the rows themselves are on the line.
+    # A smooth underside: nothing below the axle rows. The mesh's tires leave lumps under the body between the
+    # wheels; real LEGO cars have a flat floor with the axle in its bottom layer.
+    shaped[:, :, :min(w.z for w in wheels)] = 0
+
     def pull_on_wheels(pieces: list[dict]) -> float:
         peak = stability(pieces + gear, vehicle=True).metrics.get("peak_tension")
         return np.inf if peak is None else peak
