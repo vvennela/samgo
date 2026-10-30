@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .running_gear_task import FEEDBACK, apply, axles_of, check, edits_from, pose, pose_open
+from .running_gear_task import FEEDBACK, apply, axles_of, check, edits_from, explain, pose, pose_open
 
 REPO = Path(__file__).resolve().parent.parent
 MODEL = "accounts/fireworks/models/muse-glimmer-30b"
@@ -94,7 +94,7 @@ def main() -> None:
                 text = get_text_content(msg)
                 chats[k].append({"role": "assistant", "content": text})
                 edits = edits_from(text)
-                ok, issues = check(apply(p["problem"], edits), p["target"])
+                ok, issues = explain(p["problem"], edits)  # the same actionable messages the model trains on
                 rec |= {"valid_format": True, "passed": ok, "issues": issues[:3], "edits": len(edits), "answer": edits,
                         "reference": p["problem"]["answer"], "round": rnd if ok else None}
             except Exception as e:  # noqa: BLE001
