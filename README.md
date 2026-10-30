@@ -59,8 +59,7 @@ flowchart LR
 | TV turntable, laptop lid, microwave door, bicycle | in progress (`samgo/mechanism_bases.py`) |
 | BrickGPT replication on Glimmer (v1) | done: valid builds 50% -> 88%, stable 19% -> 63% on held-out prompts |
 
-The photo pipeline (`samgo/pipeline.py`) still builds cars with the older lifted-chassis builder (`samgo/car.py`);
-the arched builder is used for training data and will replace it.
+The photo pipeline (`samgo/pipeline.py`) and the training data both use the arched car builder (`samgo/arches.py`).
 
 ## Run it
 

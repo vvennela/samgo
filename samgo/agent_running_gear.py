@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .car import build_car
+from .arches import build_arched_car
 from .stability import stability
 from .technic import structural, verify_function
 from .verifier import MatchConfig, verify
@@ -62,11 +62,10 @@ still refer to the original numbered parts)."""
 
 
 def problem(folder: Path):
-    """(body parts given to the model, structural target, the reference build)."""
-    target = np.load(folder / "target.npz")["target"]
-    wheels = json.loads((folder / "wheels.json").read_text())
-    car = build_car(target, wheel_fractions=tuple(wheels["fractions"]))
-    body = [p for p in car.parts if p.get("type") not in ("axle", "wheel")]
+    """(body parts given to the model, structural target, the reference build): the arched car with its running
+    gear taken off and its Technic beams turned back into plain bricks."""
+    car = build_arched_car(np.load(folder / "target.npz")["target"], attempts=6)
+    body = [p for p in car.parts if p.get("type") not in ("axle", "wheel", "bush")]
     body = [({k: v for k, v in p.items() if k != "hole"} | {"type": "brick"}) if p["type"] == "technic_brick" else p
             for p in body]
     return body, car.target, car.parts

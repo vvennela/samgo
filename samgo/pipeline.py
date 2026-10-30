@@ -6,8 +6,9 @@
    unless --car / --static says so.
 1. SAM 3.1 segments the object, SAM 3D reconstructs it (S1).
 2. The mesh becomes a LEGO-scale target grid (S2).
-3. For a vehicle: SAM 3.1 finds the wheels, and the car builder places a Technic chassis, axles and
-   wheels there with the body on top (S4f); otherwise the structural builder fills the target (S4).
+3. For a vehicle: the arched car builder finds the tires in the body's own shape, cuts wheel arches, and puts
+   real wheels there on real-length axles through Technic beams, with bushes where needed; otherwise the
+   structural builder fills the target (S4).
 4. The verifiers check the result (S3a structure, S3b stability, S3c function for vehicles); failures are
    reported, and stability is reported alongside.
 5. Instructions are written (S5) when structure and function pass.
@@ -21,12 +22,11 @@ from pathlib import Path
 import numpy as np
 
 from .builder import build
-from .car import build_car
+from .arches import build_arched_car
 from .function_spec import infer
 from .perceive import perceive
 from .stability import stability
 from .voxelize import SIZES, load_mesh, render, voxelize
-from .wheels import detect
 
 
 def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str = "medium", reuse: bool = True) -> dict:
@@ -46,15 +46,13 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
     summary: dict = {"photo": str(photo), "function_spec": spec, "vehicle": car, "target_shape": list(target.shape),
                      "cells": int((target > 0).sum())}
     if car:
-        wheels = json.loads((out / "wheels.json").read_text()) if reuse and (out / "wheels.json").exists() \
-            else asyncio.run(detect(out))
-        result = build_car(target, wheel_fractions=tuple(wheels["fractions"]))
+        result = build_arched_car(target, attempts=6)
         if result is None:
-            summary["error"] = "car builder refused the target (too wide for an axle, or no chassis split)"
+            summary["error"] = "car builder found no tires to put wheels on, or the car is too narrow"
             (out / "summary.json").write_text(json.dumps(summary, indent=2))
             return summary
         parts, structure, function = result.parts, result.structure, result.function
-        summary |= {"wheels": wheels["source"], "wheel_fractions": wheels["fractions"],
+        summary |= {"wheels": [(w.edge, w.size) for w in result.wheels], "symmetric": round(result.symmetric, 2),
                     "function_passed": function.passed, "function_issues": sorted(function.codes)}
     else:
         b = build(target)
