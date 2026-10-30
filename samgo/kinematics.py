@@ -289,43 +289,70 @@ def unseated(parts: list[dict]) -> list[tuple[int, str]]:
 GROUND = {"ground"}
 
 
+def _sides(bodies: dict, joints: list, k: int) -> tuple[set, set] | None:
+    """The two groups of bodies joint k separates (following every other joint); None if they stay joined."""
+    a, b = joints[k][0], joints[k][1]
+    links: dict = {}
+    for n, j in enumerate(joints):
+        if n != k:
+            links.setdefault(j[0], set()).add(j[1])
+            links.setdefault(j[1], set()).add(j[0])
+    seen, todo = {b}, [b]
+    while todo:
+        for nxt in links.get(todo.pop(), ()):
+            if nxt not in seen:
+                seen.add(nxt)
+                todo.append(nxt)
+    if a in seen:
+        return None
+    return set(bodies) - seen, seen
+
+
 def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
     """Check one requirement against the build's motions, with no mechanism-specific code.
 
     req kinds:
-      {"kind": "spin", "count": 4, "touch_ground": true}: at least `count` wheels on revolute joints, all axes
-          parallel, wheels the lowest parts;
-      {"kind": "swing", "axis": "vertical"|"horizontal", "degrees": 90}: some body turns on a joint with that
-          axis, through `degrees` in one direction, without hitting anything.
+      {"kind": "spin", "count": 4, "parallel": true}: at least `count` wheels on revolute joints; with
+          "parallel" (the default, for cars) the spinning wheels' axes must all be parallel;
+      {"kind": "swing", "axis": "vertical"|"horizontal", "degrees": 90, "count": 1}: at least `count` joints
+          with that axis each let what they carry turn through `degrees` in one direction without hitting
+          anything. What turns is the smaller side of the joint with everything hanging off it (a caster's fork
+          with its wheel, a door, a seat): turning it relative to the rest is the same motion.
     """
     bodies, joints = analyse(parts)
+    root_of = {i: r for r, members in bodies.items() for i in members}
+    need = req.get("count", 2 if req["kind"] == "spin" else 1)
     if req["kind"] == "spin":
         wheels = [i for i, p in enumerate(parts) if p.get("type") == "wheel"]
-        if len(wheels) < req.get("count", 2):
-            return False, f"{len(wheels)} wheel(s); needs {req.get('count', 2)}"
-        root_of = {i: r for r, members in bodies.items() for i in members}
+        if len(wheels) < need:
+            return False, f"{len(wheels)} wheel(s); needs {need}"
         spinning = [w for w in wheels if any(root_of[w] in (j[0], j[1]) for j in joints)]
-        if len(spinning) < req.get("count", 2):
+        if len(spinning) < need:
             return False, f"{len(spinning)} of {len(wheels)} wheels can spin (the rest are locked or unsupported)"
-        axes = {tuple(np.round(np.abs(j[4]), 3)) for j in joints if root_of[spinning[0]] in (j[0], j[1])}
-        if len({tuple(np.round(np.abs(j[4]), 3)) for j in joints}) > 1 and req.get("parallel", True):
+        axes = {tuple(np.round(np.abs(j[4]), 3)) for j in joints for w in spinning if root_of[w] in (j[0], j[1])}
+        if len(axes) > 1 and req.get("parallel", True):
             return False, "wheel axes are not parallel"
-        return True, "wheels spin"
-    want = np.array([0.0, 0, 1]) if req["axis"] == "vertical" else None
-    best = "no joint with that axis"
-    for a, b, kind, point, axis, partners in joints:
+        return True, f"{len(spinning)} wheels spin"
+    best, passed = "no joint with that axis", 0
+    for k, (a, b, kind, point, axis, partners) in enumerate(joints):
         vertical = abs(abs(axis[2]) - 1) < 1e-6
         if (req["axis"] == "vertical") != vertical:
             continue
-        # The moving side is the body that does not hold the lowest part (the base).
-        lowest = min(range(len(parts)), key=lambda i: parts[i].get("z", 0))
-        moving = bodies[b] if lowest in bodies[a] else bodies[a]
+        sides = _sides(bodies, joints, k)
+        if sides is None:
+            best = "the joint is locked by another link"
+            continue
+        small = min(sides, key=lambda g: sum(len(bodies[r]) for r in g))
+        moving = [i for r in small for i in bodies[r]]
         for sign in (1, -1):
             hit = sweep(parts, moving, point, axis, sign * req["degrees"], ignore=partners)
             if hit is None:
-                return True, f"turns {req['degrees']} degrees clear"
+                passed += 1
+                break
             best = f"hits something at {abs(hit):.0f} degrees"
-    return False, best
+    if passed >= need:
+        return True, f"{passed} joint(s) turn {req['degrees']} degrees clear"
+    return False, (f"{passed} of {need} joints turn {req['degrees']} degrees clear; " if passed else "") + best
 
 
 def connected(parts: list[dict]) -> bool:
