@@ -15,8 +15,10 @@ from pathlib import Path
 from .parts import COLORS
 from .technic import DEFAULT_WHEEL, HOLE_HEIGHT, PLATE, STUD, WHEELS, wheel_studs
 
-HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3}
-EXTRA = {"trans_clear": (230, 240, 245), "trans_black": (40, 50, 60)}
+HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "tile": 1, "slope": 3, "invslope": 3, "curve": 2,
+          "roundbrick": 3, "roundplate": 1, "arch": 3, "hinge_base": 1, "hinge_top": 1}
+EXTRA = {"trans_clear": (205, 225, 240), "trans_black": (45, 60, 75)}
+SHAPE = {"slope": 1, "curve": 2, "invslope": 3, "roundbrick": 4, "roundplate": 4}  # 0 = box
 
 
 def _hex(rgb) -> str:
@@ -31,7 +33,8 @@ def scene(parts: list[dict]) -> dict:
         if t in HEIGHT:
             rgb = COLORS.get(p.get("color", "light_gray"), (None, EXTRA.get(p.get("color"), (150, 150, 150))))[1]
             boxes.append([p["x"] * STUD, p["z"] * PLATE, p["y"] * STUD, p["w"] * STUD, HEIGHT[t] * PLATE,
-                          p["l"] * STUD, _hex(rgb), 1 if t == "technic_brick" else 0])
+                          p["l"] * STUD, _hex(rgb), 1 if t == "technic_brick" else 0, SHAPE.get(t, 0),
+                          p.get("facing") or "", 1 if str(p.get("color", "")).startswith("trans") else 0])
         elif t in ("axle", "wheel"):
             size = p.get("size", DEFAULT_WHEEL)
             span = (p["length"] if t == "axle" else wheel_studs(size)) * STUD
@@ -105,16 +108,30 @@ let group = null, current = 0;
 function build(m) {
   const g = new THREE.Group();
   const hl = document.getElementById("hl").checked, xray = document.getElementById("xray").checked;
-  const box = new THREE.BoxGeometry(1, 1, 1);
-  const byColor = {};
-  for (const b of m.scene.boxes) (byColor[(hl && b[7]) ? "#ffb000" : b[6]] ||= []).push(b);
-  const edgeMat = new THREE.LineBasicMaterial({color: 0x000000, transparent: true, opacity: 0.18});
-  for (const [col, list] of Object.entries(byColor)) {
+  const geo = {0: new THREE.BoxGeometry(1, 1, 1), 1: wedge(false), 2: wedge(true), 3: wedge(false, true),
+               4: new THREE.CylinderGeometry(0.5, 0.5, 1, 20)};
+  const groups = {};
+  for (const b of m.scene.boxes) {
+    const col = (hl && b[7]) ? "#ffb000" : b[6];
+    (groups[[col, b[8], b[10]].join("|")] ||= []).push(b);
+  }
+  for (const [key, list] of Object.entries(groups)) {
+    const [col, shape, glass] = key.split("|");
     const technic = hl && col === "#ffb000";
-    const mat = new THREE.MeshLambertMaterial({color: col, transparent: xray && !technic, opacity: xray && !technic ? 0.18 : 1});
-    const inst = new THREE.InstancedMesh(box, mat, list.length);
-    const mtx = new THREE.Matrix4();
-    list.forEach((b, i) => { mtx.makeScale(b[3] - 0.2, b[4] - 0.1, b[5] - 0.2); mtx.setPosition(b[0] + b[3] / 2, b[1] + b[4] / 2, b[2] + b[5] / 2); inst.setMatrixAt(i, mtx); });
+    const see = glass === "1" ? 0.45 : (xray && !technic ? 0.18 : 1);
+    const mat = new THREE.MeshLambertMaterial({color: col, transparent: see < 1, opacity: see});
+    const inst = new THREE.InstancedMesh(geo[shape], mat, list.length);
+    const mtx = new THREE.Matrix4(), rot = new THREE.Matrix4(), scl = new THREE.Matrix4();
+    list.forEach((b, i) => {
+      // Wedges are modeled rising toward -x (high side) and sloping down to +x; turn them to their facing.
+      const turn = {"+x": 0, "-x": Math.PI, "+y": -Math.PI / 2, "-y": Math.PI / 2}[b[9]] || 0;
+      const turned = Math.abs(Math.sin(turn)) > 0.5;
+      scl.makeScale(turned ? b[5] - 0.2 : b[3] - 0.2, b[4] - 0.1, turned ? b[3] - 0.2 : b[5] - 0.2);
+      rot.makeRotationY(turn);
+      mtx.multiplyMatrices(rot, scl);
+      mtx.setPosition(b[0] + b[3] / 2, b[1] + b[4] / 2, b[2] + b[5] / 2);
+      inst.setMatrixAt(i, mtx);
+    });
     g.add(inst);
   }
   const axleMat = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0x7a7f86});
@@ -132,6 +149,21 @@ function build(m) {
   const bb = new THREE.Box3().setFromObject(g), size = bb.getSize(new THREE.Vector3());
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(size.x * 3, size.z * 3), new THREE.MeshLambertMaterial({color: 0x9aa3ad, transparent: true, opacity: 0.25}));
   floor.rotation.x = -Math.PI / 2; floor.position.set(bb.min.x + size.x / 2, bb.min.y - 0.05, bb.min.z + size.z / 2); g.add(floor);
+  return g;
+}
+function wedge(curved, inverted) {
+  // A unit block whose top falls from the -x edge to the +x edge (a slope facing +x); curved: a quarter round.
+  const pts = [], n = curved ? 8 : 1;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = -0.5 + t, y = curved ? 0.5 * Math.cos(t * Math.PI / 2) * 2 - 0.5 : 0.5 - t;
+    pts.push([x, inverted ? -y : y]);
+  }
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.5, inverted ? 0.5 : -0.5);
+  for (const [x, y] of pts) shape.lineTo(x, y);
+  shape.lineTo(0.5, inverted ? 0.5 : -0.5);
+  const g = new THREE.ExtrudeGeometry(shape, {depth: 1, bevelEnabled: false});
+  g.translate(0, 0, -0.5);
   return g;
 }
 function orient(mesh, a) {  // a = [x, centre height, y, span, axis]; LEGO y -> three z

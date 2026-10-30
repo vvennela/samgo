@@ -61,3 +61,40 @@ def test_a_post_in_the_doors_path_stops_the_swing():
     moving = moving_body(parts, bodies, joints[0])
     hit = sweep(parts, moving, joints[0][3], joints[0][4], 90, ignore=joints[0][5])
     assert hit is not None and hit <= 90
+
+
+from samgo.kinematics import requirement_met  # noqa: E402
+
+
+def test_requirement_spin_passes_for_the_car_and_fails_when_a_wheel_is_locked():
+    assert requirement_met(car(), {"kind": "spin", "count": 4})[0]
+    ok, why = requirement_met(car(locked=True), {"kind": "spin", "count": 4})
+    assert not ok and "can spin" in why
+
+
+def test_a_preset_car_door_turns_on_its_stud():
+    # A 6x2 floor; a 1x3x1 car door standing on the floor's corner stud (1, 0), hinged there, held by a plate on top.
+    parts = [{"type": "plate", "w": 2, "l": 6, "x": 0, "y": 0, "z": 0, "color": "gray"},
+             {"type": "car_door", "w": 1, "l": 3, "x": 1, "y": 0, "z": 1, "pin_x": 1, "pin_y": 0, "color": "red"}]
+    ok, why = requirement_met(parts, {"kind": "swing", "axis": "vertical", "degrees": 90})
+    assert ok, why
+
+
+def test_a_laptop_lid_on_click_hinges_swings_about_a_horizontal_axis():
+    # Base 4x4 plate; click hinge halves along its back edge (pin along x at y=4); the lid is a 4x4 plate on top half,
+    # standing up from the hinge, held only by the pin.
+    parts = [{"type": "plate", "w": 4, "l": 4, "x": 0, "y": 0, "z": 0, "color": "gray"},
+             {"type": "click_a", "w": 4, "l": 1, "x": 0, "y": 3, "z": 1, "pin_x": 0, "pin_y": 4, "pin_axis": "x", "color": "gray"},
+             {"type": "click_b", "w": 4, "l": 1, "x": 0, "y": 4, "z": 1, "pin_x": 0, "pin_y": 4, "pin_axis": "x", "color": "gray"},
+             {"type": "brick", "w": 4, "l": 1, "x": 0, "y": 4, "z": 2, "color": "black"}]
+    ok, why = requirement_met(parts, {"kind": "swing", "axis": "horizontal", "degrees": 60})
+    assert ok, why
+
+
+def test_a_tv_on_a_turntable_turns():
+    parts = [{"type": "plate", "w": 4, "l": 4, "x": 0, "y": 0, "z": 0, "color": "gray"},
+             {"type": "turntable_base", "w": 2, "l": 2, "x": 1, "y": 1, "z": 1, "color": "gray"},
+             {"type": "turntable_top", "w": 2, "l": 2, "x": 1, "y": 1, "z": 2, "color": "gray"},
+             {"type": "brick", "w": 6, "l": 1, "x": -1, "y": 1, "z": 3, "color": "black"}]
+    ok, why = requirement_met(parts, {"kind": "swing", "axis": "vertical", "degrees": 60})
+    assert ok, why

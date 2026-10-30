@@ -52,7 +52,8 @@ def score(text: str, palette: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", required=True)
-    ap.add_argument("--palette", choices=("brickgpt", "v2"), required=True)
+    ap.add_argument("--palette", choices=("brickgpt", "v2", "none"), required=True,
+                    help="none: a task with its own evaluation (e.g. running gear); use with --n-eval 0")
     ap.add_argument("--train", type=Path, required=True)
     ap.add_argument("--eval", type=Path, required=True)
     ap.add_argument("--rank", type=int, default=32)
@@ -161,6 +162,10 @@ def main() -> None:
                                     stop=renderer.get_stop_sequences())
 
         def evaluate(label: str) -> dict:
+            if not eval_rows:  # the task is evaluated by its own checker after training
+                summary = {"label": label, "n": 0, "skipped": True}
+                say(event="eval", **summary)
+                return summary
             path = tc.save_weights_for_sampler(f"{args.run_id}-{label}").result().path
             sampler = service.create_sampling_client(model_path=path, tokenizer=tok)
             prompts = [renderer.build_generation_prompt(r["messages"][:-1]) for r in eval_rows]

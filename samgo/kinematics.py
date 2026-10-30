@@ -16,7 +16,11 @@ import numpy as np
 
 from .technic import HOLE_HEIGHT, PLATE, STUD, WHEELS, DEFAULT_WHEEL, wheel_studs
 
-HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "hinge_base": 1, "hinge_top": 1}
+HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "hinge_base": 1, "hinge_top": 1, "tile": 1, "slope": 3,
+          "invslope": 3, "curve": 2, "roundbrick": 3, "roundplate": 1, "arch": 3,
+          "car_door": 3, "click_a": 1, "click_b": 1, "turntable_base": 1, "turntable_top": 1}
+# Real parts behind the pivoting kinds (LDraw): swivel hinge 2429/2430, car door 3821/3822 (1x3x1),
+# click hinge plates 44301/44302, turntable 2x2 3680/3679.
 TOL = 0.5  # mm
 
 
@@ -55,6 +59,16 @@ def connectors(p: dict) -> list[Connector]:
     if t in ("hinge_base", "hinge_top"):  # swivel hinge 2429/2430: pin vertical, on the long edge at the joint
         pin = np.array([p["pin_x"] * STUD, p["pin_y"] * STUD, p["z"] * PLATE])
         return [Connector("hinge_pin_a" if t == "hinge_base" else "hinge_pin_b", pin, z_axis, (0.0, PLATE))]
+    if t == "car_door":  # 3821/3822: turns about a vertical axis through the stud at its hinge end
+        pin = np.array([(p["pin_x"] + 0.5) * STUD, (p["pin_y"] + 0.5) * STUD, p["z"] * PLATE])
+        return [Connector("door_pin", pin, z_axis, (-PLATE, 3 * PLATE))]
+    if t in ("click_a", "click_b"):  # click hinge plates 44301/44302: a horizontal pin along `pin_axis`
+        ax = {"x": np.array([1.0, 0, 0]), "y": y_axis}[p.get("pin_axis", "x")]
+        pin = np.array([p["pin_x"] * STUD, p["pin_y"] * STUD, p["z"] * PLATE + 2 / 20 * STUD])
+        return [Connector("click_pin_a" if t == "click_a" else "click_pin_b", pin, ax, (0.0, STUD))]
+    if t in ("turntable_base", "turntable_top"):  # turntable 3680/3679: turns about the vertical axis at its center
+        c = np.array([(p["x"] + p["w"] / 2) * STUD, (p["y"] + p["l"] / 2) * STUD, p["z"] * PLATE])
+        return [Connector("turn_a" if t == "turntable_base" else "turn_b", c, z_axis, (0.0, 2 * PLATE))]
     return []
 
 
@@ -76,7 +90,11 @@ JOINT = {  # (kind, kind) -> joint type
     frozenset(["axle", "axle_hole"]): "rigid",
     frozenset(["axle", "hub"]): "rigid",
     frozenset(["hinge_pin_a", "hinge_pin_b"]): "revolute",
+    frozenset(["click_pin_a", "click_pin_b"]): "revolute",
+    frozenset(["turn_a", "turn_b"]): "revolute",
+    frozenset(["door_pin", "stud"]): "revolute",
 }
+PIVOTS = {"car_door"}  # parts that turn on a stud instead of gripping it
 
 
 def _studs_rigid(a: dict, b: dict) -> bool:
@@ -100,11 +118,26 @@ def analyse(parts: list[dict]):
 
     cons = [connectors(p) for p in parts]
     links = []
+    turning = set()  # pairs joined by a rotating connector: their touching faces turn, they are not stud-locked
+    for i in range(n):
+        for j in range(i + 1, n):
+            for a in cons[i]:
+                for b in cons[j]:
+                    if JOINT.get(frozenset([a.kind, b.kind])) == "revolute" and _on_axis(a, b):
+                        turning.add((i, j))
     for i in range(n):
         for j in range(i + 1, n):
             pi, pj = parts[i], parts[j]
-            if pi["type"] in HEIGHT and pj["type"] in HEIGHT and _studs_rigid(pi, pj):
-                links.append((i, j, "rigid", None, None))
+            if (i, j) not in turning and pi["type"] in HEIGHT and pj["type"] in HEIGHT and _studs_rigid(pi, pj):
+                pivot = pi if pi["type"] in PIVOTS else pj if pj["type"] in PIVOTS else None
+                if pivot is None:
+                    links.append((i, j, "rigid", None, None))
+                else:  # a door sits on the stud it turns about: that stud is its axle
+                    c = connectors(pivot)[0]
+                    other = pj if pivot is pi else pi
+                    lo, hi = box(other)
+                    if lo[0] - TOL <= c.point[0] <= hi[0] + TOL and lo[1] - TOL <= c.point[1] <= hi[1] + TOL:
+                        links.append((i, j, "revolute", c.point, c.axis))
             for a in cons[i]:
                 for b in cons[j]:
                     kind = JOINT.get(frozenset([a.kind, b.kind]))
@@ -148,7 +181,7 @@ def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndar
     """Turn the parts `moving` about the axis through `point`; the first angle where they hit a fixed part
     (None if the whole sweep is clear). `ignore`: the joint's own parts, which turn past each other."""
     fixed = [p for k, p in enumerate(parts) if k not in moving and k not in ignore and p["type"] in HEIGHT]
-    pts = np.vstack([_corners(parts[k]) for k in moving if parts[k]["type"] in HEIGHT and k not in ignore])
+    pts = np.vstack([_corners(parts[k]) for k in moving if parts[k]["type"] in HEIGHT])
     a = axis / np.linalg.norm(axis)
     K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
     for s in range(1, steps + 1):
@@ -158,3 +191,46 @@ def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndar
         if any(_inside(moved, f) for f in fixed):
             return degrees * s / steps
     return None
+
+
+
+GROUND = {"ground"}
+
+
+def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
+    """Check one requirement against the build's motions, with no mechanism-specific code.
+
+    req kinds:
+      {"kind": "spin", "count": 4, "touch_ground": true}: at least `count` wheels on revolute joints, all axes
+          parallel, wheels the lowest parts;
+      {"kind": "swing", "axis": "vertical"|"horizontal", "degrees": 90}: some body turns on a joint with that
+          axis, through `degrees` in one direction, without hitting anything.
+    """
+    bodies, joints = analyse(parts)
+    if req["kind"] == "spin":
+        wheels = [i for i, p in enumerate(parts) if p.get("type") == "wheel"]
+        if len(wheels) < req.get("count", 2):
+            return False, f"{len(wheels)} wheel(s); needs {req.get('count', 2)}"
+        root_of = {i: r for r, members in bodies.items() for i in members}
+        spinning = [w for w in wheels if any(root_of[w] in (j[0], j[1]) for j in joints)]
+        if len(spinning) < req.get("count", 2):
+            return False, f"{len(spinning)} of {len(wheels)} wheels can spin (the rest are locked or unsupported)"
+        axes = {tuple(np.round(np.abs(j[4]), 3)) for j in joints if root_of[spinning[0]] in (j[0], j[1])}
+        if len({tuple(np.round(np.abs(j[4]), 3)) for j in joints}) > 1 and req.get("parallel", True):
+            return False, "wheel axes are not parallel"
+        return True, "wheels spin"
+    want = np.array([0.0, 0, 1]) if req["axis"] == "vertical" else None
+    best = "no joint with that axis"
+    for a, b, kind, point, axis, partners in joints:
+        vertical = abs(abs(axis[2]) - 1) < 1e-6
+        if (req["axis"] == "vertical") != vertical:
+            continue
+        # The moving side is the body that does not hold the lowest part (the base).
+        lowest = min(range(len(parts)), key=lambda i: parts[i].get("z", 0))
+        moving = bodies[b] if lowest in bodies[a] else bodies[a]
+        for sign in (1, -1):
+            hit = sweep(parts, moving, point, axis, sign * req["degrees"], ignore=partners)
+            if hit is None:
+                return True, f"turns {req['degrees']} degrees clear"
+            best = f"hits something at {abs(hit):.0f} degrees"
+    return False, best
