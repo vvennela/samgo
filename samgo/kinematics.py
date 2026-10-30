@@ -80,6 +80,8 @@ def connectors(p: dict) -> list[Connector]:
         return [Connector("pin", _start(p), AXES[p["axis"]], pin), Connector("axle", _start(p), AXES[p["axis"]], axle)]
     if t in ("axle_joiner", "half_bush"):  # 6538a: two axles in line in one axle-hole tube; 32123a grips its axle
         return [Connector("axle_hole", _start(p), AXES[p["axis"]], (0.0, LENGTH[t] * STUD))]
+    if t == "bush":  # 3713: a 1-stud axle-hole tube that grips its axle (the cars' wheel retainers)
+        return [Connector("axle_hole", _start(p), AXES[p["axis"]], (0.0, STUD))]
     if t == "liftarm":  # thick beam: a round hole across it on every stud edge along it
         along, across = AXES[p["axis"]], AXES["y" if p["axis"] == "x" else "x"]
         n = p["length"]
@@ -267,7 +269,10 @@ def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndar
     `wheels`, tyres count too (as their bounding boxes): a steered wheel must clear the frame."""
     solid = HEIGHT.keys() | BEAMS | ({"wheel"} if wheels else set())
     fixed = [p for k, p in enumerate(parts) if k not in moving and k not in ignore and p["type"] in solid]
-    pts = np.vstack([_corners(parts[k]) for k in moving if parts[k]["type"] in solid])
+    corners = [_corners(parts[k]) for k in moving if parts[k]["type"] in solid]
+    if not corners:  # nothing solid turns (a bare axle with its wheels): nothing can hit
+        return None
+    pts = np.vstack(corners)
     a = axis / np.linalg.norm(axis)
     K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
     for s in range(1, steps + 1):
@@ -281,7 +286,7 @@ def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndar
 
 # How many parts each Technic connector must engage to hold anything: a pin joins two holes; a joiner or half
 # bush sits on an axle.
-SEATS = {"pin": 2, "axle_pin": 2, "axle_joiner": 1, "half_bush": 1}
+SEATS = {"pin": 2, "axle_pin": 2, "axle_joiner": 1, "half_bush": 1, "bush": 1}
 
 
 def unseated(parts: list[dict]) -> list[tuple[int, str]]:
@@ -358,6 +363,8 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
             continue
         small = min(sides, key=lambda g: sum(len(bodies[r]) for r in g))
         moving = [i for r in small for i in bodies[r]]
+        if not any(parts[i]["type"] in HEIGHT.keys() | BEAMS for i in moving):
+            continue  # an axle turning with its wheels: that is a spin, not a swing
         for sign in (1, -1):
             hit = sweep(parts, moving, point, axis, sign * req["degrees"], ignore=partners)
             if hit is None:
