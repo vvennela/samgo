@@ -30,7 +30,16 @@ def load_mesh(path: Path, up: str = "y") -> trimesh.Trimesh:
         if not isinstance(mesh, trimesh.Trimesh):
             continue
         if not isinstance(mesh.visual, trimesh.visual.ColorVisuals):
-            mesh.visual = mesh.visual.to_color()
+            try:
+                mesh.visual = mesh.visual.to_color()
+            except (IndexError, ValueError, AttributeError):
+                # Some downloaded models have texture coordinates that don't match their vertices; fall back to
+                # the material's one color (base color, else the texture's average).
+                mesh.visual = trimesh.visual.ColorVisuals(mesh, vertex_colors=_material_color(mesh.visual))
+        colors = np.asarray(mesh.visual.vertex_colors)
+        if len(colors) != len(mesh.vertices):  # colors that don't line up with the vertices: one solid color
+            solid = colors.reshape(-1, colors.shape[-1]).mean(axis=0) if colors.size else (150, 150, 150, 255)
+            mesh.visual = trimesh.visual.ColorVisuals(mesh, vertex_colors=np.asarray(solid, dtype=np.uint8))
         parts.append(mesh)
     if not parts:
         raise ValueError(f"{path} has no triangle meshes")
@@ -40,6 +49,21 @@ def load_mesh(path: Path, up: str = "y") -> trimesh.Trimesh:
     elif up != "z":
         raise ValueError(f"up must be 'y' or 'z', not {up!r}")
     return mesh
+
+
+def _material_color(visual) -> np.ndarray:
+    """One RGBA color for a textured visual: the material's base color, else its texture's mean, else gray."""
+    material = getattr(visual, "material", None)
+    for attr in ("baseColorFactor", "main_color", "diffuse"):
+        c = getattr(material, attr, None)
+        if c is not None and len(np.ravel(c)) >= 3:
+            c = np.asarray(c, dtype=float).ravel()
+            c = c * 255 if c.max() <= 1.0 else c
+            return np.append(c[:3], 255).astype(np.uint8)
+    image = getattr(material, "baseColorTexture", None) or getattr(material, "image", None)
+    if image is not None:
+        return np.append(np.asarray(image.convert("RGB")).reshape(-1, 3).mean(axis=0), 255).astype(np.uint8)
+    return np.array([150, 150, 150, 255], dtype=np.uint8)
 
 
 def to_lab(rgb: np.ndarray) -> np.ndarray:
