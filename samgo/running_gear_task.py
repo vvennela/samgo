@@ -168,7 +168,8 @@ def flawed(answer: list[dict], rng: random.Random) -> list[dict]:
     return bad
 
 
-def pose_open(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict | None:
+def pose_open(parts: list[dict], target: np.ndarray, strip: list[int], _mirror: bool = True,
+              _margin: int = 2) -> dict | None:
     """The harder problem: the body is tiled by the builder with no running gear at all, so nothing in it marks
     where the Technic beams go; the prompt gives only each tire's center along the car and its outline size.
 
@@ -192,7 +193,7 @@ def pose_open(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict |
     hgt = {"plate": 1, "brick": 3, "technic_brick": 3}
     band = np.zeros(target.shape, bool)
     for b in beams:
-        band[max(b["x"] - 2, 0):b["x"] + b["w"] + 2, :, b["z"]:b["z"] + 3] = True
+        band[max(b["x"] - _margin, 0):b["x"] + b["w"] + _margin, :, b["z"]:b["z"] + 3] = True
 
     def cells(p):
         return (slice(p["x"], p["x"] + p["w"]), slice(p["y"], p["y"] + p["l"]), slice(p["z"], p["z"] + hgt[p["type"]]))
@@ -205,7 +206,7 @@ def pose_open(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict |
         region[cells(p)] = COLOR_INDEX.get(p.get("color"), COLOR_INDEX["black"])
     fixed = [p | {"type": "brick"} if p.get("type") == "technic_brick" else p for p in in_band
              if p.get("type") == "technic_brick"]  # the other axle line's beams stay
-    mirror = bool((region == region[:, ::-1, :]).all())
+    mirror = _mirror and bool((region == region[:, ::-1, :]).all())
     tiled = _layout(region, None, bricks=True, given=fixed, mirror=mirror)
     tiled = [p | {"type": "technic_brick", "hole": "round"} if k < len(fixed) else p for k, p in enumerate(tiled)]
     body_target = region
@@ -240,7 +241,15 @@ def pose_open(parts: list[dict], target: np.ndarray, strip: list[int]) -> dict |
     tires = [f"- tire centered on stud edge x={e}, outline about "
              f"{WHEELS[next(g['size'] for g in gear if g['type'] == 'wheel' and g['x'] == e)][0]:.0f} mm across"
              for e in strip]
-    return {"full": full, "local": local, "tires": "\n".join(tires), "answer": answer, "target": target}
+    problem = {"full": full, "local": local, "tires": "\n".join(tires), "answer": answer, "target": target}
+    # The re-tiling can leave a piece held by nothing (a thin nose or tail skin of interleaved plates): then no
+    # answer could pass. Only pose problems the reference answer solves; else tile without the mirror, then a
+    # narrower band, which leaves thin skins as built.
+    if not explain(problem, answer)[0]:
+        if mirror:
+            return pose_open(parts, target, strip, _mirror=False, _margin=_margin)
+        return pose_open(parts, target, strip, _margin=_margin - 1) if _margin > 0 else None
+    return problem
 
 
 HGT = {"plate": 1, "brick": 3, "technic_brick": 3}
