@@ -1,7 +1,8 @@
 """S5: building instructions. A verified build -> numbered steps a person can follow.
 
 Plates and bricks go in bottom-up, one layer per step (big layers split into a few steps); axles,
-then wheels, come last. Each step is a 3D picture: parts already placed are faded, new parts are
+then wheels and retainers, come last. These are schematic groups, not an insertion-path planner.
+Each step is a 3D picture: parts already placed are faded, new parts are
 in full color with dark edges, and the step's parts are listed. Writes step_NN.png, an
 instructions.md with the parts per step, and the full bill of materials.
 
@@ -21,24 +22,47 @@ import numpy as np  # noqa: E402
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection  # noqa: E402
 
 from .parts import COLORS  # noqa: E402
-from .technic import HOLE_HEIGHT, PLATE, STUD, WHEEL_DIAMETER  # noqa: E402
+from .parts import parse_piece  # noqa: E402
+from .technic import AXLE_RADIUS, DEFAULT_WHEEL, PLATE, STUD, TUBE_RADIUS, WHEELS, _line, _validate  # noqa: E402
 
 MAX_PER_STEP = 10
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3}
+ATTACHMENTS = {"wheel", "bush", "half_bush"}
+SUPPORTED = HEIGHT.keys() | ATTACHMENTS | {"axle"}
+
+
+def _validate_parts(parts: list[dict]) -> None:
+    if not isinstance(parts, list) or not parts:
+        raise ValueError("instructions need a non-empty list of parts")
+    for i, p in enumerate(parts):
+        if not isinstance(p, dict) or not isinstance(p.get("type"), str) or p["type"] not in SUPPORTED:
+            raise ValueError(f"unsupported instruction part {i}: {p!r}")
+        try:
+            if p["type"] in HEIGHT:
+                parse_piece(p | {"type": "brick"} if p["type"] == "technic_brick" else p)
+            if p["type"] not in ("plate", "brick") and (err := _validate(p)):
+                raise ValueError(err)
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError(f"invalid instruction part {i}: {e}") from e
 
 
 def name(p: dict) -> str:
     color = p.get("color", "").replace("_", " ")
     if p["type"] == "axle":
-        return f"Technic axle {p['length']}"
+        return f"Technic {'stop ' if p.get('stop') else ''}axle {p['length']}"
     if p["type"] == "wheel":
-        return "wheel 30.4 x 14 with tire"
+        return f"wheel {p.get('size', DEFAULT_WHEEL).replace('x', ' x ')} with tire"
+    if p["type"] in ("bush", "half_bush"):
+        return "Technic bush (3713)" if p["type"] == "bush" else "Technic half bush (32123a)"
+    if p["type"] not in HEIGHT:
+        raise ValueError(f"unsupported instruction part: {p['type']}")
     a, b = sorted((p["w"], p["l"]))
     kind = {"technic_brick": f"Technic brick ({p.get('hole', 'round')} holes)"}.get(p["type"], p["type"])
     return f"{a}x{b} {kind}, {color}"
 
 
 def steps(parts: list[dict]) -> list[list[dict]]:
+    _validate_parts(parts)
     solid = sorted((p for p in parts if p["type"] in HEIGHT), key=lambda p: (p["z"], p["y"], p["x"]))
     out, layer = [], []
     for p in solid:
@@ -47,10 +71,34 @@ def steps(parts: list[dict]) -> list[list[dict]]:
             layer = []
         layer.append(p)
     out += [layer] if layer else []
-    for kind in ("axle", "wheel"):
-        if group := [p for p in parts if p["type"] == kind]:
+    for kinds in ({"axle"}, ATTACHMENTS):
+        if group := [p for p in parts if p["type"] in kinds]:
             out.append(group)
     return out
+
+
+def _radius(p: dict) -> float:
+    return (WHEELS[p.get("size", DEFAULT_WHEEL)][0] / 2 if p["type"] == "wheel"
+            else AXLE_RADIUS if p["type"] == "axle" else TUBE_RADIUS)
+
+
+def _bounds(parts: list[dict]) -> tuple:
+    """Exact display envelopes in mm, including each wheel's size, position and orientation."""
+    boxes = []
+    for p in parts:
+        if p["type"] in HEIGHT:
+            lo = np.array([p['x'] * STUD, p['y'] * STUD, p['z'] * PLATE])
+            hi = lo + [p['w'] * STUD, p['l'] * STUD, HEIGHT[p['type']] * PLATE]
+        else:
+            axis, edge, z, start, end = _line(p)
+            r = _radius(p)
+            lo, hi = ([edge - r, start, z - r], [edge + r, end, z + r]) if axis == 'y' else (
+                [start, edge - r, z - r], [end, edge + r, z + r])
+        boxes.append((lo, hi))
+    low = np.min([b[0] for b in boxes], axis=0)
+    high = np.max([b[1] for b in boxes], axis=0)
+    padding = np.maximum((high - low) * 0.03, 1.0)
+    return tuple(zip(low - padding, high + padding))
 
 
 def _box_faces(x0, x1, y0, y1, z0, z1):
@@ -67,20 +115,30 @@ def _draw(ax, p: dict, new: bool) -> None:
         faces = _box_faces(x0, x0 + p["w"] * STUD, y0, y0 + p["l"] * STUD, z0, z0 + HEIGHT[p["type"]] * PLATE)
         ax.add_collection3d(Poly3DCollection(faces, facecolor=(*rgb, alpha), edgecolor=edge, linewidth=0.4))
         return
-    z = p["z"] * PLATE + HOLE_HEIGHT
+    axis, edge_mm, z, start, end = _line(p)
     if p["type"] == "axle":
-        edge_mm, start = (p["x"] * STUD, p["y"] * STUD) if p["axis"] == "y" else (p["y"] * STUD, p["x"] * STUD)
-        span = [start, start + p["length"] * STUD]
-        xs, ys = ([edge_mm] * 2, span) if p["axis"] == "y" else (span, [edge_mm] * 2)
+        span = [start, end]
+        xs, ys = ([edge_mm] * 2, span) if axis == "y" else (span, [edge_mm] * 2)
         ax.plot(xs, ys, [z, z], color=(0.3, 0.3, 0.3, alpha), linewidth=3 if new else 1)
         return
-    r, t = WHEEL_DIAMETER / 2, np.linspace(0, 2 * np.pi, 24)
-    edge_mm, start = (p["x"] * STUD, p["y"] * STUD) if p["axis"] == "y" else (p["y"] * STUD, p["x"] * STUD)
-    for s in (start, start + p["width"] * STUD):
-        a, zc = edge_mm + r * np.cos(t), z + r * np.sin(t)
-        xs, ys = (a, np.full_like(a, s)) if p["axis"] == "y" else (np.full_like(a, s), a)
-        ax.add_collection3d(Poly3DCollection([np.c_[xs, ys, zc]], facecolor=(0.12, 0.12, 0.12, 0.9 * alpha + 0.05),
-                                             edgecolor=edge, linewidth=0.4))
+    r, t = _radius(p), np.linspace(0, 2 * np.pi, 25)
+
+    def ring(s, radius):
+        a, zc = edge_mm + radius * np.cos(t), z + radius * np.sin(t)
+        xs, ys = (a, np.full_like(a, s)) if axis == "y" else (np.full_like(a, s), a)
+        return np.c_[xs, ys, zc]
+
+    front, back = ring(start, r), ring(end, r)
+    faces = [[front[k], front[k + 1], back[k + 1], back[k]] for k in range(len(t) - 1)]
+    if p["type"] == "wheel":
+        faces += [front, back]
+        rgb = (0.12, 0.12, 0.12)
+    else:  # Retainers are collars with an axle hole, not wheels or unrendered parts.
+        for s, outer in ((start, front), (end, back)):
+            inner = ring(s, AXLE_RADIUS)
+            faces += [[outer[k], outer[k + 1], inner[k + 1], inner[k]] for k in range(len(t) - 1)]
+        rgb = (0.6, 0.6, 0.6)
+    ax.add_collection3d(Poly3DCollection(faces, facecolor=(*rgb, alpha), edgecolor=edge, linewidth=0.4))
 
 
 def render_step(parts_before: list[dict], new: list[dict], bounds, path: Path, title: str) -> None:
@@ -101,20 +159,14 @@ def render_step(parts_before: list[dict], new: list[dict], bounds, path: Path, t
 
 
 def write(parts: list[dict], out: Path) -> Path:
-    out.mkdir(parents=True, exist_ok=True)
     plan = steps(parts)
-    r = WHEEL_DIAMETER / 2
-    xs = [v for p in parts for v in ((p["x"], p["x"] + p.get("w", 0)) if p["type"] in HEIGHT else (p["x"], p["x"]))]
-    ys = [v for p in parts for v in ((p["y"], p["y"] + p.get("l", 0)) if p["type"] in HEIGHT
-                                     else (p["y"], p["y"] + p.get("length", p.get("width", 0))))]
-    zs = [p["z"] + HEIGHT.get(p["type"], 0) for p in parts]
-    has_wheels = any(p["type"] == "wheel" for p in parts)
-    bounds = ((min(xs) * STUD - (r if has_wheels else 0), max(xs) * STUD + (r if has_wheels else 0)),
-              (min(ys) * STUD, max(ys) * STUD),
-              (min(0.0, HOLE_HEIGHT - r) if has_wheels else 0.0, max(zs) * PLATE))
+    bounds = _bounds(parts)
+    out.mkdir(parents=True, exist_ok=True)
     render_step([], parts, bounds, out / "finished.png", "Finished model")
     lines = ["# Building instructions", "", "![finished model](finished.png)", "",
-             f"{len(parts)} parts in {len(plan)} steps.", "", "## Parts", ""]
+             f"{len(parts)} parts in {len(plan)} steps.", "",
+             "These steps group parts by height, then axles, then wheels and retainers. "
+             "Insertion access and temporary support have not been checked.", "", "## Parts", ""]
     lines += [f"- {n} × {name_}" for name_, n in sorted(Counter(name(p) for p in parts).items())]
     done: list[dict] = []
     for i, group in enumerate(plan, 1):

@@ -29,6 +29,7 @@ Dimensions are standard LEGO Technic; they are constants here so they can be cha
 """
 
 from dataclasses import dataclass
+from math import hypot, isfinite, sqrt
 
 from samgo.verifier import Issue, Report
 
@@ -160,7 +161,9 @@ def _round_holes(p: dict) -> list[tuple[str, float, float, float, float]]:
 def _line(a: dict) -> tuple[str, float, float, float, float]:
     """(axis, edge mm, z mm, span start mm, span end mm) of an axle, wheel, bush or half bush."""
     edge, start = (a["x"], a["y"]) if a["axis"] == "y" else (a["y"], a["x"])
-    size = a.get("length", a.get("width", 1 if a.get("type") == "bush" else LENGTH.get(a.get("type"))))
+    kind = a.get("type")
+    size = (wheel_studs(a.get("size", DEFAULT_WHEEL)) if kind == "wheel" else 1 if kind == "bush"
+            else LENGTH[kind] if kind in LENGTH else a["length"])
     return a["axis"], edge * STUD, a["z"] * PLATE + HOLE_HEIGHT, start * STUD, (start + size) * STUD
 
 
@@ -176,8 +179,26 @@ def _circle_hits_box(axis: str, edge: float, z: float, r: float, s0: float, s1: 
 
 
 def _validate(p: dict) -> str | None:
+    if not isinstance(p, dict):
+        return "part must be an object"
     t = p.get("type")
     try:
+        for flag in ("stop", "friction"):
+            if flag in p and type(p[flag]) is not bool:
+                return f"{flag} must be a boolean"
+        for field in ("length", "width", "w", "l"):
+            if field in p and type(p[field]) is not int:
+                return f"{field} must be an integer"
+        for k in ("x", "y", "z"):
+            v = p[k]
+            if type(v) not in (int, float) or not isfinite(v):
+                return f"{k} must be a finite number"
+            # Axis-line parts can slide half a stud (e.g. a caster axle with half bushes).
+            if t in OFF_GRID:
+                if v * 2 != int(v * 2):
+                    return f"{k} must be a whole or half step"
+            elif type(v) is not int:
+                return f"{k} must be an integer"
         if t == "technic_brick":
             if sorted((p["w"], p["l"]))[0] != 1 or max(p["w"], p["l"]) not in TECHNIC_LENGTHS:
                 return f"no {p['w']}x{p['l']} Technic brick (1x2, 1x4, 1x6, 1x8)"
@@ -215,18 +236,37 @@ def _validate(p: dict) -> str | None:
                 return f"liftarms come with {', '.join(map(str, LIFTARM_LENGTHS))} holes"
             if t == "cross_block" and p.get("pin_at", "+z") not in [s + k for s in "+-" for k in "xyz" if k != p["axis"]]:
                 return "pin_at must be +/- one of the two directions across the axle hole (e.g. +z)"
-        for k in ("x", "y", "z"):
-            if t in OFF_GRID - {"axle", "wheel", "bush"}:  # connectors may sit half a step off the grid
-                if float(p[k]) * 2 != int(float(p[k]) * 2):
-                    return f"{k} must be a whole or half step"
-            else:
-                int(p[k])
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError, OverflowError):
         return "missing or bad fields"
     return None
 
 
-def verify_function(parts: list[dict]) -> Report:
+def _wheels_overlap(a: dict, b: dict) -> bool:
+    """Cylinder intersection for the supported x/y wheel axes, allowing tolerance at contact.
+
+    Width follows the same catalog stud envelope as mounting and clearance checks. For perpendicular
+    axes, find the interval in z where both circular cross-sections reach the other's axial span.
+    """
+    aa, ae, az, a0, a1 = _line(a)
+    ba, be, bz, b0, b1 = _line(b)
+    ar = WHEELS[a.get("size", DEFAULT_WHEEL)][0] / 2
+    br = WHEELS[b.get("size", DEFAULT_WHEEL)][0] / 2
+    if aa == ba:
+        return min(a1, b1) - max(a0, b0) > TOLERANCE and hypot(ae - be, az - bz) < ar + br - TOLERANCE
+    # a runs along x, b along y; shrink each volume slightly so face contact is allowed.
+    if aa != "x":
+        return _wheels_overlap(b, a)
+    tol = TOLERANCE / 2
+    ar, br = ar - tol, br - tol
+    dy = max(b0 + tol - ae, 0, ae - (b1 - tol))
+    dx = max(a0 + tol - be, 0, be - (a1 - tol))
+    if dy >= ar or dx >= br:
+        return False
+    ah, bh = sqrt(ar * ar - dy * dy), sqrt(br * br - dx * dx)
+    return min(az + ah, bz + bh) > max(az - ah, bz - bh)
+
+
+def verify_function(parts: list[dict], *, min_axle_lines: int = 2) -> Report:
     """S3c for a rolling vehicle: axles turn in aligned round holes, wheels sit on axles and clear
     everything, wheels are the lowest contact, and there are at least two parallel wheeled axles."""
     issues: list[Issue] = []
@@ -243,15 +283,22 @@ def verify_function(parts: list[dict]) -> Report:
     solids = [(i, p, _box(p)) for i, p in enumerate(parts)
               if isinstance(p, dict) and p.get("type") in ("brick", "plate", "technic_brick", "liftarm", "cross_block")]
 
-    wheeled = []  # (axle index, axis) for axles that turn and carry wheels
+    for k, (ai, a) in enumerate(wheels):
+        for bi, b in wheels[k + 1:]:
+            if _wheels_overlap(a, b):
+                issues.append(Issue("wheel_overlap", f"wheel {ai} overlaps wheel {bi}", [ai, bi]))
+
+    wheeled = []  # (axle index, axis, line key, wheel indices)
+    holders: dict[tuple, list[tuple[float, float]]] = {}
     for ai, a in axles:
         axis, edge, z, s0, s1 = _line(a)
-        through = []  # Technic bricks whose hole this axle passes through
+        through, spans = [], []  # engaged holders, and their intervals along the axle
         for ti, t in technic:
             for h_axis, h_edge, h_z, h0, h1 in _round_holes(t):
                 if h_axis == axis and abs(h_edge - edge) < 0.01 and abs(h_z - z) < 0.01 and h0 >= s0 - 0.01 \
                         and h1 <= s1 + 0.01:
                     through.append(ti)
+                    spans.append((h0, h1))
         if len(set(through)) < 2:
             issues.append(Issue("axle_unsupported", f"axle {ai} passes through {len(set(through))} aligned "
                                                     "Technic hole(s); it needs 2", [ai]))
@@ -271,7 +318,9 @@ def verify_function(parts: list[dict]) -> Report:
                                               f"stop axle ({', '.join(map(str, STOP_AXLE_LENGTHS))} long) or wheels "
                                               "on both ends", [ai]))
         if mine and not locked:
-            wheeled.append((ai, axis, (axis, round(edge, 2), round(z, 2)), len(mine)))
+            key = (axis, round(edge, 2), round(z, 2))
+            wheeled.append((ai, axis, key, set(mine)))
+            holders.setdefault(key, []).extend(spans)
 
     # Each wheel must be held on both sides along its axle: by a beam's hole, a bush, another wheel, or the axle
     # ending there. A gap lets it slide along the axle (real builds fill it with bushes).
@@ -279,7 +328,7 @@ def verify_function(parts: list[dict]) -> Report:
     for wi, w in wheels:
         axis, edge, z, s0, s1 = _line(w)
         line_axles = [_line(a) for _, a in axles if _line(a)[:3] == (axis, edge, z)]
-        stops = [(l[3], l[4]) for l in line_axles]
+        stops = [(line[3], line[4]) for line in line_axles]
         neighbours = [(_line(b)[3], _line(b)[4]) for b in bushes if _line(b)[:3] == (axis, edge, z)]
         neighbours += [(_line(o)[3], _line(o)[4]) for oi, o in wheels if oi != wi and _line(o)[:3] == (axis, edge, z)]
         for _, t in technic:
@@ -306,15 +355,29 @@ def verify_function(parts: list[dict]) -> Report:
             issues.append(Issue("wheel_blocked", f"wheel {wi} would hit parts when it turns", [wi, *hit]))
 
     # Axles on one line (a through axle, or two stub axles facing each other) form one wheel pair.
-    lines: dict[tuple, int] = {}
-    for _, _, line, n in wheeled:
-        lines[line] = lines.get(line, 0) + n
-    if len(lines) < 2 or any(n < 2 for n in lines.values()):
-        issues.append(Issue("too_few_wheels", f"{len(lines)} turning axle line(s) with wheels; a car needs 2 axle "
+    lines: dict[tuple, set[int]] = {}
+    for _, _, line, ids in wheeled:
+        lines.setdefault(line, set()).update(ids)
+    if len(lines) < min_axle_lines or any(len(ids) < 2 for ids in lines.values()):
+        issues.append(Issue("too_few_wheels", f"{len(lines)} turning axle line(s) with wheels; needs {min_axle_lines} axle "
                                               "lines with a wheel on each side"))
     elif len({line[0] for line in lines}) > 1:
         issues.append(Issue("axles_misaligned", "wheeled axles are not parallel, so it cannot roll straight",
                             [ai for ai, _, _, _ in wheeled]))
+
+    # Two wheels must straddle the supporting rows; simply counting two on a line permits
+    # duplicates or adjacent wheels entirely on one side. Stub axles share their line's holders.
+    wheel_by_id = dict(wheels)
+    for line, ids in lines.items():
+        if len(ids) < 2:
+            continue  # the missing pair is reported above (single-wheel forks are a separate task)
+        h0 = min(s0 for s0, _ in holders[line])
+        h1 = max(s1 for _, s1 in holders[line])
+        left = any(_line(wheel_by_id[i])[4] <= h0 + TOLERANCE for i in ids)
+        right = any(_line(wheel_by_id[i])[3] >= h1 - TOLERANCE for i in ids)
+        if not (left and right):
+            issues.append(Issue("wheel_placement", f"axle line {line}: wheels must sit on opposite sides of its "
+                                "supporting Technic rows", sorted(ids)))
 
     from .kinematics import unseated  # kinematics builds on this module
 

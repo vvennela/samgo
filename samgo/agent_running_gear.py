@@ -11,7 +11,6 @@ function (S3c) and stability (S3b) verifiers, and their error text goes back to 
 import argparse
 import json
 import os
-import re
 import time
 from pathlib import Path
 
@@ -72,16 +71,9 @@ def problem(folder: Path):
 
 
 def apply(body: list[dict], edits: list[dict]) -> list[dict]:
-    parts: list[dict | None] = list(body)
-    added = []
-    for e in edits:
-        if e.get("op") == "set":
-            parts[int(e["index"])] = e["part"]
-        elif e.get("op") == "remove":
-            parts[int(e["index"])] = None
-        elif e.get("op") == "add":
-            added.append(e["part"])
-    return [p for p in parts if p is not None] + added
+    from .edits import apply_edits
+
+    return apply_edits(body, edits).parts
 
 
 def check(parts: list[dict], target: np.ndarray) -> tuple[bool, list[str], dict]:
@@ -134,10 +126,9 @@ def ask(messages: list[dict], max_tokens: int) -> tuple[str, dict]:
 
 
 def edits_from(text: str) -> list[dict]:
-    m = re.search(r"\[\s*\{.*\}\s*\]", text, re.S)
-    if not m:
-        raise ValueError("no JSON list of edits in the answer")
-    return json.loads(m.group(0))
+    from .running_gear_task import edits_from as parse_edits
+
+    return parse_edits(text)
 
 
 def run(folder: Path, rounds: int, max_tokens: int, out: Path) -> dict:

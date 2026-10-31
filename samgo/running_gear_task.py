@@ -15,10 +15,12 @@ import re
 
 import numpy as np
 
+from .edits import AppliedEdits, EditError, apply_edits
+from .parts import parse_piece
 from .stability import stability
-from .technic import (AXLE_LENGTHS, HOLE_HEIGHT, PLATE, STOP_AXLE_LENGTHS, WHEELS, structural, verify_function,
+from .technic import (AXLE_LENGTHS, HOLE_HEIGHT, STOP_AXLE_LENGTHS, WHEELS, _validate, structural, verify_function,
                       wheel_studs)
-from .verifier import MatchConfig, verify
+from .verifier import Issue, MatchConfig, verify
 
 WHEEL_LIST = "; ".join(f'"{k}" ({v[0]} mm across, {wheel_studs(k)} studs wide)' for k, v in WHEELS.items())
 
@@ -128,40 +130,84 @@ def prompt(problem: dict) -> list[dict]:
 
 def apply(problem: dict, edits: list[dict]) -> list[dict]:
     """The whole car after `edits` (on the local numbering)."""
-    parts: list[dict | None] = list(problem["full"])
-    added = []
-    for e in edits:
-        if e.get("op") == "set":
-            parts[problem["local"][int(e["index"])]] = e["part"]
-        elif e.get("op") == "remove":
-            parts[problem["local"][int(e["index"])]] = None
-        elif e.get("op") == "add":
-            added.append(e["part"])
-    return [p for p in parts if p is not None] + added
+    return _candidate(problem, edits).parts
 
 
-def check(parts: list[dict], target: np.ndarray) -> tuple[bool, list[str]]:
-    """Structure (the chassis counts as standing on its wheels), function, stability; error text for Glimmer."""
+def _candidate(problem: dict, edits: list[dict]) -> AppliedEdits:
+    allowed = frozenset({"add"}) if problem.get("task") == TASK_FRAME else frozenset({"set", "remove", "add"})
+    return apply_edits(problem["full"], edits, problem["local"], allowed)
+
+
+def _check_issues(parts: list[dict], target: np.ndarray, *, partial_edge: int | None = None,
+                  changed: frozenset[int] = frozenset()) -> list[tuple[str, Issue]]:
+    """Shared verdict; issue indices refer to the candidate, including its off-grid gear.
+
+    Partial steps require one functional axle line at the requested edge. Existing body parts far
+    from it may await the other line; new/changed parts may not. Whole-car stability is deferred.
+    """
     try:
-        solid = structural(parts)  # Technic bricks become plain bricks here, in the same order
-        anchors = frozenset(k for k, p in enumerate(q for q in parts if q.get("type") not in GEAR)
-                            if p.get("type") == "technic_brick")
-        s = verify(solid, target, config=MatchConfig(), anchors=anchors)
-        f = verify_function(parts)
-    except Exception as e:  # noqa: BLE001  a malformed part
-        return False, [f"invalid model: {e}"]
-    issues = [f"structure: {i.message}" for i in s.issues] + [f"function: {i.message}" for i in f.issues]
-    if not issues:
+        if not isinstance(parts, list):
+            raise ValueError("build must be a list")
+        for i, p in enumerate(parts):
+            if not isinstance(p, dict) or p.get("type") not in (*HGT, *GEAR):
+                raise ValueError(f"part {i}: unsupported running-gear part")
+            if p["type"] in HGT:
+                parse_piece(p | {"type": "brick"} if p["type"] == "technic_brick" else p)
+            if p["type"] not in ("plate", "brick") and (err := _validate(p)):
+                raise ValueError(f"part {i}: {err}")
+        solid_idx = [i for i, p in enumerate(parts) if p["type"] in HGT]
+        anchors = frozenset(k for k, i in enumerate(solid_idx) if parts[i]["type"] == "technic_brick")
+        s = verify(structural(parts), target, config=MatchConfig(), anchors=anchors)
+        f = verify_function(parts, min_axle_lines=1 if partial_edge is not None else 2)
+    except (KeyError, TypeError, ValueError, OverflowError) as e:
+        return [("model", Issue("invalid_part", f"invalid model: {e}"))]
+
+    issues = []
+    for issue in s.issues:
+        ids = [solid_idx[k] for k in issue.pieces]
+        if partial_edge is not None:
+            if issue.code == "disconnected":
+                continue  # separate anchored sections may be joined by the remaining axle line
+            if issue.code == "floating":
+                ids = [i for i in ids if i in changed or
+                       abs(parts[i]["x"] + parts[i]["w"] / 2 - partial_edge) <= 6]
+                if not ids:
+                    continue
+        issues.append(("structure", Issue(issue.code, issue.message, ids)))
+    issues += [("function", i) for i in f.issues]
+    if partial_edge is not None:
+        wheels = [p for p in parts if p["type"] == "wheel" and p["axis"] == "y" and p["x"] == partial_edge]
+        if len(wheels) < 2:
+            issues.append(("function", Issue("missing_axle_line", f"add a wheel pair on the requested axle line x={partial_edge}")))
+    elif not issues:
         st = stability(parts, vehicle=True)
-        issues += [f"stability: {i.message}" for i in st.issues]
-    return not issues, issues
+        issues += [("stability", Issue(i.code, i.message, [solid_idx[k] for k in i.pieces])) for i in st.issues]
+    return issues
+
+
+def check(parts: list[dict], target: np.ndarray, *, partial_edge: int | None = None,
+          changed: frozenset[int] = frozenset()) -> tuple[bool, list[str]]:
+    """Structure (the chassis counts as standing on its wheels), function, stability; error text for Glimmer."""
+    issues = _check_issues(parts, target, partial_edge=partial_edge, changed=changed)
+    return not issues, [f"{stage}: {i.message}" for stage, i in issues]
 
 
 def edits_from(text: str) -> list[dict]:
-    m = re.search(r"\[\s*\{.*\}\s*\]", text, re.S)
-    if not m:
-        raise ValueError("no JSON list of edits in the answer")
-    return json.loads(m.group(0))
+    # Accept one JSON list, optionally fenced. Reject ambiguous multiple answers instead of
+    # greedily combining them or accidentally extracting a nested list from a malformed answer.
+    value = text.strip()
+    if value.startswith("```"):
+        match = re.fullmatch(r"```(?:json)?\s*\n?(.*?)\s*```", value, re.S)
+        if not match:
+            raise EditError("invalid JSON code fence")
+        value = match.group(1)
+    try:
+        edits = json.loads(value)
+    except (TypeError, json.JSONDecodeError) as e:
+        raise EditError("answer must contain one JSON list of edits") from e
+    if not isinstance(edits, list):
+        raise EditError("edits must be a JSON list")
+    return edits
 
 
 def flawed(answer: list[dict], rng: random.Random) -> list[dict]:
@@ -292,31 +338,32 @@ def _stud_linked(p: dict, q: dict) -> bool:
 def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bool, list[str]]:
     """Check an answer and say exactly what is wrong in terms the model can act on: which of its parts overlap which
     input part (by number), which part rests on nothing, which axle or wheel fails and how."""
-    removed = {int(e["index"]) for e in edits if e.get("op") == "remove"}
-    set_at = {int(e["index"]): e["part"] for e in edits if e.get("op") == "set"}
-    tagged = []  # (part, label)
-    local_of = {i: k for k, i in enumerate(problem["local"])}
-    for i, p in enumerate(problem["full"]):
-        k = local_of.get(i)
-        if k is not None and k in removed:
-            continue
-        if k is not None and k in set_at:
-            tagged.append((set_at[k], f"your changed part {k} ({describe(set_at[k])})"))
-        else:
-            tagged.append((p, f"input part {k} ({describe(p)})" if k is not None else f"the body's {describe(p)}"))
-    tagged += [(e["part"], f"your added {describe(e['part'])}") for e in edits if e.get("op") == "add"]
-    parts = [p for p, _ in tagged]
-    ok, issues = check(parts, problem["target"])
-    if partial:  # a step that adds one axle line: the car cannot roll on one line yet, which is fine here
-        issues = [i for i in issues if "turning axle line" not in i and not i.startswith("stability")]
-        ok = not issues
-    if ok:
+    try:
+        candidate = _candidate(problem, edits)
+    except EditError as e:
+        return False, [f"invalid edits: {e}"]
+    if partial and "edge" not in problem:
+        return False, ["partial task must identify the requested axle edge"]
+    parts = candidate.parts
+    issues = _check_issues(parts, problem["target"], partial_edge=problem["edge"] if partial else None,
+                           changed=candidate.changed)
+    if not issues:
         return True, []
+    if any(i.code == "invalid_part" for _, i in issues):
+        return False, [f"{stage}: {i.message}" for stage, i in issues]
+
+    local_of = {i: k for k, i in enumerate(problem["local"])}
+    tagged = []
+    for n, (p, source) in enumerate(zip(parts, candidate.sources)):
+        k = local_of.get(source)
+        label = ("your added" if source is None else f"your changed part {k}" if n in candidate.changed
+                 else f"input part {k}" if k is not None else "the body's")
+        tagged.append((p, f"{label} ({describe(p)})"))
     msgs = []
-    # Overlaps, by the pair of parts involved.
+    # The exact candidate's grid overlaps, named by pair rather than by occupied cell.
     owners: dict = {}
     for n, (p, _) in enumerate(tagged):
-        if p.get("type") in HGT:
+        if p["type"] in HGT:
             for x in range(p["x"], p["x"] + p["w"]):
                 for y in range(p["y"], p["y"] + p["l"]):
                     for z in range(p["z"], p["z"] + HGT[p["type"]]):
@@ -333,61 +380,41 @@ def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bo
                         "floor" if problem.get("task") == TASK_FRAME
                         else f": remove {label.split(' (')[0].replace('input ', '')} first")
         msgs.append(f"overlap: {la} and {lb} fill the same cells{hint}")
-    # Everything else from the verifiers, with part numbers turned into descriptions.
-    for issue in issues:
-        if "occupied twice" in issue:
+
+    for stage, issue in issues:
+        if issue.code == "overlap" and pairs:
             continue
-        if "not supported from the ground" in issue:
-            solid_idx = [n for n, (p, _) in enumerate(tagged) if p.get("type") not in GEAR]
-            try:
-                s = verify(structural(parts), problem["target"], config=MatchConfig(),
-                           anchors=frozenset(k for k, n in enumerate(solid_idx) if parts[n].get("type") == "technic_brick"))
-                gone = [(k, problem["full"][i]) for i, k in local_of.items() if k in removed]
-                for i in next(x for x in s.issues if x.code == "floating").pieces[:4]:
-                    p = parts[solid_idx[i]]
-                    if partial and "edge" in problem and not tagged[solid_idx[i]][1].startswith("your ") and \
-                            abs(p["x"] + p.get("w", 1) / 2 - problem["edge"]) > 6:
-                        continue  # it waits on the other axle line, not built yet
-                    held = [k for k, q in gone if _stud_linked(p, q)]
-                    reach = [q for q in parts if q.get("type") == "technic_brick" and q["z"] + 3 == p["z"]
-                             and q["y"] < p["y"] + p["l"] and p["y"] < q["y"] + q["l"]
-                             and (q["x"] + q["w"] == p["x"] or p["x"] + p["w"] == q["x"])]
-                    if reach and not held:
-                        q = reach[0]
-                        longer = next((n for n in (4, 6, 8) if n > q["w"]), None)
-                        if longer:
-                            msgs.append(f"loose: {tagged[solid_idx[i]][1]} rests on nothing - it sits just past the end "
-                                        f"of the Technic brick 1x{q['w']} at (x={q['x']}, y={q['y']}, z={q['z']}); "
-                                        f"use a longer one (1x{longer}, centered on the axle) so it reaches under it")
-                            continue
-                    why = (f" - it was held by input part {held[0]}, which you removed; put a part over or under it "
-                           "that also reaches a part that stays (e.g. a plate across it and your new beam), or leave "
-                           "it out" if held else " - put a part under or over it that shares a stud, or leave it out")
-                    msgs.append(f"loose: {tagged[solid_idx[i]][1]} rests on nothing{why}")
-            except Exception:  # noqa: BLE001
-                msgs.append(issue)
+        if issue.code == "floating":
+            gone = [(local_of.get(i), problem["full"][i]) for i in candidate.removed]
+            # Verdicts are decided before truncating display messages: a distant loose part must
+            # never hide a newly added loose part later in the candidate.
+            for i in issue.pieces[:4]:
+                p = parts[i]
+                held = [k for k, q in gone if _stud_linked(p, q)]
+                reach = [q for q in parts if q["type"] == "technic_brick" and q["z"] + 3 == p["z"]
+                         and q["y"] < p["y"] + p["l"] and p["y"] < q["y"] + q["l"]
+                         and (q["x"] + q["w"] == p["x"] or p["x"] + p["w"] == q["x"])]
+                if reach and not held:
+                    q = reach[0]
+                    longer = next((n for n in (4, 6, 8) if n > q["w"]), None)
+                    if longer:
+                        msgs.append(f"loose: {tagged[i][1]} rests on nothing - it sits just past the end "
+                                    f"of the Technic brick 1x{q['w']} at (x={q['x']}, y={q['y']}, z={q['z']}); "
+                                    f"use a longer one (1x{longer}, centered on the axle) so it reaches under it")
+                        continue
+                why = (f" - it was held by input part {held[0]}, which you removed; put a part over or under it "
+                       "that also reaches a part that stays (e.g. a plate across it and your new beam), or leave "
+                       "it out" if held else " - put a part under or over it that shares a stud, or leave it out")
+                msgs.append(f"loose: {tagged[i][1]} rests on nothing{why}")
             continue
-        if "passes through solid parts" in issue:
-            for ax in (p for p in parts if p.get("type") == "axle"):
-                e, z0 = ax["x"], ax["z"]
-                for q, label in tagged:
-                    if q.get("type") not in HGT or not (q["x"] < e < q["x"] + q["w"]):
-                        continue
-                    if not (q["y"] < ax["y"] + ax["length"] and ax["y"] < q["y"] + q["l"]):
-                        continue
-                    if q["z"] <= z0 < q["z"] + HGT[q["type"]] and not (q["type"] == "technic_brick" and q["z"] == z0):
-                        msgs.append(f"blocked: the axle at x={e}, z={z0} runs into {label}: only Technic bricks with "
-                                    f"their bottom at z={z0} let it through")
+        if issue.code == "axle_blocked":
+            axle = parts[issue.pieces[0]]
+            for i in issue.pieces[1:]:
+                msgs.append(f"blocked: {describe(axle)} runs into {tagged[i][1]}: only aligned Technic holes let it through")
             continue
         named = re.sub(r"(axle|wheel|part) (\d+)", lambda m: f"{m.group(1)} [{describe(parts[int(m.group(2))])}]"
-                       if int(m.group(2)) < len(parts) else m.group(0), issue)
-        msgs.append(named)
-    if partial:
-        # One axle line of several: body parts that will hang from a line not built yet are loose for now; only
-        # the parts this step adds must hold.
-        msgs = [m for m in msgs if "separate grounded structures" not in m and "not supported from the ground" not in m]
-        if not msgs:
-            return True, []
+                       if int(m.group(2)) < len(parts) else m.group(0), issue.message)
+        msgs.append(f"{stage}: {named}")
     return False, msgs[:12]
 
 

@@ -1,4 +1,4 @@
-import copy
+import pytest
 
 from samgo.technic import structural, verify_function
 from samgo.verifier import verify
@@ -135,3 +135,60 @@ def test_a_wheel_with_a_gap_along_its_axle_slides_and_a_bush_holds_it():
     assert "wheel_slides" in codes(parts)
     bushes = [{"type": "bush", "axis": "y", "x": x, "z": 0, "y": y} for x in (1, 7) for y in (-2, 5)]
     assert "wheel_slides" not in codes(parts + bushes), verify_function(parts + bushes).issues
+
+
+def test_duplicate_wheels_are_not_physical_parts_that_can_share_space():
+    parts = car()
+    assert "wheel_overlap" in codes(parts + [parts[-1].copy()])
+
+
+def test_two_duplicate_pairs_on_one_side_do_not_make_a_car():
+    parts = [p | {"y": -1} if p['type'] == 'wheel' else p for p in car()]
+    assert {'wheel_overlap', 'wheel_placement'} <= codes(parts)
+
+
+def test_distinct_wheels_on_same_side_fail_placement_without_overlap():
+    parts = car()
+    for p in parts:
+        if p['type'] == 'axle':
+            p['y'], p['length'] = -3, 6
+        elif p['type'] == 'wheel' and p['y'] == 3:
+            p['y'] = -3  # wheels at -3..-1 and -1..1, both before the chassis at 1..3
+    report = verify_function(parts)
+    assert 'wheel_placement' in report.codes
+    assert 'wheel_overlap' not in report.codes
+
+
+@pytest.mark.parametrize('axis', ['x', 'y'])
+def test_wheel_overlap_uses_cylinders_and_allows_touching_faces(axis):
+    def wheel(edge, start, z=0):
+        return {'type': 'wheel', 'axis': axis, 'x': edge if axis == 'y' else start,
+                'y': start if axis == 'y' else edge, 'z': z, 'size': '30.4x14'}
+    # Checking the overlap code independently of these deliberately unmounted wheels.
+    assert 'wheel_overlap' in codes([wheel(0, 0), wheel(3, 0)])
+    assert 'wheel_overlap' not in codes([wheel(0, 0), wheel(0, 2)])
+    # Bounding boxes overlap, but the radial separation is sqrt(24^2 + 22.4^2) > diameter.
+    assert 'wheel_overlap' not in codes([wheel(0, 0), wheel(3, 0, 7)])
+
+
+def test_perpendicular_wheels_can_collide():
+    a = {'type': 'wheel', 'axis': 'x', 'x': 0, 'y': 0, 'z': 0}
+    b = {'type': 'wheel', 'axis': 'y', 'x': 1, 'y': 0, 'z': 0}
+    assert 'wheel_overlap' in codes([a, b])
+    assert 'wheel_overlap' not in codes([a, b | {'z': 20}])
+
+
+@pytest.mark.parametrize('field,value', [('length', 6.9), ('length', '6'), ('length', True),
+                                        ('x', float('nan')), ('z', float('inf')), ('y', '0'),
+                                        ('stop', 'false')])
+def test_invalid_numeric_and_boolean_fields_fail_cleanly(field, value):
+    parts = car()
+    parts[4][field] = value
+    assert 'invalid_part' in codes(parts)
+
+
+def test_transposed_and_translated_car_still_passes():
+    parts = [{**p, 'x': p['y'] + 10, 'y': p['x'] + 5,
+              **({'w': p['l'], 'l': p['w']} if 'w' in p else {}),
+              **({'axis': 'x'} if p.get('axis') == 'y' else {})} for p in car()]
+    assert verify_function(parts).passed

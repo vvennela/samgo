@@ -12,9 +12,7 @@ import json
 import os
 from pathlib import Path
 
-import numpy as np
-
-from .running_gear_task import (FEEDBACK, apply, axles_of, check, edits_from, explain, pose_frame, pose_open, prompt,
+from .running_gear_task import (FEEDBACK, apply, axles_of, check, edits_from, explain, pose_frame, prompt,
                                 step_problem)
 
 REPO = Path(__file__).resolve().parent.parent
@@ -64,7 +62,7 @@ def main() -> None:
         log = {"car": folder.name, "model": label, "steps": []}
 
         def solve(prob, partial, tag):
-            """Ask, check, feed errors back; returns the build after the best answer and whether it passed."""
+            """Ask, check, feed errors back; only an accepted answer replaces the input build."""
             chat = prompt(prob)
             result = None
             seen = set()
@@ -83,7 +81,7 @@ def main() -> None:
                 try:
                     edits = edits_from(text)
                     ok, issues = explain(prob, edits, partial=partial)
-                    result = apply(prob, edits)
+                    result = apply(prob, edits) if ok else None
                 except Exception as e:  # noqa: BLE001
                     ok, issues, edits = False, [f"could not use the answer: {e}"], []
                 log["steps"].append({"step": tag, "round": rnd, "passed": ok, "edits": len(edits), "tokens": len(toks),
@@ -93,7 +91,7 @@ def main() -> None:
                 if ok:
                     return result, True
                 chat.append({"role": "user", "content": FEEDBACK.format(issues="\n".join(f"- {i}" for i in issues))})
-            return result, False
+            return prob["full"], False
 
         if args.sequential:
             sizes = {p["x"]: p["size"] for p in parts if p.get("type") == "wheel"}

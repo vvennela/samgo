@@ -37,11 +37,11 @@ UNSUPPORTED = [
     "(requirement counts lowered from 5 to 4)",
     "seat height adjustment (gas lift) and seat tilt: no LEGO-scale mechanism modelled",
 ]
-CAR_ONLY = {"too_few_wheels", "axles_misaligned", "axle_loose"}
+CAR_ONLY = {"too_few_wheels", "axles_misaligned", "axle_loose", "wheel_placement"}
 
 
-def _plate(w, l, x, y, z, color, kind="plate"):
-    return {"type": kind, "w": w, "l": l, "x": x, "y": y, "z": z, "color": color}
+def _plate(w, length, x, y, z, color, kind="plate"):
+    return {"type": kind, "w": w, "l": length, "x": x, "y": y, "z": z, "color": color}
 
 
 def caster(x: int, y: int, z_top: int, along: str, color: str = "dark_gray") -> list[dict]:
