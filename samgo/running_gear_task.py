@@ -345,6 +345,9 @@ def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bo
                 gone = [(k, problem["full"][i]) for i, k in local_of.items() if k in removed]
                 for i in next(x for x in s.issues if x.code == "floating").pieces[:4]:
                     p = parts[solid_idx[i]]
+                    if partial and "edge" in problem and not tagged[solid_idx[i]][1].startswith("your ") and \
+                            abs(p["x"] + p.get("w", 1) / 2 - problem["edge"]) > 6:
+                        continue  # it waits on the other axle line, not built yet
                     held = [k for k, q in gone if _stud_linked(p, q)]
                     reach = [q for q in parts if q.get("type") == "technic_brick" and q["z"] + 3 == p["z"]
                              and q["y"] < p["y"] + p["l"] and p["y"] < q["y"] + q["l"]
@@ -382,7 +385,6 @@ def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bo
     if partial:
         # One axle line of several: body parts that will hang from a line not built yet are loose for now; only
         # the parts this step adds must hold.
-        msgs = [m for m in msgs if not (m.startswith("loose: ") and not m.startswith("loose: your "))]
         msgs = [m for m in msgs if "separate grounded structures" not in m and "not supported from the ground" not in m]
         if not msgs:
             return True, []
@@ -428,7 +430,7 @@ def step_problem(full: list[dict], target: np.ndarray, edge: int, size: str, fra
     local = [i for i, p in enumerate(full) if p.get("type") not in GEAR and p["x"] <= edge + 5 and
              p["x"] + p["w"] >= edge - 5 and zb - 3 <= p["z"] <= zb + (4 if frame else 3)]
     tires = f"- tire centered on stud edge x={edge}, outline about {WHEELS[size][0]:.0f} mm across"
-    return {"full": full, "local": local, "tires": tires, "answer": [], "target": target} | (
+    return {"full": full, "local": local, "tires": tires, "answer": [], "target": target, "edge": edge} | (
         {"task": TASK_FRAME} if frame else {})
 
 
@@ -493,5 +495,5 @@ def frame_problem(parts: list[dict], target: np.ndarray, label: str) -> tuple[di
         return None, True
     first = [e for e in both["answer"] if e["part"]["x"] < edges[0] < e["part"]["x"] + e["part"].get("w", 0)
              or (e["part"]["type"] in GEAR and e["part"]["x"] == edges[0])]
-    pr = both | {"answer": first, "tires": both["tires"].split("\n")[0]}
+    pr = both | {"answer": first, "tires": both["tires"].split("\n")[0], "edge": edges[0]}
     return (pr if explain(pr, first, partial=True)[0] else None), True
