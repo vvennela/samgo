@@ -19,7 +19,7 @@ on its own turntable, and each wheel turns on its axle in the fork's round holes
 
 import numpy as np
 
-from .kinematics import _sides, analyse, connected, locked, requirement_met
+from .kinematics import bound_motion, connected, locked, requirement_met
 from .mechanism_bases import PIVOT_AS
 from .mechanism_bases import structural as pivots_as_plates
 from .stability import stability
@@ -154,17 +154,7 @@ def checks(parts: list[dict], requirements: list[dict], seat_parts: set | None =
 
 def _seat_moves(parts: list[dict], seat_parts: set) -> tuple[bool, str]:
     """Some vertical joint's moving side is exactly the seat and backrest (with the turntable's top half)."""
-    bodies, joints = analyse(parts)
-    for k, j in enumerate(joints):
-        if abs(abs(j[4][2]) - 1) > 1e-6:
-            continue
-        sides = _sides(bodies, joints, k)
-        if sides is None:
-            continue
-        small = min(sides, key=lambda g: sum(len(bodies[r]) for r in g))
-        if {i for r in small for i in bodies[r]} == seat_parts:
-            return True, f"the seat and back ({len(seat_parts)} parts) turn on the column's turntable"
-    return False, "no vertical joint turns exactly the seat and back"
+    return bound_motion(parts, seat_parts, 360, "vertical")
 
 
 if __name__ == "__main__":

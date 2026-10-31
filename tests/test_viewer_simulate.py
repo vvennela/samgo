@@ -36,3 +36,29 @@ def test_page_embeds_joints_and_a_model_without_joints_has_none():
     html = page([("tv", tv(), []), ("brick", [{"type": "brick", "w": 2, "l": 2, "x": 0, "y": 0, "z": 0}], [])])
     data = json.loads(html.split("const MODELS = ", 1)[1].split(";\n", 1)[0])
     assert len(data[0]["joints"]) == 1 and data[1]["joints"] == []
+
+
+def test_exhausted_budget_never_invents_a_swing():
+    assert motions(tv(), budget=0) == []
+
+
+def test_expiry_during_sweep_never_invents_a_swing(monkeypatch):
+    from samgo import viewer3d
+
+    now = [0.0]
+    monkeypatch.setattr(viewer3d.time, "monotonic", lambda: now[0])
+
+    def blocked(*args, **kwargs):
+        now[0] = 21.0
+        return 5
+
+    monkeypatch.setattr(viewer3d, "sweep", blocked)
+    assert motions(tv()) == []
+
+
+def test_wheel_previews_require_clearance(monkeypatch):
+    from samgo import viewer3d
+    from samgo.chair import caster
+
+    monkeypatch.setattr(viewer3d, "sweep", lambda *args, **kwargs: 5)
+    assert motions(caster(0, 0, 10, "y")) == []

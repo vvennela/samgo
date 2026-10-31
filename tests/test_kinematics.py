@@ -1,7 +1,5 @@
 """The connector experiment: one generic analysis, four builds, no mechanism-specific code."""
 
-import numpy as np
-
 from samgo.kinematics import analyse, sweep
 
 
@@ -70,6 +68,36 @@ def test_requirement_spin_passes_for_the_car_and_fails_when_a_wheel_is_locked():
     assert requirement_met(car(), {"kind": "spin", "count": 4})[0]
     ok, why = requirement_met(car(locked=True), {"kind": "spin", "count": 4})
     assert not ok and "can spin" in why
+
+
+def test_swiveling_a_locked_caster_does_not_count_as_wheel_spin():
+    from samgo.chair import caster
+
+    parts = caster(0, 0, 10, "y")
+    assert requirement_met(parts, {"kind": "spin", "count": 1})[0]
+    for p in parts:
+        if p["type"] == "technic_brick":
+            p["hole"] = "axle"
+    assert analyse(parts)[1]  # steering joint is still present
+    assert not requirement_met(parts, {"kind": "spin", "count": 1})[0]
+
+
+def test_named_payload_can_be_larger_than_its_base():
+    from samgo.kinematics import bound_motion
+    from samgo.doors import joint_moves
+
+    parts = door() + [{"type": "brick", "w": 4, "l": 1, "x": 2, "y": 0, "z": 5}]
+    assert bound_motion(parts, {2, 3, 4}, 90, "vertical")[0]
+    assert joint_moves(parts, {2, 3, 4}, 90)[0]
+    assert not bound_motion(parts, {3, 4}, 90, "vertical")[0]
+
+
+def test_sweep_checks_initial_pose_too():
+    parts = door()
+    parts.append(parts[3].copy())  # initially intersecting solid, kept fixed
+    bodies, joints = analyse(door())
+    j = joints[0]
+    assert sweep(parts, [2, 3], j[3], j[4], 90, ignore=j[5]) == 0
 
 
 def test_a_preset_car_door_turns_on_its_stud():

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .kinematics import _sides, analyse, sweep
+from .kinematics import _sides, analyse, sweep, wheel_axis_matches
 from .parts import COLORS
 from .technic import (BEAM_HEIGHT, DEFAULT_WHEEL, HOLE_HEIGHT, LENGTH, PIN_RADIUS, PLATE, STUD, TUBE_RADIUS, WHEELS,
                       extent, wheel_studs)
@@ -114,10 +114,10 @@ def motions(parts: list[dict], budget: float = 20.0) -> list[dict]:
     """The build's joints for the page's Simulate mode, outermost first (largest moving set first).
 
     Each: {"moving": part indices that turn, "point"/"axis": the pivot in the page's mm y-up frame, "spin": a
-    wheel turning continuously, "degrees": swing range (signed, in the page's frame) for other joints}. What
+    wheel making a full turn, "degrees": sampled range (signed, in the page's frame)}. What
     turns is the smaller side of the joint with everything hanging off it (kinematics.requirement_met's rule).
     The swing range is the largest of SWINGS clear in one direction (kinematics.sweep); after `budget` seconds
-    the sweeps are skipped and joints swing 60 degrees."""
+    unchecked joints are omitted. These are sampled previews, not continuous-motion certificates."""
     t0 = time.monotonic()
     try:
         bodies, joints = analyse(parts)
@@ -134,20 +134,18 @@ def motions(parts: list[dict], budget: float = 20.0) -> list[dict]:
         small = min(sides, key=lambda g: (sum(len(bodies[r]) for r in g), any(i in low for r in g for i in bodies[r])))
         moving = sorted(i for r in small for i in bodies[r])
         types = {parts[i].get("type") for i in moving}
-        spin = "wheel" in types and types <= SPIN_PARTS
-        deg = 0 if spin else 60
-        if not spin and time.monotonic() - t0 < budget:
-            deg = next((sign * d for d in SWINGS for sign in (1, -1)
-                        if time.monotonic() - t0 < budget
-                        and sweep(parts, moving, point, axis, sign * d, ignore=partners) is None), None)
-            if deg is None:
-                deg = 60 if time.monotonic() - t0 >= budget else 0
-        if not spin and deg == 0:
-            continue  # blocked both ways at the smallest swing: nothing to show
+        spin = ("wheel" in types and types <= SPIN_PARTS
+                and all(wheel_axis_matches(parts[i], point, axis)
+                        for i in moving if parts[i].get("type") == "wheel"))
+        deg = next((sign * d for d in ((360,) if spin else SWINGS) for sign in (1, -1)
+                    if time.monotonic() - t0 < budget
+                    and sweep(parts, moving, point, axis, sign * d, ignore=partners, wheels=True) is None), None)
+        if deg is None:
+            continue  # blocked or unchecked within the budget: no invented animation range
         p, a = np.asarray(point, float), np.asarray(axis, float)
         # LEGO (x, y, z up) -> page (x, z, y): a mirror, so a turn of +d about axis a is -d about the mapped axis.
         out.append({"moving": moving, "point": [round(float(p[0]), 3), round(float(p[2]), 3), round(float(p[1]), 3)],
-                    "axis": [float(a[0]), float(a[2]), float(a[1])], "spin": spin, "degrees": -float(deg)})
+                    "axis": [float(a[0]), float(a[2]), float(a[1])], "spin": spin, "degrees": -float(deg), "validation": "sampled_clearance"})
     out.sort(key=lambda j: -len(j["moving"]))
     return out
 
@@ -190,7 +188,7 @@ h1 b { color: var(--accent); }
 <div class="bar">
   <label><input type="checkbox" id="hl"> Highlight running gear (Technic bricks, axles, wheels)</label>
   <label><input type="checkbox" id="xray"> See-through body</label>
-  <button type="button" id="sim" aria-pressed="false" hidden>Simulate</button>
+  <button type="button" id="sim" aria-pressed="false" hidden>Preview motion (sampled)</button>
   <button type="button" id="side">Side view</button><button type="button" id="three">3/4 view</button><button type="button" id="under">Underside</button>
 </div>
 <div id="stage"></div>
@@ -317,14 +315,13 @@ function show(i, keepView) {
   sim.hidden = n === 0;
   sim.setAttribute("aria-pressed", simOn[i]);
   const spins = (MODELS[i].joints || []).filter(j => j.spin).length;
-  sim.title = `${spins} spinning, ${n - spins} swinging joint(s)`;
+  sim.title = `${spins} spinning, ${n - spins} swinging joint(s); sampled clearance, one at a time`;
   if (!keepView) view("three");
 }
 const jm = new THREE.Matrix4(), jr = new THREE.Matrix4(), jt = new THREE.Matrix4(), jv = new THREE.Vector3();
 function jointMatrix(j, t, out) {  // turn about the pivot line: T(p) R(axis, angle) T(-p)
   let a;
-  if (j.spin) a = t * Math.PI * 1.4;
-  else { const period = 2.5 + Math.abs(j.degrees) / 120; a = j.degrees * Math.PI / 180 * (1 - Math.cos(2 * Math.PI * t / period)) / 2; }
+  a = j.degrees * Math.PI / 180 * (1 - Math.cos(2 * Math.PI * t / 6)) / 2;
   jr.makeRotationAxis(jv.set(j.axis[0], j.axis[1], j.axis[2]).normalize(), a);
   out.makeTranslation(j.point[0], j.point[1], j.point[2]).multiply(jr);
   return out.multiply(jt.makeTranslation(-j.point[0], -j.point[1], -j.point[2]));
@@ -332,11 +329,12 @@ function jointMatrix(j, t, out) {  // turn about the pivot line: T(p) R(axis, an
 function animate() {
   const on = simOn[current], joints = MODELS[current].joints || [];
   const t = (performance.now() - simStart) / 1000, cache = {};
+  const active = Math.floor(t / 6) % joints.length; // every preview starts and ends at rest
   for (const h of movers) {
     if (!on && h.userData.rest) continue;  // off: back at rest once, then left alone
     h.userData.rest = !on;
     h.matrix.identity();
-    if (on) for (const n of h.userData.chain) h.matrix.multiply(cache[n] ||= jointMatrix(joints[n], t, new THREE.Matrix4()));
+    if (on && h.userData.chain.includes(active)) h.matrix.multiply(cache[active] ||= jointMatrix(joints[active], t % 6, new THREE.Matrix4()));
     h.matrixWorldNeedsUpdate = true;
   }
 }

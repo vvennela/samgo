@@ -25,7 +25,7 @@ from collections import Counter
 import numpy as np
 
 from .builder import build
-from .kinematics import HEIGHT, _sides, analyse, connected, locked, requirement_met, sweep
+from .kinematics import HEIGHT, analyse, bound_motion, connected, locked, requirement_met, sweep
 from .mechanism_bases import PIVOT_AS
 from .mechanism_bases import structural as pivots_as_plates
 from .parts import COLOR_INDEX, COLORS
@@ -136,25 +136,7 @@ def _solid_colors(parts: list[dict]) -> list[dict]:
 
 def joint_moves(parts: list[dict], members: set, degrees: float) -> tuple[bool, str]:
     """Some vertical joint's moving side is exactly `members`, and it turns `degrees` clear one way."""
-    bodies, joints = analyse(parts)
-    for k, (a, b, kind, point, axis, partners) in enumerate(joints):
-        if abs(abs(axis[2]) - 1) > 1e-6:
-            continue
-        sides = _sides(bodies, joints, k)
-        if sides is None:
-            continue
-        small = min(sides, key=lambda g: sum(len(bodies[r]) for r in g))
-        moving = [i for r in small for i in bodies[r]]
-        if set(moving) != set(members):
-            continue
-        for sign in (1, -1):
-            hit = sweep(parts, moving, point, axis, sign * degrees, steps=max(18, int(degrees / 5)),
-                        ignore=partners)
-            if hit is None:
-                return True, f"{len(members)} parts turn {degrees} degrees clear about the pin at " \
-                             f"({point[0] / 8:.0f}, {point[1] / 8:.0f}) studs"
-        return False, f"its joint is found but it hits something at {abs(hit):.0f} degrees"
-    return False, "no vertical joint turns exactly these parts"
+    return bound_motion(parts, members, degrees, "vertical")
 
 
 def checks(parts: list[dict], requirements: list[dict], moving: dict, vehicle: bool) -> dict:

@@ -97,36 +97,9 @@ def moving_groups(parts, kinds):
 
 
 def bound_motion(parts, members, degrees, axis):
-    """Check the named payload, including either joint side; do not choose the smallest body."""
-    from .kinematics import analyse, _sides, sweep
+    from .kinematics import bound_motion as check_motion
 
-    bodies, joints = analyse(parts)
-    for k, (_, _, _, point, direction, partners) in enumerate(joints):
-        if (abs(direction[2]) > 0.9) != (axis == "vertical"):
-            continue
-        sides = _sides(bodies, joints, k)
-        if sides is None:
-            continue
-        for side in sides:
-            moving = {i for body in side for i in bodies[body]}
-            if moving != set(members):
-                continue
-            if any(
-                sweep(
-                    parts,
-                    sorted(moving),
-                    point,
-                    direction,
-                    sign * degrees,
-                    steps=max(18, int(degrees / 5)),
-                    ignore=partners,
-                )
-                is None
-                for sign in (1, -1)
-            ):
-                return True, "specified payload clears its required rotation"
-            return False, "specified payload collides during rotation"
-    return False, "no matching joint moves the specified payload"
+    return check_motion(parts, members, degrees, axis)
 
 
 def native_checks(case, parts):

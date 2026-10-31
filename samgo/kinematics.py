@@ -225,7 +225,7 @@ def analyse(parts: list[dict]):
             if kind == "revolute" and find(i) != find(j):
                 lines.setdefault(tuple(sorted((find(i), find(j)))), []).append((point, axis))
         for (ra, rb), ls in lines.items():
-            if any(not _same_line(ls[0], l) for l in ls[1:]):
+            if any(not _same_line(ls[0], line) for line in ls[1:]):
                 parent[find(ra)] = find(rb)
                 merged = True
                 break
@@ -282,7 +282,7 @@ def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndar
     a = axis / np.linalg.norm(axis)
     K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
     steps = max(steps, int(abs(degrees) / 5))  # at most 5 degrees a step
-    for s in range(1, steps + 1):
+    for s in range(steps + 1):
         th = np.radians(degrees * s / steps)
         R = np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
         moved = (pts - point) @ R.T + point
@@ -340,7 +340,8 @@ def _sides(bodies: dict, joints: list, k: int) -> tuple[set, set] | None:
 
 def _outward(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndarray, sign: int) -> bool:
     """Whether turning `moving` a little in direction `sign` moves its centre away from the model's centre."""
-    pts = lambda ids: np.vstack([_corners(parts[i]) for i in ids if parts[i].get("type") in HEIGHT.keys() | BEAMS])
+    def pts(ids):
+        return np.vstack([_corners(parts[i]) for i in ids if parts[i].get("type") in HEIGHT.keys() | BEAMS])
     others = [i for i in range(len(parts)) if i not in moving]
     mine = pts(moving)
     middle = pts(others).mean(axis=0) if others else point
@@ -350,6 +351,39 @@ def _outward(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.n
     R = np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
     before, after = mine.mean(axis=0), ((mine - point) @ R.T + point).mean(axis=0)
     return np.linalg.norm(after - middle) > np.linalg.norm(before - middle)
+
+
+def wheel_axis_matches(part, point, axis):
+    """A joint must turn a wheel about its own axle line, not merely carry it around."""
+    own = AXES[part.get("axis", "y")]
+    center = np.array([part["x"] * STUD, part["y"] * STUD, part["z"] * PLATE + HOLE_HEIGHT])
+    return (np.linalg.norm(np.cross(own, axis)) < 1e-6
+            and np.linalg.norm(np.cross(center - point, own)) < 1e-6)
+
+
+def bound_motion(parts, members, degrees, axis):
+    """Sample a rotation of exactly the named payload, including either side of a joint."""
+    if axis not in ("vertical", "horizontal") or not np.isfinite(degrees) or degrees <= 0:
+        raise ValueError("motion needs a vertical/horizontal axis and positive finite degrees")
+    bodies, joints = analyse(parts)
+    best = "no matching joint moves the specified payload"
+    for k, (_, _, _, point, direction, partners) in enumerate(joints):
+        if (abs(direction[2]) > 0.9) != (axis == "vertical"):
+            continue
+        sides = _sides(bodies, joints, k)
+        if sides is None:
+            continue
+        for side in sides:
+            moving = {i for body in side for i in bodies[body]}
+            if moving != set(members):
+                continue
+            for sign in (1, -1):
+                hit = sweep(parts, sorted(moving), point, direction, sign * degrees, ignore=partners,
+                            wheels=True)
+                if hit is None:
+                    return True, "specified payload clears its sampled rotation"
+                best = f"specified payload hits something at {abs(hit):.0f} degrees"
+    return False, best
 
 
 def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
@@ -371,10 +405,12 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
         wheels = [i for i, p in enumerate(parts) if p.get("type") == "wheel"]
         if len(wheels) < need:
             return False, f"{len(wheels)} wheel(s); needs {need}"
-        spinning = [w for w in wheels if any(root_of[w] in (j[0], j[1]) for j in joints)]
+        spinning = [w for w in wheels if any(
+            root_of[w] in (j[0], j[1]) and wheel_axis_matches(parts[w], j[3], j[4])
+            and _sides(bodies, joints, k) is not None for k, j in enumerate(joints))]
         if len(spinning) < need:
             return False, f"{len(spinning)} of {len(wheels)} wheels can spin (the rest are locked or unsupported)"
-        axes = {tuple(np.round(np.abs(j[4]), 3)) for j in joints for w in spinning if root_of[w] in (j[0], j[1])}
+        axes = {parts[w].get("axis", "y") for w in spinning}
         if len(axes) > 1 and req.get("parallel", True):
             return False, "wheel axes are not parallel"
         return True, f"{len(spinning)} wheels spin"
