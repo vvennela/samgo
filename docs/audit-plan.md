@@ -186,3 +186,14 @@ Validation and live evidence:
 - These are development integration runs, **not a new benchmark**. The live runs generated 4,714 Glimmer output tokens across nine model responses; perception service usage is separate. No training was launched. Local run artifacts are ignored by Git; their summaries include source/dependency identity and input hashes.
 
 Remaining work: improve learned success on changed body/perception outputs; freeze and evaluate the integrated workflow on held-out objects; broaden physical/motion checks; and validate real assembly access/order. A successful cached-mesh demo and a tested fresh-perception path do not establish reliable success on arbitrary fresh photos. The preexisting `samgo/ldraw.py` remains untouched and uncommitted.
+
+
+### Third slice — object-family and feedback diagnostics (October 31, 2026)
+
+Implemented a frozen, resumable evaluation across LEGO object families, following the user's clarification that “models” means objects. The 20-case r3 run covers cars, train-style chassis, a bed, chairs, bicycles, a skateboard, microwave mechanisms, car doors and TV/laptop pivots. A four-case single-axle control separates beam selection from multi-axle completeness. Every reference passes and every defective input fails before inference. References are never sent as answers to the sampler.
+
+The main suite yields **2 first-try passes and 2 additional feedback repairs**; generic retry fixes none. One first-call service timeout and three token-limited Beetle door responses are identified separately from geometry failures. Supplemental controls yield **1 first-try pass and 1 additional feedback repair**, with failures under translation and increased beam span. These are development repair/completion probes, not whole-object generation or a held-out benchmark. The multi-axle train tasks fail; the valid train references remain procedural.
+
+Added an offline training inventory with source hashes: the r3 frame dataset contains 1,169 feedback rows but no same-center beam-resizing examples. This is a supervision gap consistent with the errors, not proof of their cause. No training was launched. The initially started base-model sweep was stopped after the scope correction; its output-limit/timeouts do not provide a matched comparison.
+
+Validation: **238 tests passed in 47.58 seconds**; eight audit tests passed after final additions. All **49 parsed main proposals and 10 supplemental proposals** reproduce their saved verdicts, error codes and exact candidate assemblies offline. The CLI can prepare 16 portable cases without historical fixtures, explicitly request local fixtures, render labeled galleries and summarize/recheck saved proposals. Full results, limitations, artifacts and the proposed next training experiment are in [object-audit.md](object-audit.md). The preexisting `samgo/ldraw.py` remains untouched and uncommitted.
