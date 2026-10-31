@@ -346,6 +346,17 @@ def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bo
                 for i in next(x for x in s.issues if x.code == "floating").pieces[:4]:
                     p = parts[solid_idx[i]]
                     held = [k for k, q in gone if _stud_linked(p, q)]
+                    reach = [q for q in parts if q.get("type") == "technic_brick" and q["z"] + 3 == p["z"]
+                             and q["y"] < p["y"] + p["l"] and p["y"] < q["y"] + q["l"]
+                             and (q["x"] + q["w"] == p["x"] or p["x"] + p["w"] == q["x"])]
+                    if reach and not held:
+                        q = reach[0]
+                        longer = next((n for n in (4, 6, 8) if n > q["w"]), None)
+                        if longer:
+                            msgs.append(f"loose: {tagged[solid_idx[i]][1]} rests on nothing - it sits just past the end "
+                                        f"of the Technic brick 1x{q['w']} at (x={q['x']}, y={q['y']}, z={q['z']}); "
+                                        f"use a longer one (1x{longer}, centered on the axle) so it reaches under it")
+                            continue
                     why = (f" - it was held by input part {held[0]}, which you removed; put a part over or under it "
                            "that also reaches a part that stays (e.g. a plate across it and your new beam), or leave "
                            "it out" if held else " - put a part under or over it that shares a stud, or leave it out")
