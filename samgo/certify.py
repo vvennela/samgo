@@ -87,6 +87,7 @@ def certify(raw, *, policy=DEFAULT_POLICY, order=None, timeout=20.0):
         physical_validation="not_performed",
         certificate=None,
         completed_steps=0,
+        failed_part=None,
         issues=[],
     )
 
@@ -119,6 +120,7 @@ def certify(raw, *, policy=DEFAULT_POLICY, order=None, timeout=20.0):
         )
         placed = []
         for index in order:
+            report["failed_part"] = index
             check_path(pieces, placed, index)
             placed.append(index)
             witness, issue = solve_forces(pieces, placed, policy, start + timeout)
@@ -136,7 +138,7 @@ def certify(raw, *, policy=DEFAULT_POLICY, order=None, timeout=20.0):
         if not checked["passed"]:
             report.update(status="checker_rejected", issues=checked["issues"])
             return finish()
-        report.update(passed=True, status="certified_under_model", certificate=certificate)
+        report.update(passed=True, status="certified_under_model", certificate=certificate, failed_part=None)
     except CertificateError as e:
         report.update(status="not_certified", issues=[str(e)])
     return finish()

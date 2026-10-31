@@ -28,6 +28,7 @@ All checks use integer or rational arithmetic. Contact positions are regenerated
 ## Implementation and trust boundary
 
 - `samgo/certify.py` asks Z3's exact linear-real-arithmetic solver for a force witness for each prefix. It starts with a deterministic bottom-up order, or accepts an explicit order to check. It does not exhaustively search orders or plan subassemblies.
+- `samgo/synthesize.py` uses failed-prefix feedback to propose permanent support columns. It preserves all input parts and positions, searches within explicit part/attempt/time budgets, and independently replays the complete certificate before accepting a candidate. This producer is procedural; it is not a learned model or a proof that the chosen repair is minimal.
 - `samgo/certificates.py` checks the witness independently using Python `Fraction`. It does not import Z3 or trust `sat`, solver tolerances, floating-point feasibility, or a saved `passed` flag. Geometry and paths are checked directly with exact interval comparisons.
 - `samgo/instructions.py` rechecks a supplied certificate before exporting and preserves the certified one-part-per-step order. It does not regroup certified steps by height. A mismatched/tampered certificate rejects before output creation.
 - `samgo/pipeline.py` records a separate certificate report and `certified_under_model` field for each completed build. `--require-certificate` makes missing/unknown/unsupported certification fail the run and suppress success instructions. The original target/function/stability checks must also pass.
@@ -77,5 +78,22 @@ A checked-in 12-part bed fixture produces a certificate for all 12 prefixes, whi
 Adversarial regressions reject modified builds, altered forces, negative/float witnesses, missing stages, duplicate order indices, forged specifications and changed caller capacities. Tests cover overlap, disconnected parts, below-support floating models, blocked insertion paths and an assembly with feasible final equilibrium but an infeasible intermediate prefix. Resource exhaustion is reported as unknown, never success. Pipeline tests exercise strict acceptance and rejection and certificate-bound instruction export.
 
 The 20 reference assemblies from the previous object audit were checked without inference. **19 are unsupported because they contain mechanisms; the original 26-part bed is unknown because its bottom-up order has an unstable prefix.** These are verification coverage results, not additional learned-model failures. Artifacts are in `runs/audit/formal-v1/`; the existing audit fixtures were not changed to make them pass.
+
+## Producing a certified repair
+
+The next slice turns verification into feedback for construction. For supported inputs whose geometry already passes, `samgo.synthesize` proposes ground-to-piece columns made of catalog 1x1 bricks and plates under the first uncertified piece. Candidate ordering spreads the support footprint; a depth-first search tries additions within its limits. Every candidate goes through the same geometry, insertion, equilibrium and independent certificate checks. The acceptance specification is unchanged.
+
+```bash
+uv run python -m samgo.synthesize build.json -o runs/support-repair \
+  --max-added 24 --max-attempts 128 --timeout 30
+uv run python -m samgo.certify check runs/support-repair/build.json \
+  runs/support-repair/search.json
+```
+
+Use a new output directory. `search.json` records the original hash, specification, budgets, attempted additions and failure feedback. Only successful searches export `build.json` and certificate-bound instructions. Original parts remain in their original list positions; `added_indices` identifies the permanent additions. Unsupported parts are never stripped. A timeout or exhausted search has no accepted build or certificate. The time budget has the same non-hard-deadline limitations as the witness producer.
+
+The original **26-part audit bed** now has a **50-part certified repair**: 24 added support bricks, 13 candidate evaluations, approximately six seconds of search on the development machine. Every original part/position is preserved and all 50 resting prefixes certify. The earlier center-first proposal heuristic exhausted its 30-second budget and remains recorded as unknown. Both runs are retained under `runs/audit/formal-v2/`; the final CLI output with replayable candidate additions is `certified-repair/`. These are development examples used to improve the proposal heuristic, not held-out transfer evidence. The completed repair and its instruction rendering were inspected.
+
+The search does not optimize part count, repair overlaps/disconnected inputs, move existing parts, search placement orders, plan temporary supports, or handle mechanisms. Added columns may change appearance or obstruct a desired use; target fidelity and function still need their own acceptance checks. It is deliberately an explicit command, not a silent photo-pipeline fallback. A learned editor can eventually supply proposals through the same certificate gate, but neither a new learned success nor RL training is claimed here.
 
 To extend the guarantee to cars and trains, the next work is explicit axle/wheel/retainer solids and mating geometry, axial insertion/subassembly plans, wheel-to-ground load transfer, then continuous swept-volume guarantees for required motions. Real part dimensions, tolerances, insertion/contact strengths and declared external loads must accompany that extension. Adding the words “formal” to the existing sampled mechanism checks would not supply those guarantees.
