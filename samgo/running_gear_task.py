@@ -368,6 +368,13 @@ def explain(problem: dict, edits: list[dict], partial: bool = False) -> tuple[bo
         named = re.sub(r"(axle|wheel|part) (\d+)", lambda m: f"{m.group(1)} [{describe(parts[int(m.group(2))])}]"
                        if int(m.group(2)) < len(parts) else m.group(0), issue)
         msgs.append(named)
+    if partial:
+        # One axle line of several: body parts that will hang from a line not built yet are loose for now; only
+        # the parts this step adds must hold.
+        msgs = [m for m in msgs if not (m.startswith("loose: ") and not m.startswith("loose: your "))]
+        msgs = [m for m in msgs if "separate grounded structures" not in m and "not supported from the ground" not in m]
+        if not msgs:
+            return True, []
     return False, msgs[:12]
 
 
