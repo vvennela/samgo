@@ -2,6 +2,32 @@
 
 Planning estimate checked October 31, 2026. No paid training was launched or authorized by this estimate. This prices the existing Muse Glimmer 30B path; switching models is a separate experiment.
 
+## Updated constraint: $100 in Prime Intellect RL credits
+
+The user has $100 of Prime Intellect RL credits. Treat this as the available experiment budget; the Fireworks estimates below describe a different provider and cannot be converted directly into Prime steps or hours.
+
+Prime's current documentation says the shared, per-token hosted LoRA service is retired. Its replacement Hosted Training uses dedicated GPUs per run, full-parameter training and GPU-hour billing. Self-managed `prime-rl` still supports LoRA. Older Verifiers tutorials and the May Lab announcement describe the retired service; do not use their model list or configuration as a current launch contract. [Retirement notice](https://docs.primeintellect.ai/hosted-training/shared-lora-retired)
+
+Training credit grants contribute to the spendable wallet and are consumed before the paid balance. On-demand access must be enabled. Rates and model availability are account/cluster dependent and should be inspected with `prime train models --output json`. GPU charges start when pods are ready; storage is separate. The wallet can include an overdraft allowance, so a $100 credit grant is not itself a $100 enforced spend cap. [Billing](https://docs.primeintellect.ai/hosted-training/billing), [model discovery](https://docs.primeintellect.ai/hosted-training/models)
+
+Proposed allocation, pending account eligibility and live rates:
+
+| Purpose | Credit allocation |
+|---|---:|
+| Baseline evaluation and short environment smoke test | $10 |
+| One focused repair-training experiment | $65 |
+| Held-out evaluation against its pre-RL checkpoint | $15 |
+| Storage, stop latency and contingency | $10 |
+| **Total** | **$100** |
+
+For the training portion, maximum planned wall-clock time is `$65 / sum(allocated GPU hourly rates)`, before any separately metered services. Include both trainer and rollout-inference GPUs. This is an allocation, not a rate quote or a claim about achievable optimizer steps. Measure throughput and actual charges during the smoke test before selecting the main step count.
+
+First verify whether the current Glimmer base and training state are usable on Prime. A Fireworks sampler checkpoint identifier is not automatically a portable training checkpoint. If Glimmer is unavailable, a small available Meta/Llama model is a candidate for the hackathon, with a new baseline and curriculum; its results must not be reported as continued training of r3. Preserve checkpoint storage explicitly, since current Hosted Training disables checkpoint saving by default without a volume and checkpoint configuration. [Getting started](https://docs.primeintellect.ai/hosted-training/getting-started)
+
+Keep this run narrow: beam-length/placement repairs and response to verifier feedback on held-out translated layouts. Do not spend the pilot trying to teach every object family simultaneously. The repo's certificate and existing mechanism checks can support a Prime environment adapter, but that adapter and its reward tests have not yet been implemented. The formal static certificate alone does not cover wheel or hinge tasks.
+
+At this update, the local workspace has no Prime CLI, Prime configuration directory or Prime API credential variables. No account balance, grant expiration, access entitlement or live training rate has been inspected, and no resources have been provisioned. The offline calculator below remains explicitly Fireworks-only.
+
 ## Current prices and workload
 
 Fireworks lists Glimmer Serverless Training API rates of **$1.96 input, $0.39 cached input, $4.88 generation and $5.86 training per million tokens**. Its advertised Glimmer SFT promotion runs through November 30 and does not say RL is free. [Provider pricing](https://fireworks.ai/pricing)
