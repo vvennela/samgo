@@ -253,9 +253,13 @@ def _corners(p: dict) -> np.ndarray:
         th = np.linspace(0, 2 * np.pi, 32, endpoint=False)
         ring = [c + k * r * (np.cos(t) * u + np.sin(t) * v) for k in (1.0, 0.66, 0.33) for t in th] + [c]
         return np.array([q + s * w * along for q in ring for s in np.linspace(0, 1, 4)])
-    # Points about every 4 mm over the box (at least its corners), so a thin post can't slip between them.
-    xs, ys, zs = np.meshgrid(*[np.linspace(lo[k], hi[k], max(2, int(np.ceil((hi[k] - lo[k]) / 4)) + 1))
-                               for k in range(3)], indexing="ij")
+    # Points about every 4 mm over the box, plus the midpoints between them: corner-only points of a 1-plate part
+    # all lie on the faces of a part on the same layer, where _inside's tolerance never counts them, so a plate
+    # swinging into a plate of its own layer would never be seen.
+    def axis_points(k):
+        v = np.linspace(lo[k], hi[k], max(2, int(np.ceil((hi[k] - lo[k]) / 4)) + 1))
+        return np.concatenate([v, (v[:-1] + v[1:]) / 2])
+    xs, ys, zs = np.meshgrid(*[axis_points(k) for k in range(3)], indexing="ij")
     return np.c_[xs.ravel(), ys.ravel(), zs.ravel()]
 
 
