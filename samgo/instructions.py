@@ -144,12 +144,15 @@ def _draw(ax, p: dict, new: bool) -> None:
 def render_step(parts_before: list[dict], new: list[dict], bounds, path: Path, title: str) -> None:
     fig = plt.figure(figsize=(6, 5), dpi=110)
     ax = fig.add_subplot(projection="3d")
+    # Every step uses known assembly bounds. Set them before adding artists so partial
+    # collections cannot trigger autoscaling on empty/degenerate intermediate extents.
+    (x0, x1), (y0, y1), (z0, z1) = bounds
+    ax.set_xlim(x0, x1), ax.set_ylim(y0, y1), ax.set_zlim(z0, z1)
+    ax.set_autoscale_on(False)
     for p in parts_before:
         _draw(ax, p, False)
     for p in new:
         _draw(ax, p, True)
-    (x0, x1), (y0, y1), (z0, z1) = bounds
-    ax.set_xlim(x0, x1), ax.set_ylim(y0, y1), ax.set_zlim(z0, z1)
     ax.set_box_aspect((x1 - x0, y1 - y0, z1 - z0))
     ax.view_init(elev=28, azim=-60)
     ax.set_axis_off()

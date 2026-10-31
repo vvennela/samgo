@@ -60,6 +60,9 @@ flowchart LR
 | BrickGPT replication on Glimmer (v1) | done: valid builds 50% -> 88%, stable 19% -> 63% on held-out prompts |
 
 The photo pipeline (`samgo/pipeline.py`) and the training data both use the arched car builder (`samgo/arches.py`).
+The pipeline now supports `--assembly learned`: Glimmer places running gear on the procedural body, receives
+verifier feedback, and exports only the accepted assembly. Procedural mode remains the default. See
+[the photo pipeline guide](docs/photo-pipeline.md) for live inference, exact-prompt replay, runtime setup, and output contracts.
 
 ## Run it
 
@@ -67,9 +70,10 @@ Use the external venv (the repo's `.venv` can hang on iCloud):
 
 ```bash
 export UV_PROJECT_ENVIRONMENT=$HOME/.venvs/samgo
+uv sync --locked --inexact
 
 # Photo -> verified build + instructions (needs SAM/Spark keys in .env)
-PYTHONPATH=. uv run --no-sync python -m samgo.pipeline photos/camry.jpg --prompt car -o runs/s6/camry
+PYTHONPATH=. uv run --no-sync python -m samgo.pipeline photos/camry.jpg --prompt car --car -o runs/photo-camry
 
 # Training bases: Objaverse vehicles -> verified LEGO cars at 16/20/24 studs
 PYTHONPATH=. uv run --no-sync python -m samgo.gen_bases --workers 8
@@ -81,7 +85,7 @@ PYTHONPATH=. uv run --no-sync python -m samgo.gen_running_gear --bases runs/base
 PYTHONPATH=. uv run --no-sync python -m samgo.viewer3d out.html "Camry=runs/s6/camry/arched_build.json"
 
 # Tests
-PYTHONPATH=. uv run --no-sync --with matplotlib python -m pytest -q tests/
+PYTHONPATH=. uv run --no-sync python -m pytest -q tests/
 ```
 
 ## Layout
