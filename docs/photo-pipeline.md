@@ -35,6 +35,8 @@ By default, assembly proceeds one axle line at a time. The procedural reference 
 
 `--rounds` bounds proposals per task, with one sampling request per round; temperature is 0 on the first round and 0.7 afterward. `--timeout` bounds waiting for a sampling response, not tokenizer/runtime initialization. Function inference and perception have 120-second and 300-second stage deadlines. Failed/timeout requests consume a round. These deadlines do not guarantee cancellation of remote work already submitted. Token counts and whether a response reached its token limit are recorded; reaching the limit is not itself proof of truncation.
 
+`--require-certificate` additionally requires an exact static assembly certificate. This currently supports ordinary bricks and plates only; a vehicle with axles/wheels is explicitly unsupported and cannot pass this strict gate. `--certificate-timeout` sets the shared prefix-solver budget (default 20 seconds). Every completed build receives a separate `certified_under_model` result even in non-strict mode. See [the certificate specification and physical limitations](formal-verification.md).
+
 ## Outputs and replay
 
 `OUT/summary.json` always points to the latest run. Each invocation writes into its own `OUT/artifacts/<run-id>/` directory, including failed runs, so a failed rerun cannot publish old instructions as its result.
@@ -49,10 +51,11 @@ By default, assembly proceeds one axle line at a time. The procedural reference 
 | `assembly/trace.json` | Sampler identity, budgets, task mode, input/local numbering, full model-visible message histories, raw answers, parsed edits, rejected candidates, feedback, accepted states, tokens and timings |
 | `assembly/input.json`, `reference.json`, `accepted.json`, `target.npz` | Stripped body, procedural reference, last accepted state and checked target |
 | `build.json`, `checks.json` | Exact final accepted state and structure/function/stability reports, plus original-target fidelity |
+| `certificate.json` | Exact static assembly certificate or an explicit unsupported/unknown/invalid result; physical validation remains separate |
 | `viewer.html` | That exact build, labeled with mode, live/replay source, and check outcome |
 | `instructions/` | Inventory and schematic steps, emitted only after assembly and all required checks pass |
 
-The viewer is static in this path: unchecked motion animations are disabled. Instructions still do not establish insertion access, temporary support, or physical buildability. Original-target fidelity is reported separately and does not replace the assembly-target gate.
+The viewer is static in this path: unchecked motion animations are disabled. It separately labels whether the build has a static certificate. Certified instructions preserve the exact checked placement order and resting-prefix gravity equilibria; other instructions remain schematic with unverified access. Neither establishes unconditional real-world physical buildability. Original-target fidelity is reported separately and does not replace the assembly-target gate.
 
 For a network-free rehearsal, replay an `assembly/trace.json` from an earlier run:
 

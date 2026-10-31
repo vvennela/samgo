@@ -22,6 +22,7 @@ import numpy as np
 from .arches import build_arched_car
 from .assembly import Config, FireworksSampler, ReplaySampler, assemble, digest, save
 from .builder import build
+from .certify import certify
 from .function_spec import MODEL as SPEC_MODEL
 from .function_spec import infer
 from .perceive import MAX_SIDE, SAM_3D_ENDPOINT, SAM_MODEL, perceive
@@ -73,7 +74,8 @@ def _reports(parts, target, original, vehicle):
 def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str = 'medium', reuse: bool = True,
         *, assembly: str = 'procedural', model: str | None = None, rounds: int = 3, max_tokens: int = 8000,
         timeout: float = 120, sequential: bool = True, mesh: Path | None = None,
-        replay: Path | None = None, sampler=None) -> dict:
+        replay: Path | None = None, sampler=None, require_certificate: bool = False,
+        certificate_timeout: float = 20) -> dict:
     if assembly not in ('procedural', 'learned') or size not in SIZES:
         raise ValueError('unknown assembly mode or size')
     if assembly == 'procedural' and (model or replay or sampler is not None):
@@ -83,6 +85,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
     if assembly == 'learned' and car is False:
         raise ValueError('learned assembly currently supports cars only')
     config = Config(rounds, max_tokens, timeout, sequential)
+    if not np.isfinite(certificate_timeout) or certificate_timeout <= 0:
+        raise ValueError('certificate timeout must be positive and finite')
     photo_sha = file_hash(photo)
     out = out.resolve()
     run_dir = out / 'artifacts' / (time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8])
@@ -92,6 +96,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
     start = time.monotonic()
     summary = {'photo': str(photo.resolve()), 'photo_sha256': photo_sha, 'prompt': prompt, 'size': size,
                'run_dir': str(run_dir), 'assembly_mode': assembly, 'passed': False, 'status': 'running',
+               'require_certificate': require_certificate, 'certified_under_model': False,
                'procedural_fallback': False, 'timings': {}, 'artifacts': {},
                'code_sha256': {p.name: file_hash(p) for p in Path(__file__).parent.glob('*.py')
                                if p.name != 'ldraw.py'}}
@@ -197,7 +202,17 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         tick = time.monotonic()
         stage('validation')
         passed, reports = _reports(parts, target, original, car)
+        formal = certify(parts, timeout=certificate_timeout)
+        save(run_dir / 'certificate.json', formal)
+        summary['artifacts']['certificate'] = str(run_dir / 'certificate.json')
+        summary['certified_under_model'] = formal['passed']
+        reports['certification'] = {k: v for k, v in formal.items() if k != 'certificate'}
+        reports['assembly_access'] = {
+            'status': 'certified_vertical_envelope_path' if formal['passed'] else 'not_certified',
+            'physical_validation': 'not_performed'}
         summary['passed'] = passed and summary.get('assembly_passed', True)
+        if require_certificate:
+            summary['passed'] = summary['passed'] and formal['passed']
         summary.update(structure_passed=reports['structure']['passed'],
                        function_passed=reports['function'].get('passed'), stands=reports['stability'].get('passed'))
         save(run_dir / 'checks.json', reports)
@@ -210,11 +225,13 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             from .viewer3d import facts_for, page
             label = f"{assembly} / {summary.get('sampler', {}).get('source', 'procedural')} / " + (
                 'checks passed' if summary['passed'] else 'incomplete: checks failed')
+            label += ' / certified under static model' if formal['passed'] else ' / buildability not certified'
             (run_dir / 'viewer.html').write_text(page([(label, parts, facts_for(parts))], simulate=False))
             summary['artifacts']['viewer'] = str(run_dir / 'viewer.html')
         if summary['passed']:
             from .instructions import write
-            summary['artifacts']['instructions'] = str(write(parts, run_dir / 'instructions'))
+            options = {'certificate': formal['certificate']} if formal['passed'] else {}
+            summary['artifacts']['instructions'] = str(write(parts, run_dir / 'instructions', **options))
         summary['timings']['exports'] = time.monotonic() - tick
         summary['status'] = 'passed' if summary['passed'] else 'failed'
         stage('complete')
@@ -244,10 +261,13 @@ def main() -> None:
     ap.add_argument('--max-tokens', type=int, default=8000)
     ap.add_argument('--timeout', type=float, default=120, help='seconds to wait for each sampling response')
     ap.add_argument('--joint', action='store_true', help='solve both axle lines in one task')
+    ap.add_argument('--require-certificate', action='store_true', help='require the exact static assembly certificate; unsupported mechanisms fail closed')
+    ap.add_argument('--certificate-timeout', type=float, default=20, help='solver budget for static certification')
     args = ap.parse_args()
     result = run(args.photo, args.prompt, args.out, args.car, args.size, reuse=not args.fresh,
                  assembly=args.assembly, model=args.model, replay=args.replay, mesh=args.mesh,
-                 rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint)
+                 rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint,
+                 require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['passed'] else 1)
 

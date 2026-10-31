@@ -161,15 +161,33 @@ def render_step(parts_before: list[dict], new: list[dict], bounds, path: Path, t
     plt.close(fig)
 
 
-def write(parts: list[dict], out: Path) -> Path:
-    plan = steps(parts)
+def write(parts: list[dict], out: Path, *, certificate=None, certificate_policy=None) -> Path:
+    if certificate is not None:
+        from .certificates import DEFAULT_POLICY, check_certificate
+        checked = check_certificate(parts, certificate, policy=certificate_policy or DEFAULT_POLICY)
+        if not checked['passed']:
+            raise ValueError('instruction certificate rejected: ' + '; '.join(checked['issues']))
+        # Preserve the actual proved sequence; regrouping by height can invalidate prefix equilibrium.
+        plan = [[parts[i]] for i in certificate['order']]
+    else:
+        plan = steps(parts)
     bounds = _bounds(parts)
     out.mkdir(parents=True, exist_ok=True)
     render_step([], parts, bounds, out / "finished.png", "Finished model")
+    assurance = (
+        'This exact one-part-at-a-time order has an independently checked certificate for vertical '
+        'insertion and gravity equilibrium at every resting step under the declared idealized model. '
+        'It uses no temporary supports in that model. Real connector insertion forces, hand/gripper '
+        'access, tolerances and material strength remain unvalidated.'
+        if certificate is not None else
+        'These steps group parts by height, then axles, then wheels and retainers. '
+        'Insertion access and temporary support have not been checked.'
+    )
     lines = ["# Building instructions", "", "![finished model](finished.png)", "",
-             f"{len(parts)} parts in {len(plan)} steps.", "",
-             "These steps group parts by height, then axles, then wheels and retainers. "
-             "Insertion access and temporary support have not been checked.", "", "## Parts", ""]
+             f"{len(parts)} parts in {len(plan)} steps.", "", assurance, "", "## Parts", ""]
+    if certificate is not None:
+        (out / 'assembly_certificate.json').write_text(json.dumps(
+            {'certificate': certificate, 'specification': checked['specification']}, indent=2) + '\n')
     lines += [f"- {n} × {name_}" for name_, n in sorted(Counter(name(p) for p in parts).items())]
     done: list[dict] = []
     for i, group in enumerate(plan, 1):

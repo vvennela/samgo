@@ -146,6 +146,26 @@ def test_static_path_remains_available(setup_pipeline, monkeypatch):
     assert result['passed'] and result['stands']
     assert result['function_passed'] is None
     assert 'trace' not in result['artifacts']
+    assert result['certified_under_model']
+
+
+def test_strict_certificate_gate_rejects_unsupported_vehicle(setup_pipeline):
+    photo, mesh, out, _, _ = setup_pipeline
+    result = pipeline.run(photo, 'car', out, car=True, mesh=mesh, require_certificate=True)
+    assert not result['passed'] and not result['certified_under_model']
+    assert 'instructions' not in result['artifacts']
+    report = json.loads(Path(result['artifacts']['certificate']).read_text())
+    assert report['status'] == 'unsupported' and report['physical_validation'] == 'not_performed'
+    assert 'buildability not certified' in Path(result['artifacts']['viewer']).read_text()
+
+
+def test_strict_certificate_gate_accepts_supported_static_build(setup_pipeline, monkeypatch):
+    import numpy as np
+    photo, mesh, out, _, _ = setup_pipeline
+    monkeypatch.setattr(pipeline, 'voxelize', lambda *a: np.ones((2, 2, 1), dtype=int))
+    result = pipeline.run(photo, 'block', out, car=False, mesh=mesh, require_certificate=True)
+    assert result['passed'] and result['certified_under_model']
+    assert 'gravity equilibrium' in Path(result['artifacts']['instructions']).read_text()
 
 
 def test_export_error_reports_failure_in_its_own_run(setup_pipeline, monkeypatch):
