@@ -185,7 +185,7 @@ def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric
     votes = votes.reshape(*shape, len(COLORS))
     if plane is not None:
         grid = _mirror(grid, votes)
-    return smooth_colors(grid, mirrored=plane is not None)
+    return merge_small_regions(smooth_colors(grid, mirrored=plane is not None))
 
 
 CELL_MM = (8.0, 8.0, 3.2)
@@ -260,6 +260,35 @@ def smooth_colors(grid: np.ndarray, mirrored: bool) -> np.ndarray:
             break
         best = cur
     return best.astype(np.int32)
+
+
+def merge_small_regions(grid: np.ndarray, min_share: float = 0.02) -> np.ndarray:
+    """Even colors: every connected patch of one color smaller than `min_share` of the model (at least 8 cells)
+    takes the most common color around it. Photo reflections and shadows leave scattered patches that Potts
+    smoothing keeps; large regions (the body color, windows, lights) stay."""
+    from scipy import ndimage
+
+    grid = grid.copy()
+    occ = grid > 0
+    small = max(8, int(min_share * occ.sum()))
+    for _ in range(5):
+        changed = False
+        for c in np.unique(grid[occ]):
+            labels, n = ndimage.label(grid == c)
+            if n < 2 and (grid == c).sum() >= small:
+                continue
+            sizes = ndimage.sum(np.ones_like(labels), labels, range(1, n + 1))
+            for k in np.nonzero(sizes < small)[0] + 1:
+                patch = labels == k
+                ring = ndimage.binary_dilation(patch) & ~patch & occ
+                around = grid[ring]
+                around = around[around != c]
+                if around.size:
+                    grid[patch] = np.bincount(around).argmax()
+                    changed = True
+        if not changed:
+            break
+    return grid
 
 
 def render(target: np.ndarray, path: Path, cell: int = 10) -> None:

@@ -37,10 +37,10 @@ from .verifier import verify
 COLOR_NAME = {v: k for k, v in COLOR_INDEX.items()}
 CAR_REQUIREMENTS = [
     {"name": "wheels_spin", "kind": "spin", "count": 4, "parallel": True},
-    {"name": "doors_swing", "kind": "swing", "axis": "vertical", "degrees": 90, "count": 2},
+    {"name": "doors_swing", "kind": "swing", "axis": "vertical", "degrees": 90, "count": 2, "outward": True},
 ]
 MICROWAVE_REQUIREMENTS = [
-    {"name": "door_swings", "kind": "swing", "axis": "vertical", "degrees": 90, "count": 1},
+    {"name": "door_swings", "kind": "swing", "axis": "vertical", "degrees": 90, "count": 1, "outward": True},
     {"name": "turntable_turns", "kind": "swing", "axis": "vertical", "degrees": 360, "count": 1},
 ]
 CAR_UNSUPPORTED = ["the car gains an interior floor pan (plates on, in and under the deck) to replace the side "

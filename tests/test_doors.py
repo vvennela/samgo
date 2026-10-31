@@ -40,11 +40,8 @@ def test_a_brick_in_the_doors_path_stops_it(cars):
     left = next(d for d in r["doors"] if d["side"] == "left")
     parts = list(r["parts"])
     d0, row, (zb, zt) = left["x"][0], left["row"], left["z"]
-    # The Camry's mirror sits on the outside of the wall just in front of the door; a 1x4 plate hung under it
-    # reaches into the door's path (a loose brick would not do: unattached parts ride along with the door).
-    mirror = next(p for p in parts if p.get("w") and p["y"] <= row - 1 < p["y"] + p["l"]
-                  and p["x"] <= d0 - 1 < p["x"] + p["w"] and zb < p["z"] <= zt)
-    parts.append({"type": "plate", "w": 4, "l": 1, "x": d0 - 1, "y": row - 1, "z": mirror["z"] - 1, "color": "red"})
+    # A brick standing outside the car, 2 studs from the hinge, inside the arc the door's free end sweeps.
+    parts.append({"type": "brick", "w": 2, "l": 1, "x": d0 + 1, "y": row - 3, "z": zb, "color": "red"})
     reqs = [q for q in CAR_REQUIREMENTS if q["name"] == "doors_swing"]
     out = checks(parts, reqs, {}, vehicle=True)
     assert not out["doors_swing"][0]

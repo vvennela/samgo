@@ -29,7 +29,7 @@ from .verifier import verify
 
 REQUIREMENTS = [
     {"name": "casters_spin", "kind": "spin", "count": 4, "parallel": False},
-    {"name": "casters_swivel", "kind": "swing", "axis": "vertical", "degrees": 360, "count": 4},
+    {"name": "casters_swivel", "kind": "swing", "axis": "vertical", "degrees": 360, "count": 4, "below": 12},
     {"name": "seat_swivels", "kind": "swing", "axis": "vertical", "degrees": 360, "count": 1},
 ]
 UNSUPPORTED = [

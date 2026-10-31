@@ -253,7 +253,9 @@ def _corners(p: dict) -> np.ndarray:
         th = np.linspace(0, 2 * np.pi, 32, endpoint=False)
         ring = [c + k * r * (np.cos(t) * u + np.sin(t) * v) for k in (1.0, 0.66, 0.33) for t in th] + [c]
         return np.array([q + s * w * along for q in ring for s in np.linspace(0, 1, 4)])
-    xs, ys, zs = np.meshgrid(*[np.linspace(lo[k], hi[k], 4) for k in range(3)], indexing="ij")
+    # Points about every 4 mm over the box (at least its corners), so a thin post can't slip between them.
+    xs, ys, zs = np.meshgrid(*[np.linspace(lo[k], hi[k], max(2, int(np.ceil((hi[k] - lo[k]) / 4)) + 1))
+                               for k in range(3)], indexing="ij")
     return np.c_[xs.ravel(), ys.ravel(), zs.ravel()]
 
 
@@ -275,6 +277,7 @@ def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndar
     pts = np.vstack(corners)
     a = axis / np.linalg.norm(axis)
     K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    steps = max(steps, int(abs(degrees) / 5))  # at most 5 degrees a step
     for s in range(1, steps + 1):
         th = np.radians(degrees * s / steps)
         R = np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
@@ -316,15 +319,33 @@ def _sides(bodies: dict, joints: list, k: int) -> tuple[set, set] | None:
         if n != k:
             links.setdefault(j[0], set()).add(j[1])
             links.setdefault(j[1], set()).add(j[0])
-    seen, todo = {b}, [b]
-    while todo:
-        for nxt in links.get(todo.pop(), ()):
-            if nxt not in seen:
-                seen.add(nxt)
-                todo.append(nxt)
-    if a in seen:
+    def reach(start):
+        seen, todo = {start}, [start]
+        while todo:
+            for nxt in links.get(todo.pop(), ()):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    todo.append(nxt)
+        return seen
+
+    side_b = reach(b)
+    if a in side_b:
         return None
-    return set(bodies) - seen, seen
+    return reach(a), side_b  # bodies joined to neither side (loose parts) stay where they are
+
+
+def _outward(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndarray, sign: int) -> bool:
+    """Whether turning `moving` a little in direction `sign` moves its centre away from the model's centre."""
+    pts = lambda ids: np.vstack([_corners(parts[i]) for i in ids if parts[i].get("type") in HEIGHT.keys() | BEAMS])
+    others = [i for i in range(len(parts)) if i not in moving]
+    mine = pts(moving)
+    middle = pts(others).mean(axis=0) if others else point
+    a = axis / np.linalg.norm(axis)
+    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    th = np.radians(10 * sign)
+    R = np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
+    before, after = mine.mean(axis=0), ((mine - point) @ R.T + point).mean(axis=0)
+    return np.linalg.norm(after - middle) > np.linalg.norm(before - middle)
 
 
 def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
@@ -334,7 +355,8 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
       {"kind": "spin", "count": 4, "parallel": true}: at least `count` wheels on revolute joints; with
           "parallel" (the default, for cars) the spinning wheels' axes must all be parallel;
       {"kind": "swing", "axis": "vertical"|"horizontal", "degrees": 90, "count": 1}: at least `count` joints
-          with that axis each let what they carry turn through `degrees` in one direction without hitting
+          with that axis (and, with "below": Z, a pivot below plate Z) each let what they carry turn through
+          `degrees` in one direction without hitting
           anything. What turns is the smaller side of the joint with everything hanging off it (a caster's fork
           with its wheel, a door, a seat): turning it relative to the rest is the same motion.
     """
@@ -357,6 +379,8 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
         vertical = abs(abs(axis[2]) - 1) < 1e-6
         if (req["axis"] == "vertical") != vertical:
             continue
+        if "below" in req and point[2] >= req["below"] * PLATE:
+            continue  # only joints whose pivot is lower than plate `below` (a chair's casters, not its seat)
         sides = _sides(bodies, joints, k)
         if sides is None:
             best = "the joint is locked by another link"
@@ -365,7 +389,10 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
         moving = [i for r in small for i in bodies[r]]
         if not any(parts[i]["type"] in HEIGHT.keys() | BEAMS for i in moving):
             continue  # an axle turning with its wheels: that is a spin, not a swing
-        for sign in (1, -1):
+        signs = (1, -1)
+        if req.get("outward"):  # only the way that carries it away from the model's middle (doors open out)
+            signs = [sg for sg in signs if _outward(parts, moving, point, axis, sg)]
+        for sign in signs:
             hit = sweep(parts, moving, point, axis, sign * req["degrees"], ignore=partners)
             if hit is None:
                 passed += 1
