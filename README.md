@@ -53,27 +53,30 @@ flowchart LR
 
 What Glimmer learned, measured on frozen test sets made before training (Muse Glimmer 30B, LoRA SFT on Fireworks):
 
-| Test | Run 3 (cars only) | Run 4 (all mechanisms) |
-|---|---|---|
-| Held-out instances of the 7 trained object families (place or repair the mechanism) | 1/72 | **67/72** |
-| Never-trained families (skateboard, microwave): repair a broken mechanism | 4/20 | **20/20** |
-| Never-trained families: place the whole mechanism | 0/20 | 0/20 |
-| Held-out cars: add Technic running gear | 48/50 | 46/50 |
+| Test | Run 3 (cars) | Run 4 (all mechanisms) | Run 5 (+ doors on varied cars) |
+|---|---|---|---|
+| Held-out instances of the 7 trained object families (place or repair the mechanism) | 1/72 | **67/72** | 60/72 |
+| Door hinges on cars from **vehicles never seen in training** | - | 0/10 | **7/10** |
+| Never-trained families (skateboard, microwave): repair a broken mechanism | 4/20 | **20/20** | **20/20** |
+| Never-trained families: place the whole mechanism | 0/20 | 0/20 | 0/20 |
+| Held-out cars: Technic running gear (first try / with feedback) | 48/50 | 46/50 | **47/50 / 49/50** |
 
-- Glimmer learns the mechanisms it is shown and transfers *repairs* to unseen objects, but not *placing* a whole
-  mechanism in an object family it never saw. That is the current limit.
-- Live from photos (cached SAM 3D meshes): the Beetle gets Glimmer's running gear, glass and produced colors and
-  passes structure, function and stability. The Camry's rear axle still fails (Technic bricks one size too short).
-- Door placement on the photo cars by Glimmer fails: run 4's door examples were two fixed cars, so it memorised
-  their running gear. Run 5 trains on doors cut into ~700 varied cars, plus the too-short-brick corrections.
-- Physical evidence: every model exports to LDraw with no part off by more than 0.4 mm from the official library
-  geometry; the skateboard's instructions are formally certified (9 steps). Nothing has been built physically yet.
+- **Live from photos** (cached SAM 3D meshes), run 5: the Camry and the Beetle each get Glimmer's running gear and
+  Glimmer's door hinges (first try), glass and produced colors; structure, function, stability and the doors' swing
+  all pass.
+- Glimmer learns the mechanisms it is shown and transfers *repairs* to unseen object families, and door placement
+  to unseen cars once its data varies; it does not yet *place* a whole mechanism in an object family it never saw.
+  Run 5 traded some accuracy on two fixed door cars (where it now places only hinges) for that generality.
+- **Physical evidence:** every model exports to LDraw with no part off by more than 0.4 mm from the official library
+  geometry. Building instructions are **formally certified** (exact per-step equilibrium with a declared stud-grip
+  capacity, insertion paths, no temporary support, steps of at most 6 parts, independent checker) for the chair,
+  skateboard and microwave. The cars are not certified yet: their shells of small plates only lock as a whole.
 
 | Built by | What |
 |---|---|
-| Glimmer (trained) | Technic running gear on cars; placing/repairing hinges, turntables, axles, wheels, crank arms in trained families |
-| Code (verified) | bodies from photos, glass, colors, door openings; chair, bicycle, skateboard, microwave builders |
-| Checks | structure, stability, motion (sampled sweeps); exact certificates for the instruction steps under a stated model |
+| Glimmer (trained) | Technic running gear; door hinges on cars; placing/repairing hinges, turntables, axles, wheels, crank arms in trained families |
+| Code (verified) | bodies from photos, glass, produced colors, door openings; chair, bicycle, skateboard, microwave, TV, laptop builders |
+| Checks | structure, stability, motion (sampled sweeps); exact certificates for instruction steps under a stated model |
 
 ## Run it
 
