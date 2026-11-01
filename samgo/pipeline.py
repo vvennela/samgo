@@ -214,7 +214,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             # Validate scaffolding before spending model calls, with a small deterministic search.
             body_attempts = []
             for seed in range(3):
-                reference = build_arched_car(original, attempts=6, seed=seed, buildable=buildable)
+                reference = build_arched_car(original, attempts=6, seed=seed,
+                                             **({'buildable': True} if buildable else {}))
                 ok, issues = check(reference.parts, reference.target) if reference else (False, ['no supported body'])
                 body_attempts.append({'seed': seed, 'attempts': 6, 'passed': ok, 'issues': issues})
                 save(run_dir / 'body_search.json', body_attempts)
