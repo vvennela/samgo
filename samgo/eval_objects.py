@@ -243,7 +243,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path("runs/audit/object-diagnostics"))
     ap.add_argument("--prepare", action="store_true")
-    ap.add_argument("--models", nargs="+", choices=MODELS, default=["r3"])
+    ap.add_argument("--models", nargs="+", default=["r3"], help=f"names ({', '.join(MODELS)}) or name=sampler_path")
     ap.add_argument("--include-local-fixtures", action="store_true")
     ap.add_argument("--single-axle", action="store_true")
     ap.add_argument("--render", action="store_true", help="render saved proposals and references offline")
@@ -267,6 +267,14 @@ def main():
             raise ValueError("refusing to overwrite frozen cases; use a new output directory")
         make_cases(args.out, include_local_fixtures=args.include_local_fixtures, single_axle=args.single_axle)
         return
+    for spec in args.models:  # name=path registers a newly trained sampler
+        if "=" in spec:
+            name, path = spec.split("=", 1)
+            MODELS[name] = path
+    args.models = [m.split("=", 1)[0] for m in args.models]
+    unknown = set(args.models) - set(MODELS)
+    if unknown:
+        raise ValueError(f"unknown models: {sorted(unknown)}")
     bundle = json.loads((args.out / "cases.json").read_text())
     cases = bundle["cases"]
     if digest(cases) != bundle["sha256"]:
