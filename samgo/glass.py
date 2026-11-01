@@ -7,7 +7,7 @@ body below it. Its outer wall becomes glass, except the corner columns (A/C pill
 functional check is unaffected; colors.legalize then splits any glass piece LEGO never made in that size.
 """
 
-GLASS = "trans_black"
+GLASS = "trans_clear"  # see-through; LEGO makes far more sizes in trans-clear than trans-black
 BODY_TYPES = ("plate", "brick")
 HEIGHT = {"plate": 1, "brick": 3}
 

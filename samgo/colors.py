@@ -147,3 +147,31 @@ def legalize(parts: list[dict]) -> tuple[list[dict], list[dict]]:
             p = p | {"color": name}
         out.append(p)
     return out, changes
+
+
+def paint(parts: list[dict], body: str, trim: str = "black") -> list[dict]:
+    """A clean color scheme for a car (color is paint: it is not checked and does not constrain the layout): the
+    body in one color; the Technic frame, the layer it hangs from (floor) and everything below it in `trim`; glass
+    and mechanism parts keep theirs."""
+    frame = [p for p in parts if p["type"] == "technic_brick"]
+    floor = (min(p["z"] for p in frame) + 3) if frame else None
+    out = []
+    for p in parts:
+        if p["type"] in ("plate", "brick") and p.get("color") not in ("trans_clear", "trans_black"):
+            low = floor is not None and p["z"] <= floor
+            p = p | {"color": trim if low else body}
+        elif p["type"] == "technic_brick":
+            p = p | {"color": trim}
+        out.append(p)
+    return out
+
+
+def body_color(target) -> str:
+    """The most common color of a voxel target (the photo's main paint color)."""
+    import numpy as np
+
+    from .parts import COLORS
+
+    names = list(COLORS)
+    cells = np.asarray(target)[np.asarray(target) > 0]
+    return names[int(np.bincount(cells).argmax()) - 1] if cells.size else "light_gray"

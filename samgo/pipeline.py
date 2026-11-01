@@ -29,7 +29,7 @@ from .perceive import MAX_SIDE, SAM_3D_ENDPOINT, SAM_MODEL, perceive
 from .running_gear_task import check
 from .stability import stability
 from .technic import structural, verify_function
-from .verifier import verify
+from .verifier import MatchConfig, verify
 from .voxelize import SIZES, load_mesh, render, voxelize
 
 
@@ -52,8 +52,10 @@ def _reports(parts, target, original, vehicle):
     solids = structural(parts) if vehicle else parts
     anchors = frozenset(i for i, p in enumerate(p for p in parts if p['type'] in ('plate', 'brick', 'technic_brick'))
                         if p['type'] == 'technic_brick') if vehicle else frozenset()
-    structure = verify(solids, target, anchors=anchors)
-    fidelity = verify(solids, original, anchors=anchors)
+    # Color is paint: shape and structure are checked, color accuracy is reported but never gates a build.
+    config = MatchConfig(min_color_accuracy=0.0)
+    structure = verify(solids, target, config=config, anchors=anchors)
+    fidelity = verify(solids, original, config=config, anchors=anchors)
     function = verify_function(parts) if vehicle else None
     # Do not feed invalid geometry to the force solver or report a deferred check as passing.
     stands = stability(parts, vehicle=vehicle) if structure.passed and (function is None or function.passed) else None
@@ -297,6 +299,12 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         if car and glass:
             from .glass import add_glass
             parts, summary['glass_parts'] = add_glass(parts)
+        if car:  # paint: one body color (Spark's, else the photo's most common), black frame and underbody
+            from .colors import body_color, paint
+            from .parts import COLORS
+            chosen = (spec or {}).get('body_color')
+            summary['body_color'] = chosen if chosen in COLORS else body_color(original)
+            parts = paint(parts, summary['body_color'])
         from .colors import legalize
         parts, recolored = legalize(parts)
         summary['recolored_to_produced'] = len(recolored)
