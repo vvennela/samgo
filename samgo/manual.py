@@ -1,0 +1,391 @@
+"""Certified building instructions: an exact, independently checked certificate for every step of the manual.
+
+The manual builds the body upright on the table, one layer per step (parts of one layer never touch each other),
+then adds the running gear and other axle-line mechanisms as sub-assemblies. For every step, exactly (rational
+arithmetic, no sampling, no floating point trusted):
+
+1. inventory: the manual's parts are exactly the model's parts (multiset equality);
+2. insertion: each body part goes straight down without crossing a placed part (the audit's swept-volume rule);
+   each axle slides in along its line through Technic holes only, and each wheel, bush or half bush slides on from
+   its own side without its circle meeting a placed part;
+3. equilibrium: after each step the placed body is in exact force and torque balance under the declared model
+   (MODEL below): unit weight per plate cell, four contact points per shared stud, the table pushing up only,
+   compression unbounded, stud grip (tension) at most TENSION per stud, the same rule as stability.py;
+4. the finished body is one stud-connected assembly.
+
+Witness forces come from Z3 (exact rationals); `check` re-derives every contact and re-checks every witness without
+Z3. Hinge, click-hinge and turntable halves count as plates (held still while building), Technic bricks as bricks.
+Not modelled: gear weight and gear loads, insertion force, hand access, tolerances; final motion is a sampled check.
+
+    uv run python -m samgo.manual runs/demo/chair/chair.json   # writes <stem>_manual.json beside it
+"""
+
+import json
+import sys
+import time
+from fractions import Fraction
+from pathlib import Path
+
+from .certificates import CertificateError, check_path, contacts, digest, rational, xy_overlap
+from .parts import parse_piece
+
+VERSION = "samgo-manual-certificate-v1"
+TENSION = "250"
+MODEL = {"weight": "w*l*height per part, at its centre", "contacts": "4 points per shared stud, 1/4 stud inset",
+         "ground": "the table under the lowest layer pushes up only", "compression": "unbounded",
+         "tension_per_stud": TENSION, "insertion": "body straight down; axles along their line; wheels/bushes along "
+         "the axle", "not_modelled": ["gear weight and loads", "insertion force", "hand access", "tolerances",
+                                       "final motion (sampled check elsewhere)"]}
+AS_PLATE = {"hinge_base", "hinge_top", "click_a", "click_b", "turntable_base", "turntable_top"}
+BODY = {"plate", "brick", "technic_brick"} | AS_PLATE
+AXIAL = {"axle", "wheel", "bush", "half_bush"}
+
+
+def split(parts: list[dict]) -> tuple[list[int], list[int], list[int]]:
+    """(body part indices, axial gear indices, indices this manual cannot certify)."""
+    body = [i for i, p in enumerate(parts) if p["type"] in BODY]
+    gear = [i for i, p in enumerate(parts) if p["type"] in AXIAL]
+    other = [i for i, p in enumerate(parts) if p["type"] not in BODY | AXIAL]
+    return body, gear, other
+
+
+HEIGHTS = {"plate": 1, "brick": 3, "technic_brick": 3} | {t: 1 for t in AS_PLATE}
+PAIRS = (("hinge_base", "hinge_top"), ("click_a", "click_b"))
+
+
+def units(parts: list[dict], body: list[int]) -> list[list[int]]:
+    """Body parts grouped into building units: a hinge's two halves side by side at one height (same pin) are one
+    unit, held still while building; every other part is its own unit."""
+    used, out = set(), []
+    for i in body:
+        if i in used:
+            continue
+        p, mate = parts[i], None
+        for a, b in PAIRS:
+            if p["type"] in (a, b):
+                other = b if p["type"] == a else a
+                mate = next((j for j in body if j not in used and j != i and parts[j]["type"] == other
+                             and parts[j]["z"] == p["z"] and parts[j].get("pin_x") == p.get("pin_x")
+                             and parts[j].get("pin_y") == p.get("pin_y")), None)
+        group = [i] + ([mate] if mate is not None else [])
+        used.update(group)
+        out.append(group)
+    return out
+
+
+def pieces(parts: list[dict], groups: list[list[int]], flipped: bool = False, base: int | None = None):
+    """One catalog piece per building unit, in a building frame: upright with layer `base` (default: the lowest)
+    on the table, or upside down with the top layer on the table."""
+    top = max(parts[i]["z"] + HEIGHTS[parts[i]["type"]] for g in groups for i in g)
+    z0 = min(parts[i]["z"] for g in groups for i in g)
+    out = []
+    for g in groups:
+        x0 = min(parts[i]["x"] for i in g); x1 = max(parts[i]["x"] + parts[i]["w"] for i in g)
+        y0 = min(parts[i]["y"] for i in g); y1 = max(parts[i]["y"] + parts[i]["l"] for i in g)
+        p = parts[g[0]]
+        kind = "plate" if p["type"] in AS_PLATE else "brick" if p["type"] == "technic_brick" else p["type"]
+        z = top - (p["z"] + HEIGHTS[p["type"]]) if flipped else p["z"] - (z0 if base is None else base)
+        out.append(parse_piece({"type": kind, "w": x1 - x0, "l": y1 - y0, "x": x0, "y": y0, "z": z, "color": "black"}))
+    return out
+
+
+def _forces_ok(ps, placed, witness, tension: Fraction) -> None:
+    """Exact check of one step's witness (raises CertificateError)."""
+    cs = contacts(ps, placed)
+    if not isinstance(witness, list) or len(witness) != len(cs):
+        raise CertificateError("force witness length differs from the derived contacts")
+    force = {i: Fraction(0) for i in placed}
+    tx, ty, studs = dict(force), dict(force), {}
+    for (up, down, x, y, stud), encoded in zip(cs, witness):
+        f = rational(encoded)
+        if down is None and f < 0:
+            raise CertificateError("the table cannot pull")
+        if stud is not None:
+            studs[stud] = studs.get(stud, Fraction(0)) + f
+        for k, sign in ((up, 1), (down, -1)):
+            if k is None:
+                continue
+            p = ps[k]
+            force[k] += sign * f
+            tx[k] += sign * f * (x - p.x - Fraction(p.w, 2))
+            ty[k] += sign * f * (y - p.y - Fraction(p.l, 2))
+    if any(v < -tension for v in studs.values()):
+        raise CertificateError("stud grip (tension) above the declared capacity")
+    for k in placed:
+        p = ps[k]
+        if force[k] != p.w * p.l * p.h or tx[k] != 0 or ty[k] != 0:
+            raise CertificateError(f"force/torque balance fails exactly for body part {k}")
+
+
+def _solve(ps, placed, tension: Fraction, deadline: float):
+    import z3
+
+    def q(f):
+        f = Fraction(f)
+        return z3.RealVal(f"{f.numerator}/{f.denominator}")
+
+    cs = contacts(ps, placed)
+    s = z3.SolverFor("QF_LRA")
+    fs = [z3.Real(f"f{k}") for k in range(len(cs))]
+    totals = {k: [[], [], []] for k in placed}
+    studs = {}
+    for (up, down, x, y, stud), f in zip(cs, fs):
+        if down is None:
+            s.add(f >= 0)
+        if stud is not None:
+            studs.setdefault(stud, []).append(f)
+        for k, sign in ((up, 1), (down, -1)):
+            if k is None:
+                continue
+            p = ps[k]
+            totals[k][0].append(sign * f)
+            totals[k][1].append(sign * f * q(x - p.x - Fraction(p.w, 2)))
+            totals[k][2].append(sign * f * q(y - p.y - Fraction(p.l, 2)))
+    for values in studs.values():
+        s.add(z3.Sum(values) >= -q(tension))
+    for k, (force, tx, ty) in totals.items():
+        p = ps[k]
+        s.add(z3.Sum(force) == p.w * p.l * p.h, z3.Sum(tx) == 0, z3.Sum(ty) == 0)
+    s.set(timeout=max(1, int((deadline - time.monotonic()) * 1000)))
+    r = s.check()
+    if r != z3.sat:
+        return None, "no equilibrium within the declared stud grip" if r == z3.unsat else "solver: " + s.reason_unknown()
+    m = s.model()
+    return [str(Fraction(v.numerator_as_long(), v.denominator_as_long()))
+            for v in (m.eval(f, model_completion=True) for f in fs)], None
+
+
+def _connected(ps) -> bool:
+    adj = {i: set() for i in range(len(ps))}
+    for i, a in enumerate(ps):
+        for j, b in enumerate(ps[:i]):
+            if xy_overlap(a, b) and (a.z == b.z + b.h or b.z == a.z + a.h):
+                adj[i].add(j)
+                adj[j].add(i)
+    seen, todo = {0}, [0]
+    while todo:
+        for j in adj[todo.pop()] - seen:
+            seen.add(j)
+            todo.append(j)
+    return len(seen) == len(ps)
+
+
+def _gear_groups(parts: list[dict], gear: list[int]) -> list[list[int]]:
+    """Axle-line sub-assemblies: everything on one line (axis, edge, height), axle first."""
+    lines: dict[tuple, list[int]] = {}
+    for i in gear:
+        p = parts[i]
+        lines.setdefault((p.get("axis", "y"), p["x"] if p.get("axis", "y") == "y" else p["y"], p["z"]), []).append(i)
+    order = {"axle": 0, "half_bush": 1, "bush": 1, "wheel": 2}
+    return [sorted(v, key=lambda i: order[parts[i]["type"]]) for _, v in sorted(lines.items())]
+
+
+def _gear_path_ok(parts: list[dict], body: list[int], placed_gear: list[int], i: int) -> None:
+    """Exact slide-in check for axle-line parts (raises CertificateError). Units: studs and plates as Fractions."""
+    from .technic import HOLE_HEIGHT, PLATE, STUD, WHEELS, wheel_studs
+
+    p = parts[i]
+    if p.get("axis", "y") != "y":
+        raise CertificateError(f"part {i}: only axle lines across the model (axis y) are covered")
+    edge, zc = Fraction(p["x"]), Fraction(p["z"]) + Fraction(str(HOLE_HEIGHT)) / Fraction(str(PLATE))  # plates
+    y0 = Fraction(str(p["y"]))
+    span = {"axle": Fraction(p.get("length", 0)), "wheel": Fraction(wheel_studs(p.get("size", "30.4x14"))),
+            "bush": Fraction(1), "half_bush": Fraction(1, 2)}[p["type"]]
+    if p["type"] == "axle":
+        radius = Fraction(0)
+    elif p["type"] == "wheel":
+        radius = Fraction(str(WHEELS[p.get("size", "30.4x14")][0])) / 2 / Fraction(str(STUD))  # studs
+    else:
+        radius = Fraction(9, 20)
+    lo_y, hi_y = min(parts[b]["y"] for b in body), max(parts[b]["y"] + parts[b]["l"] for b in body)
+    from_low = (y0 + span / 2) < (lo_y + hi_y) / 2          # slide in from the nearer side
+    sweep_lo, sweep_hi = (Fraction(-10**6), y0 + span) if from_low else (y0, Fraction(10**6))
+    hh = {"plate": 1, "brick": 3, "technic_brick": 3} | {t: 1 for t in AS_PLATE}
+    for b in body:
+        q = parts[b]
+        if not (q["y"] < sweep_hi and sweep_lo < q["y"] + q["l"]):
+            continue
+        if p["type"] == "axle":
+            on_line = q["x"] < edge < q["x"] + q["w"] and q["z"] < zc < q["z"] + hh[q["type"]]
+            if on_line and not (q["type"] == "technic_brick" and q["z"] == p["z"]):
+                raise CertificateError(f"axle part {i} would have to pass through solid part {b}")
+            continue
+        # A wheel/bush disc (radius in studs, centre (edge, zc in plates)) against the part's x-z rectangle.
+        x0, x1 = Fraction(q["x"]), Fraction(q["x"] + q["w"])
+        z0, z1 = Fraction(q["z"]) * Fraction(str(PLATE)) / Fraction(str(STUD)), \
+            Fraction(q["z"] + hh[q["type"]]) * Fraction(str(PLATE)) / Fraction(str(STUD))  # studs
+        cz = zc * Fraction(str(PLATE)) / Fraction(str(STUD))
+        dx = max(x0 - edge, Fraction(0), edge - x1)
+        dz = max(z0 - cz, Fraction(0), cz - z1)
+        if dx * dx + dz * dz < radius * radius:
+            raise CertificateError(f"{p['type']} part {i} would hit part {b} while sliding on")
+
+
+def plans(parts: list[dict], groups: list[list[int]]) -> list[tuple[str, int | None, list[tuple[str, list[int]]]]]:
+    """Candidate build orders as (name, base layer, [(frame, units)]): bottom up; upside down; and from the
+    each other layer out (largest first) - that layer on the table, everything above it, then turned over for
+    everything below."""
+    z = [parts[g[0]]["z"] for g in groups]
+    levels = sorted(set(z))
+    area = {lv: sum(parts[g[0]]["w"] * parts[g[0]]["l"] for g, gz in zip(groups, z) if gz == lv) for lv in levels}
+    layer = lambda lv: [k for k, gz in enumerate(z) if gz == lv]
+    out = [("upright", None, [("up", layer(lv)) for lv in levels]),
+           ("upside down, then turned over", None, [("down", layer(lv)) for lv in reversed(levels)])]
+    for base in sorted(levels[1:], key=lambda lv: -area[lv]):  # every other layer as the start, largest first
+        out.append((f"from layer z={base} up, then turned over for the layers below", base,
+                    [("up", layer(lv)) for lv in levels if lv >= base] +
+                    [("down", layer(lv)) for lv in reversed(levels) if lv < base]))
+    return out
+
+
+def _body_steps(parts, groups, plan, base, tension, deadline):
+    """(certified steps of original indices, None) or (None, why)."""
+    frames = {"up": pieces(parts, groups, False, base), "down": pieces(parts, groups, True)}
+    try:
+        ps = frames["up"]
+        for i, a in enumerate(ps):
+            for j, b in enumerate(ps[:i]):
+                if xy_overlap(a, b) and max(a.z, b.z) < min(a.z + a.h, b.z + b.h):
+                    raise CertificateError(f"body parts {groups[j]} and {groups[i]} overlap")
+        if not _connected(ps):
+            raise CertificateError("the finished body is not one stud-connected assembly")
+        placed, steps = [], []
+        for frame, units_ in plan:
+            ps = frames[frame]
+            for k in units_:
+                check_path(ps, placed, k)
+                placed.append(k)
+            witness, issue = _solve(ps, placed, tension, deadline)
+            if issue:
+                raise CertificateError(f"step {len(steps) + 1}: {issue}")
+            steps.append({"kind": "layer", "frame": frame, "units": units_,
+                          "parts": [i for k in units_ for i in groups[k]], "forces": witness})
+        return steps, None
+    except CertificateError as e:
+        return None, str(e)
+
+
+def _greedy_steps(parts, groups, flipped, tension, deadline):
+    """Part by part: at each step add the lowest unit that can go in (clear path) and keeps the placed body in
+    exact balance. (certified steps, None) or (None, why)."""
+    frame = "down" if flipped else "up"
+    ps = pieces(parts, groups, flipped)
+    remaining = sorted(range(len(ps)), key=lambda k: (ps[k].z, ps[k].x, ps[k].y))
+    placed, steps = [], []
+    while remaining:
+        if time.monotonic() > deadline:
+            return None, "time budget exhausted"
+        for k in remaining:
+            try:
+                check_path(ps, placed, k)
+            except CertificateError:
+                continue
+            witness, _ = _solve(ps, placed + [k], tension, deadline)
+            if witness is not None:
+                placed.append(k)
+                remaining.remove(k)
+                steps.append({"kind": "layer", "frame": frame, "units": [k], "parts": list(groups[k]),
+                              "forces": witness})
+                break
+        else:
+            return None, f"stuck after {len(placed)} of {len(ps)} parts: no remaining part can go in and stay balanced"
+    return steps, None
+
+
+def certify_manual(parts: list[dict], *, timeout: float = 600) -> dict:
+    """The manual (steps of original part indices) and its certificate, or why it could not be certified."""
+    start = time.monotonic()
+    body, gear, other = split(parts)
+    report = {"version": VERSION, "model": MODEL, "build_sha256": digest(parts), "passed": False, "steps": [],
+              "uncertified_parts": [{"index": i, "type": parts[i]["type"]} for i in other], "issues": []}
+    if not body:
+        report["issues"].append("no body parts")
+        return report
+    groups = units(parts, body)
+    tension = rational(TENSION)
+    failures = []
+    for name, base, plan in plans(parts, groups):
+        steps, issue = _body_steps(parts, groups, plan, base, tension, start + timeout)
+        if steps is not None:
+            report.update(orientation=name, base=base, steps=steps)
+            break
+        failures.append(f"{name}: {issue}")
+    else:
+        for flipped in (False, True):  # finer: part by part
+            steps, issue = _greedy_steps(parts, groups, flipped, tension, start + timeout)
+            if steps is not None:
+                report.update(orientation=("upside down, then turned over" if flipped else "upright") + ", part by part",
+                              base=None, steps=steps)
+                break
+            failures.append(f"part by part {'upside down' if flipped else 'upright'}: {issue}")
+    if not report["steps"]:
+        report["issues"] += failures
+        report["seconds"] = time.monotonic() - start
+        return report
+    try:
+        done: list[int] = []
+        for grp in _gear_groups(parts, gear):
+            for i in grp:
+                _gear_path_ok(parts, body, done, i)
+                done.append(i)
+            report["steps"].append({"kind": "axle_line", "parts": grp})
+    except CertificateError as e:
+        report["issues"].append(str(e))
+        report["seconds"] = time.monotonic() - start
+        return report
+    checked = check(parts, report)
+    report["passed"] = checked["passed"] and not other
+    if not checked["passed"]:
+        report["issues"] += checked["issues"]
+    if other:
+        report["issues"].append(f"{len(other)} parts of types this manual cannot certify (e.g. pins, liftarms)")
+    report["seconds"] = time.monotonic() - start
+    return report
+
+
+def check(parts: list[dict], report: dict) -> dict:
+    """Independent re-check of a manual certificate (no solver): inventory, insertion, every witness."""
+    try:
+        if report.get("version") != VERSION or report.get("build_sha256") != digest(parts):
+            raise CertificateError("certificate does not belong to this model")
+        body, gear, other = split(parts)
+        listed = [i for s in report["steps"] for i in s["parts"]]
+        if sorted(listed) != sorted(body + gear):
+            raise CertificateError("the manual's parts differ from the model's parts")
+        groups = units(parts, body)
+        frames = {"up": pieces(parts, groups, False, report.get("base")), "down": pieces(parts, groups, True)}
+        ps = frames["up"]
+        placed: list[int] = []
+        done: list[int] = []
+        for s in report["steps"]:
+            if s["kind"] == "layer":
+                if sorted(i for k in s["units"] for i in groups[k]) != sorted(s["parts"]):
+                    raise CertificateError("a step's units and parts disagree")
+                ps = frames[s["frame"]]
+                for k in s["units"]:
+                    check_path(ps, placed, k)
+                    placed.append(k)
+                _forces_ok(ps, placed, s["forces"], rational(TENSION))
+            else:
+                for i in s["parts"]:
+                    _gear_path_ok(parts, body, done, i)
+                    done.append(i)
+        if not _connected(ps):
+            raise CertificateError("the finished body is not one stud-connected assembly")
+        return {"passed": True, "steps": len(report["steps"])}
+    except (CertificateError, KeyError, TypeError, ValueError) as e:
+        return {"passed": False, "issues": [str(e)]}
+
+
+def main() -> None:
+    for path in map(Path, sys.argv[1:]):
+        parts = json.loads(path.read_text())
+        r = certify_manual(parts)
+        out = path.with_name(path.stem + "_manual.json")
+        out.write_text(json.dumps(r))
+        print(f"{path.name}: {'CERTIFIED' if r['passed'] else 'not certified'}; {len(r['steps'])} steps; "
+              f"{len(r['uncertified_parts'])} uncertified parts; {r.get('seconds', 0):.0f}s; issues: {r['issues'][:2]}")
+
+
+if __name__ == "__main__":
+    main()
