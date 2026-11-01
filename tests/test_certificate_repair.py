@@ -123,7 +123,15 @@ def test_independent_checker_rejects_producer_success(monkeypatch):
             completed_steps=3,
         ),
     )
+
     assert evaluate(task(), solution())["status"] == "checker_rejected"
+
+
+def test_prompt_defines_the_positional_bounds_and_full_solid_constraints():
+    system = messages(task())[0]["content"]
+    assert "[xmin, xmax, ymin, ymax, maximum_top_z]" in system
+    assert "x+w <= xmax" in system and "y+l <= ymax" in system
+    assert "z+height <= maximum_top_z" in system
 
 
 def test_resume_rejects_tampered_success_and_does_not_resample(tmp_path):

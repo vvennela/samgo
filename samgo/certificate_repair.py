@@ -95,7 +95,9 @@ def messages(task, policy=DEFAULT_POLICY):
         + json.dumps(FOOTPRINTS)
         + ". Colors: "
         + ", ".join(COLORS)
-        + ". All additions must fit completely within the stated bounds. "
+        + ". Bounds are [xmin, xmax, ymin, ymax, maximum_top_z]. Every added part must satisfy "
+        "xmin <= x, x+w <= xmax, ymin <= y, y+l <= ymax, and z+height <= maximum_top_z. "
+        "The bounds constrain the entire solid, not just its origin. "
         "The final assembly must be stud-connected, touch ground, and have no solid-envelope overlaps. "
         "The assembly order is fixed: ascending (z,y,x,input index). At EVERY prefix, every piece must balance "
         "its weight and torques using compressive contacts only. Weight is w*l*height at its center. Stud "
