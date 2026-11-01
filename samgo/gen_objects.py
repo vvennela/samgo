@@ -169,6 +169,39 @@ def repair_variant(family: str, seed: int) -> dict | None:
     return case
 
 
+MECHANISM = {"wheel", "axle", "bush", "half_bush", "turntable_base", "turntable_top", "hinge_base", "hinge_top",
+             "click_a", "click_b", "car_door"}
+
+
+def _is_mechanism(p: dict) -> bool:
+    return p["type"] in MECHANISM or (p["type"] == "liftarm" and "axle_hole" in p)  # crank arms
+
+
+def place_variant(family: str, seed: int) -> dict | None:
+    """The model without its moving-part connections (hinges, turntables, axles, wheels, bushes, crank arms); the
+    answer adds them back. Checks name payloads by the input parts that stay, so the answer's order is free."""
+    rng = random.Random(f"place-{family}-{seed}")
+    parts, ctx = _model(family, rng)
+    dx, dy = (rng.randint(0, 6), rng.randint(0, 6)) if family != "door" else (0, 0)
+    parts = recolored(shifted(parts, dx, dy), rng)
+    removed = [i for i, p in enumerate(parts) if _is_mechanism(p)]
+    kept = [i for i in range(len(parts)) if i not in removed]
+    new_index = {old: k for k, old in enumerate(kept)} | {old: len(kept) + j for j, old in enumerate(removed)}
+    ctx = copy.deepcopy(ctx)
+    if "seat" in ctx:
+        ctx["seat"] = sorted(new_index[i] for i in ctx["seat"] if i in new_index and i not in removed)
+    if "moving" in ctx:
+        ctx["moving"] = {k: (sorted(new_index[i] for i in g if i not in removed), d) for k, (g, d) in ctx["moving"].items()}
+    case = dict(id=f"place_{family}_{seed}", family=family, mode="place", input=[parts[i] for i in kept],
+                reference=[parts[i] for i in kept + removed], context=ctx,
+                oracle=[{"op": "add", "part": parts[i]} for i in removed])
+    if not _ok(native_checks(case, case["reference"])):
+        return None
+    if inspect_case(case, []).get("passed"):
+        return None  # nothing missing that the checks would notice
+    return case
+
+
 def gear_variant(family: str, seed: int) -> dict | None:
     rng = random.Random(f"{family}-{seed}")
     if family == "car":
@@ -182,13 +215,18 @@ def gear_variant(family: str, seed: int) -> dict | None:
         return None
 
 
-def variant(family: str, seed: int) -> dict | None:
-    return gear_variant(family, seed) if family in ("car", "train") else repair_variant(family, seed)
+def variant(family: str, seed: int, mode: str = "repair") -> dict | None:
+    if family in ("car", "train"):
+        return gear_variant(family, seed)
+    return place_variant(family, seed) if mode == "place" else repair_variant(family, seed)
 
 
 def wrong_answer(case: dict, rng: random.Random) -> list[dict]:
     """A plausible wrong answer: the right part with a different wrong value, or (gear) one placement off."""
     bad = copy.deepcopy(case["oracle"])
+    if case["mode"] == "place" and len(bad) > 1 and rng.random() < 0.3:
+        bad.remove(rng.choice(bad))  # a connection left out
+        return bad
     e = rng.choice(bad)
     field = rng.choice([k for k in ("x", "y", "z") if k in e["part"]])
     e["part"][field] += rng.choice((-1, 1))
@@ -209,10 +247,10 @@ def row(case: dict, seed: int) -> dict | None:
             "turns": (len(chat) - 1) // 2, "input_digest": digest(case["input"])}
 
 
-def _job(args: tuple[str, int, bool]) -> tuple[dict | None, dict | None]:
-    family, seed, make_row = args
+def _job(args: tuple) -> tuple[dict | None, dict | None]:
+    family, seed, make_row, mode = args
     try:
-        case = variant(family, seed)
+        case = variant(family, seed, mode)
     except Exception as e:  # noqa: BLE001 - a builder variant that cannot be made is skipped, and counted
         return None, {"family": family, "seed": seed, "error": f"{type(e).__name__}: {e}"}
     if case is None:
@@ -232,18 +270,22 @@ def main() -> None:
     if (args.test / "cases.json").exists():
         raise ValueError("refusing to overwrite a frozen test set; use a new --test directory")
     # Test seeds are drawn from a separate range so no test instance reuses a training seed.
-    test_jobs = [(f, 100000 + s, False) for f in TRAIN_FAMILIES for s in range(args.test_instances * 3)]
-    test_jobs += [(f, 200000 + s, False) for f in HELD_OUT for s in range(args.test_held_out * 3)]
-    train_jobs = [(f, s, True) for f in TRAIN_FAMILIES for s in range(args.per_family)]
+    modes = lambda f: ("gear",) if f in ("car", "train") else ("repair", "place")
+    test_jobs = [(f, 100000 + s, False, m) for f in TRAIN_FAMILIES for m in modes(f)
+                 for s in range(args.test_instances * 3)]
+    test_jobs += [(f, 200000 + s, False, m) for f in HELD_OUT for m in modes(f) for s in range(args.test_held_out * 3)]
+    count = lambda f: args.per_family // 2 if f == "door" else args.per_family  # 400-part cars are slow to check
+    train_jobs = [(f, s, True, m) for f in TRAIN_FAMILIES for m in modes(f) for s in range(count(f))]
     with ProcessPoolExecutor(args.workers) as pool:
         test_out = list(pool.map(_job, test_jobs))
         train_out = list(pool.map(_job, train_jobs))
     cases, per = [], {}
-    for (case, _), (family, _, _) in zip(test_out, test_jobs):
+    for (case, _), (family, _, _, mode) in zip(test_out, test_jobs):
         want = args.test_held_out if family in HELD_OUT else args.test_instances
-        if case is not None and per.get(family, 0) < want:
+        key = f"{family}/{mode}"
+        if case is not None and per.get(key, 0) < want:
             cases.append(case)
-            per[family] = per.get(family, 0) + 1
+            per[key] = per.get(key, 0) + 1
     rows = [r for r, _ in train_out if r is not None]
     test_inputs = {digest(c["input"]) for c in cases}
     leaked = [r for r in rows if r["input_digest"] in test_inputs]
@@ -259,7 +301,8 @@ def main() -> None:
             f.write(json.dumps(r) + "\n")
     skipped = [e for _, e in train_out + test_out if e]
     print(json.dumps({"test_cases": per, "train_rows": len(rows), "dropped_as_test_duplicates": len(leaked),
-                      "train_rows_by_family": {f: sum(r["family"] == f for r in rows) for f in TRAIN_FAMILIES},
+                      "train_rows_by_family_mode": {f"{f}/{m}": sum(r["family"] == f and r["mode"] == m for r in rows)
+                                                    for f in TRAIN_FAMILIES for m in ("gear", "repair", "place")},
                       "two_turn_rows": sum(r["turns"] == 2 for r in rows), "skipped_variants": len(skipped),
                       "skip_examples": skipped[:4]}, indent=1))
 

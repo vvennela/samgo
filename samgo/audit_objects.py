@@ -102,9 +102,41 @@ def bound_motion(parts, members, degrees, axis):
     return check_motion(parts, members, degrees, axis)
 
 
+def payload_motion(parts, members, n_input, degrees, axis):
+    """Placement tasks: some joint turns a side holding the named input parts plus only parts the answer added
+    (the connectors it placed), clear through `degrees`. Index order of added parts does not matter."""
+    from .kinematics import _sides, analyse, sweep
+
+    bodies, joints = analyse(parts)
+    best = "no joint moves the specified payload"
+    for k, (_, _, _, point, direction, partners) in enumerate(joints):
+        if (abs(direction[2]) > 0.9) != (axis == "vertical"):
+            continue
+        sides = _sides(bodies, joints, k)
+        for side in sides or ():
+            moving = {i for body in side for i in bodies[body]}
+            if not set(members) <= moving or any(i < n_input and i not in members for i in moving):
+                continue
+            for sign in (1, -1):
+                hit = sweep(parts, sorted(moving), point, direction, sign * degrees, ignore=partners, wheels=True)
+                if hit is None:
+                    return True, "specified payload clears its sampled rotation"
+                best = f"specified payload hits something at {abs(hit):.0f} degrees"
+    return False, best
+
+
 def native_checks(case, parts):
     family = case["family"]
     ctx = case.get("context", {})
+    if case.get("mode") == "place" and ("seat" in ctx or "moving" in ctx):
+        plain = case | {"mode": "repair", "context": {k: v for k, v in ctx.items() if k not in ("seat", "moving")}}
+        out = native_checks(plain, parts)
+        n = len(case["input"])
+        if "seat" in ctx:
+            out["seat_is_moving_side"] = payload_motion(parts, ctx["seat"], n, 360, "vertical")
+        for key, (members, degrees) in ctx.get("moving", {}).items():
+            out[key] = payload_motion(parts, members, n, degrees, "horizontal" if family == "laptop" else "vertical")
+        return out
     if family in ("chair", "skateboard"):
         from .chair import checks
 
@@ -139,7 +171,7 @@ def native_checks(case, parts):
             {},
             vehicle=ctx.get("vehicle", False),
         )
-        for key, (members, degrees) in ctx["moving"].items():
+        for key, (members, degrees) in ctx.get("moving", {}).items():
             result[key] = bound_motion(
                 parts, members, degrees, "horizontal" if family == "laptop" else "vertical"
             )
@@ -192,7 +224,7 @@ def inspect_case(case, edits):
                 codes.append("missing_required_axles")
                 messages.append(f"required wheel pairs absent at x={missing}")
         else:
-            allowed = frozenset({"add"}) if case["mode"] == "add" else frozenset({"set"})
+            allowed = frozenset({"add"}) if case["mode"] in ("add", "place") else frozenset({"set"})
             candidate = apply_edits(case["input"], edits, allowed_ops=allowed).parts
             if case["mode"] == "repair":
                 for old, new in zip(case["input"], candidate):
@@ -219,6 +251,21 @@ def inspect_case(case, edits):
         )
     except (ValueError, TypeError, KeyError, IndexError, OverflowError) as e:
         return dict(passed=False, codes=["invalid_edit_or_part"], issues=[str(e)], candidate=None, beams=[])
+
+
+PLACE_FORMATS = (
+    "Part formats: "
+    '{"type":"turntable_base"|"turntable_top","w":2,"l":2,"x","y","z","color"} (top exactly one plate above the base, '
+    "same x/y; the top half turns about the vertical through its centre); "
+    '{"type":"hinge_base"|"hinge_top","w":2,"l":1,"x","y","z","pin_x","pin_y","color"} (swivel hinge 2429/2430: both '
+    "halves share pin_x/pin_y, a vertical pivot on that stud corner); "
+    '{"type":"click_a"|"click_b","w":W,"l":1,"x","y","z","pin_x","pin_y","pin_axis":"x"|"y","color"} (click hinge '
+    "44301/44302: both halves share the horizontal pin line); "
+    '{"type":"axle","axis":"x"|"y","x","y","z","length":L} (on a stud edge at Technic hole height; real lengths only); '
+    '{"type":"wheel","axis":"x"|"y","x","y","z","size":"30.4x14"} (on an axle line); '
+    '{"type":"bush"|"half_bush","axis","x","y","z","color"} (on an axle, holding a wheel); '
+    '{"type":"liftarm","axis","x","y","z","length":2,"axle_hole":"start"|"end","color"} (a crank arm locked on an axle). '
+)
 
 
 def problem(case):
@@ -248,7 +295,11 @@ def messages(case):
         + "Hinge halves must have matching pin coordinates/axis; turntable halves share x/y with top one plate above base. "
         + "Only real catalog dimensions are allowed. Return only a JSON list of edits. "
     )
-    if mode == "repair":
+    if mode == "place":
+        rules += 'Use only {"op":"add","part":{...}}. ' + PLACE_FORMATS
+        task = ("Make this object work: add the moving-part connections it is missing (hinges, turntables, axles, "
+                "wheels, bushes, crank arms) so that every requirement below passes. Keep every existing part.")
+    elif mode == "repair":
         rules += 'Use only {"op":"set","index":I,"part":{...}} on original numbering. Preserve every part type, field, color and role. '
         task = "Repair this assembly while preserving its object and required motions. Prefer the smallest necessary change."
     else:
