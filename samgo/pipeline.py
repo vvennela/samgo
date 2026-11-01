@@ -121,7 +121,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         *, assembly: str = 'procedural', model: str | None = None, rounds: int = 3, max_tokens: int = 8000,
         timeout: float = 120, sequential: bool = True, mesh: Path | None = None,
         replay: Path | None = None, sampler=None, require_certificate: bool = False,
-        certificate_timeout: float = 20, doors: bool = False, glass: bool = True, mechanisms: bool = True) -> dict:
+        certificate_timeout: float = 20, doors: bool = False, glass: bool = True, mechanisms: bool = True,
+        buildable: bool = False, manual: bool = False) -> dict:
     if assembly not in ('procedural', 'learned') or size not in SIZES:
         raise ValueError('unknown assembly mode or size')
     if assembly == 'procedural' and (model or replay or sampler is not None):
@@ -213,7 +214,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             # Validate scaffolding before spending model calls, with a small deterministic search.
             body_attempts = []
             for seed in range(3):
-                reference = build_arched_car(original, attempts=6, seed=seed)
+                reference = build_arched_car(original, attempts=6, seed=seed, buildable=buildable)
                 ok, issues = check(reference.parts, reference.target) if reference else (False, ['no supported body'])
                 body_attempts.append({'seed': seed, 'attempts': 6, 'passed': ok, 'issues': issues})
                 save(run_dir / 'body_search.json', body_attempts)
@@ -353,6 +354,13 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             from .instructions import write
             options = {'certificate': formal['certificate']} if formal['passed'] else {}
             summary['artifacts']['instructions'] = str(write(parts, run_dir / 'instructions', **options))
+        if manual and parts:
+            from .manual import certify_manual
+            certified = certify_manual(parts)
+            save(run_dir / 'manual.json', certified)
+            summary['artifacts']['manual'] = str(run_dir / 'manual.json')
+            summary.update(manual_certified=certified['passed'], manual_steps=len(certified['steps']),
+                           manual_orientation=certified.get('orientation'))
         summary['timings']['exports'] = time.monotonic() - tick
         summary['status'] = 'passed' if summary['passed'] else 'failed'
         stage('complete')
@@ -385,6 +393,8 @@ def main() -> None:
     ap.add_argument('--doors', action='store_true', help='cut a hinged door in each side; with --assembly learned, Glimmer places the hinges')
     ap.add_argument('--no-glass', action='store_true', help='keep the cabin walls opaque')
     ap.add_argument('--no-mechanisms', action='store_true', help='static objects: skip the research step')
+    ap.add_argument('--buildable', action='store_true', help='cars: lay out for structure first, then color (certifiable)')
+    ap.add_argument('--manual', action='store_true', help='also certify the building instructions (samgo.manual)')
     ap.add_argument('--require-certificate', action='store_true', help='require the exact static assembly certificate; unsupported mechanisms fail closed')
     ap.add_argument('--certificate-timeout', type=float, default=20, help='solver budget for static certification')
     args = ap.parse_args()
@@ -392,7 +402,8 @@ def main() -> None:
                  assembly=args.assembly, model=args.model, replay=args.replay, mesh=args.mesh,
                  rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint,
                  require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout,
-                 doors=args.doors, glass=not args.no_glass, mechanisms=not args.no_mechanisms)
+                 doors=args.doors, glass=not args.no_glass, mechanisms=not args.no_mechanisms,
+                 buildable=args.buildable, manual=args.manual)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['passed'] else 1)
 

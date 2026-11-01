@@ -169,7 +169,8 @@ def frame_and_shell(shaped: np.ndarray, chassis: list[dict], floor: int) -> np.n
     return out
 
 
-def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool = True) -> ArchedCar | None:
+def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool = True,
+           buildable: bool = False) -> ArchedCar | None:
     """None if no two tire outlines are found or the car is too narrow for wheels and chassis."""
     if target.shape[1] > target.shape[0]:
         target = target.transpose(1, 0, 2)[::-1].copy()  # length along x (a rotation, not a mirror)
@@ -251,21 +252,36 @@ def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool
         peak = stability(pieces + gear, vehicle=True).metrics.get("peak_tension")
         return np.inf if peak is None else peak
 
-    body = build(shaped, seed=seed, given=structural(chassis), pull=pull_on_wheels, attempts=attempts, anchored=True)
-    parts = chassis + body.pieces[len(chassis):] + gear
+    if buildable:
+        # Lay out for structure first (shape only: long, bonded plates whose build order can be certified), then
+        # give each part the most common photo color among the cells it covers.
+        plain = np.where(shaped > 0, COLOR_INDEX["light_gray"], 0).astype(shaped.dtype)
+        body = build(plain, seed=seed, given=structural(chassis), pull=pull_on_wheels, attempts=attempts, anchored=True)
+        names = {v: k for k, v in COLOR_INDEX.items()}
+        pieces = []
+        for q in body.pieces[len(chassis):]:
+            h = 3 if q["type"] == "brick" else 1
+            cells = shaped[q["x"]:q["x"] + q["w"], q["y"]:q["y"] + q["l"], q["z"]:q["z"] + h].ravel()
+            cells = cells[cells > 0]
+            pieces.append(q | {"color": names[int(np.bincount(cells).argmax())]} if len(cells) else q)
+        parts = chassis + pieces + gear
+    else:
+        body = build(shaped, seed=seed, given=structural(chassis), pull=pull_on_wheels, attempts=attempts, anchored=True)
+        parts = chassis + body.pieces[len(chassis):] + gear
     return ArchedCar(parts, shaped, wheels, verify(structural(parts), shaped, config=MatchConfig(),
                             anchors=frozenset(range(len(chassis)))),
                      verify_function(parts), sym)
 
 
-def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2) -> ArchedCar | None:
+def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2, buildable: bool = False) -> ArchedCar | None:
     """The car on Technic beams 1x4, else 1x6, else 1x8 (longer beams spread the car's weight over more studs):
-    the first that passes structure, function and stability, else the last one tried."""
+    the first that passes structure, function and stability, else the last one tried. `buildable`: lay out for
+    structure first, then color (long bonded plates, so certified building instructions exist)."""
     from .stability import stability
 
     car = None
     for beam in (4, 6, 8):
-        car = _build(target, seed, attempts, beam)
+        car = _build(target, seed, attempts, beam, buildable=buildable)
         if car is None:
             return None
         if car.structure.passed and car.function.passed and stability(car.parts, vehicle=True).passed:
