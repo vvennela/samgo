@@ -26,7 +26,12 @@ from .parts import parse_piece  # noqa: E402
 from .technic import AXLE_RADIUS, DEFAULT_WHEEL, PLATE, STUD, TUBE_RADIUS, WHEELS, _line, _validate  # noqa: E402
 
 MAX_PER_STEP = 10
-HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3}
+GLASS_RGB = {"trans_clear": (205, 225, 240), "trans_black": (45, 60, 75)}
+PIVOTS = {"hinge_base": "swivel hinge plate base (2429)", "hinge_top": "swivel hinge plate top (2430)",
+          "turntable_base": "turntable 2x2 base (3680)", "turntable_top": "turntable 2x2 top (3679)",
+          "bar_plate": "plate 1x2 with bar on end (60478)", "clip_plate": "plate 1x2 with clip on end (63868)",
+          "click_a": "click hinge plate (44301)", "click_b": "click hinge plate (44302)"}
+HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3} | {t: 1 for t in PIVOTS}
 ATTACHMENTS = {"wheel", "bush", "half_bush"}
 SUPPORTED = HEIGHT.keys() | ATTACHMENTS | {"axle"}
 
@@ -38,6 +43,10 @@ def _validate_parts(parts: list[dict]) -> None:
         if not isinstance(p, dict) or not isinstance(p.get("type"), str) or p["type"] not in SUPPORTED:
             raise ValueError(f"unsupported instruction part {i}: {p!r}")
         try:
+            if p["type"] in PIVOTS:  # one-plate parts: their footprint must be a catalog plate footprint
+                parse_piece({"type": "plate", "w": p["w"], "l": p["l"], "x": p["x"], "y": p["y"], "z": p["z"],
+                             "color": "black"})
+                continue
             if p["type"] in HEIGHT:
                 parse_piece(p | {"type": "brick"} if p["type"] == "technic_brick" else p)
             if p["type"] not in ("plate", "brick") and (err := _validate(p)):
@@ -54,6 +63,8 @@ def name(p: dict) -> str:
         return f"wheel {p.get('size', DEFAULT_WHEEL).replace('x', ' x ')} with tire"
     if p["type"] in ("bush", "half_bush"):
         return "Technic bush (3713)" if p["type"] == "bush" else "Technic half bush (32123a)"
+    if p["type"] in PIVOTS:
+        return f"{PIVOTS[p['type']]}, {color}"
     if p["type"] not in HEIGHT:
         raise ValueError(f"unsupported instruction part: {p['type']}")
     a, b = sorted((p["w"], p["l"]))
@@ -110,7 +121,7 @@ def _box_faces(x0, x1, y0, y1, z0, z1):
 def _draw(ax, p: dict, new: bool) -> None:
     alpha, edge = (1.0, (0.1, 0.1, 0.1, 0.9)) if new else (0.12, (0.4, 0.4, 0.4, 0.15))
     if p["type"] in HEIGHT:
-        rgb = np.array(COLORS[p["color"]][1]) / 255
+        rgb = np.array(COLORS[p["color"]][1] if p["color"] in COLORS else GLASS_RGB.get(p["color"], (150, 150, 150))) / 255
         x0, y0, z0 = p["x"] * STUD, p["y"] * STUD, p["z"] * PLATE
         faces = _box_faces(x0, x0 + p["w"] * STUD, y0, y0 + p["l"] * STUD, z0, z0 + HEIGHT[p["type"]] * PLATE)
         ax.add_collection3d(Poly3DCollection(faces, facecolor=(*rgb, alpha), edgecolor=edge, linewidth=0.4))
