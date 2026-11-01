@@ -42,7 +42,10 @@ def test_learned_pipeline_exports_the_checked_model_and_replays(setup_pipeline):
     assert not result['procedural_fallback']
     final = json.loads(Path(result['artifacts']['build']).read_text())
     trace = json.loads(Path(result['artifacts']['trace']).read_text())
-    assert final == trace['steps'][-1]['accepted']
+    # Colors may change after assembly (produced colors, glass); geometry is exactly the accepted assembly's, and
+    # the final checks ran on the saved, recolored model.
+    strip = lambda parts: [{k: v for k, v in p.items() if k != 'color'} for p in parts]
+    assert strip(final) == strip(trace['steps'][-1]['accepted'])
     assert 'checks passed' in Path(result['artifacts']['viewer']).read_text()
     assert Path(result['artifacts']['instructions']).is_file()
     replay = pipeline.run(photo, 'car', out, car=True, assembly='learned', mesh=mesh,

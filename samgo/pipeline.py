@@ -71,11 +71,29 @@ def _reports(parts, target, original, vehicle):
     return bool(passed), reports
 
 
+def _door_reports(parts):
+    """Final checks for a car with hinged doors: the door module's checks plus each door's own sampled swing."""
+    from .doors import CAR_REQUIREMENTS, checks
+    from .learned_mechanisms import car_door_context
+    from .kinematics import bound_motion
+
+    out = checks(parts, CAR_REQUIREMENTS, {}, vehicle=True)
+    doors = {k: bound_motion(parts, g, d, 'vertical') for k, (g, d) in car_door_context(parts)['moving'].items()}
+    ok = lambda v: v if isinstance(v, bool) else v[0]
+    reports = {'structure': {'passed': all(ok(out[k]) for k in ('structure', 'connected') if k in out)},
+               'function': {'passed': all(ok(v) for k, v in out.items() if k not in ('structure', 'connected', 'stands'))},
+               'stability': {'passed': ok(out.get('stands', False))},
+               'doors': {'passed': all(ok(v) for v in doors.values()) and bool(doors), 'each': {k: list(v) for k, v in doors.items()}},
+               'checks': {k: list(v) if not isinstance(v, bool) else v for k, v in out.items()}}
+    passed = all(ok(v) for v in out.values()) and reports['doors']['passed']
+    return bool(passed), reports
+
+
 def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str = 'medium', reuse: bool = True,
         *, assembly: str = 'procedural', model: str | None = None, rounds: int = 3, max_tokens: int = 8000,
         timeout: float = 120, sequential: bool = True, mesh: Path | None = None,
         replay: Path | None = None, sampler=None, require_certificate: bool = False,
-        certificate_timeout: float = 20) -> dict:
+        certificate_timeout: float = 20, doors: bool = False, glass: bool = True) -> dict:
     if assembly not in ('procedural', 'learned') or size not in SIZES:
         raise ValueError('unknown assembly mode or size')
     if assembly == 'procedural' and (model or replay or sampler is not None):
@@ -193,6 +211,38 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 parts = reference.parts
         else:
             parts = build(target).pieces
+        door_reports = None
+        if car and doors:
+            stage('doors')
+            from .doors import add_car_doors
+            built = add_car_doors(parts, target)
+            failed = {k: v for k, v in built['checks'].items() if not (v if isinstance(v, bool) else v[0])}
+            summary['doors_cut'] = not failed
+            save(run_dir / 'doors_cut.json', built['parts'])
+            if failed:
+                summary['doors_passed'] = False
+                summary['doors_error'] = 'door cut failed: ' + '; '.join(f'{k}: {v[1]}' for k, v in failed.items())
+            elif assembly == 'learned':
+                from .learned_mechanisms import car_door_context, place
+                chooser = sampler if sampler is not None else FireworksSampler(model)
+                placed, door_trace = place(built['parts'], 'door', car_door_context(built['parts']), chooser,
+                                           run_dir / 'doors', rounds=rounds, max_tokens=max_tokens, timeout=timeout)
+                summary['doors_passed'] = door_trace['passed']
+                summary['artifacts']['door_trace'] = str(run_dir / 'doors' / 'trace.json')
+                if placed is not None:  # no procedural fallback: a failed placement leaves the car without doors
+                    parts = placed
+            else:
+                summary['doors_passed'] = True
+                parts = built['parts']
+        if car and glass:
+            from .glass import add_glass
+            parts, summary['glass_parts'] = add_glass(parts)
+        from .colors import legalize
+        parts, recolored = legalize(parts)
+        summary['recolored_to_produced'] = len(recolored)
+        save(run_dir / 'recolored.json', recolored)
+        if any(p['type'].startswith('hinge') for p in parts):
+            door_reports = _door_reports(parts)
         np.savez_compressed(run_dir / 'assembly_target.npz', target=target)
         save(run_dir / 'build.json', parts)
         summary['artifacts']['build'] = str(run_dir / 'build.json')
@@ -201,7 +251,10 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
 
         tick = time.monotonic()
         stage('validation')
-        passed, reports = _reports(parts, target, original, car)
+        if door_reports is not None:
+            passed, reports = door_reports
+        else:
+            passed, reports = _reports(parts, target, original, car)
         formal = certify(parts, timeout=certificate_timeout)
         save(run_dir / 'certificate.json', formal)
         summary['artifacts']['certificate'] = str(run_dir / 'certificate.json')
@@ -210,11 +263,13 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         reports['assembly_access'] = {
             'status': 'certified_vertical_envelope_path' if formal['passed'] else 'not_certified',
             'physical_validation': 'not_performed'}
-        summary['passed'] = passed and summary.get('assembly_passed', True)
+        summary['passed'] = passed and summary.get('assembly_passed', True) and summary.get('doors_passed', True)
         if require_certificate:
             summary['passed'] = summary['passed'] and formal['passed']
         summary.update(structure_passed=reports['structure']['passed'],
                        function_passed=reports['function'].get('passed'), stands=reports['stability'].get('passed'))
+        if 'doors' in reports:
+            summary['doors_swing'] = reports['doors']['passed']
         save(run_dir / 'checks.json', reports)
         summary['artifacts']['checks'] = str(run_dir / 'checks.json')
         summary['timings']['validation'] = time.monotonic() - tick
@@ -226,8 +281,13 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             label = f"{assembly} / {summary.get('sampler', {}).get('source', 'procedural')} / " + (
                 'checks passed' if summary['passed'] else 'incomplete: checks failed')
             label += ' / certified under static model' if formal['passed'] else ' / buildability not certified'
-            (run_dir / 'viewer.html').write_text(page([(label, parts, facts_for(parts))], simulate=False))
+            (run_dir / 'viewer.html').write_text(page([(label, parts, facts_for(parts))]))
             summary['artifacts']['viewer'] = str(run_dir / 'viewer.html')
+            from .ldraw import export as ldraw_export
+            text, geometry = ldraw_export(parts, 'samgo_model')
+            (run_dir / 'model.ldr').write_text(text)
+            summary['artifacts']['ldraw'] = str(run_dir / 'model.ldr')
+            summary['ldraw_worst_mismatch_mm'] = max((r['mismatch_mm'] for r in geometry), default=0)
         if summary['passed']:
             from .instructions import write
             options = {'certificate': formal['certificate']} if formal['passed'] else {}
@@ -261,13 +321,16 @@ def main() -> None:
     ap.add_argument('--max-tokens', type=int, default=8000)
     ap.add_argument('--timeout', type=float, default=120, help='seconds to wait for each sampling response')
     ap.add_argument('--joint', action='store_true', help='solve both axle lines in one task')
+    ap.add_argument('--doors', action='store_true', help='cut a hinged door in each side; with --assembly learned, Glimmer places the hinges')
+    ap.add_argument('--no-glass', action='store_true', help='keep the cabin walls opaque')
     ap.add_argument('--require-certificate', action='store_true', help='require the exact static assembly certificate; unsupported mechanisms fail closed')
     ap.add_argument('--certificate-timeout', type=float, default=20, help='solver budget for static certification')
     args = ap.parse_args()
     result = run(args.photo, args.prompt, args.out, args.car, args.size, reuse=not args.fresh,
                  assembly=args.assembly, model=args.model, replay=args.replay, mesh=args.mesh,
                  rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint,
-                 require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout)
+                 require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout,
+                 doors=args.doors, glass=not args.no_glass)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['passed'] else 1)
 

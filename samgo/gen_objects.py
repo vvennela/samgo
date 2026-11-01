@@ -176,13 +176,9 @@ def _is_mechanism(p: dict) -> bool:
     return p["type"] in MECHANISM or (p["type"] == "liftarm" and "axle_hole" in p)  # crank arms
 
 
-def place_variant(family: str, seed: int) -> dict | None:
-    """The model without its moving-part connections (hinges, turntables, axles, wheels, bushes, crank arms); the
-    answer adds them back. Checks name payloads by the input parts that stay, so the answer's order is free."""
-    rng = random.Random(f"place-{family}-{seed}")
-    parts, ctx = _model(family, rng)
-    dx, dy = (rng.randint(0, 6), rng.randint(0, 6)) if family != "door" else (0, 0)
-    parts = recolored(shifted(parts, dx, dy), rng)
+def place_case(parts: list[dict], family: str, ctx: dict, case_id: str) -> dict:
+    """The placement task for a verified model: its moving-part connections removed (the answer adds them back);
+    payload checks name the input parts that stay, so the answer's order is free."""
     removed = [i for i, p in enumerate(parts) if _is_mechanism(p)]
     kept = [i for i in range(len(parts)) if i not in removed]
     new_index = {old: k for k, old in enumerate(kept)} | {old: len(kept) + j for j, old in enumerate(removed)}
@@ -191,9 +187,17 @@ def place_variant(family: str, seed: int) -> dict | None:
         ctx["seat"] = sorted(new_index[i] for i in ctx["seat"] if i in new_index and i not in removed)
     if "moving" in ctx:
         ctx["moving"] = {k: (sorted(new_index[i] for i in g if i not in removed), d) for k, (g, d) in ctx["moving"].items()}
-    case = dict(id=f"place_{family}_{seed}", family=family, mode="place", input=[parts[i] for i in kept],
+    return dict(id=case_id, family=family, mode="place", input=[parts[i] for i in kept],
                 reference=[parts[i] for i in kept + removed], context=ctx,
                 oracle=[{"op": "add", "part": parts[i]} for i in removed])
+
+
+def place_variant(family: str, seed: int) -> dict | None:
+    """A randomized placement task (translated, recolored); None if the reference fails or nothing is missing."""
+    rng = random.Random(f"place-{family}-{seed}")
+    parts, ctx = _model(family, rng)
+    dx, dy = (rng.randint(0, 6), rng.randint(0, 6)) if family != "door" else (0, 0)
+    case = place_case(recolored(shifted(parts, dx, dy), rng), family, ctx, f"place_{family}_{seed}")
     if not _ok(native_checks(case, case["reference"])):
         return None
     if inspect_case(case, []).get("passed"):
