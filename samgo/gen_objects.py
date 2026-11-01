@@ -125,6 +125,12 @@ def _model(family: str, rng: random.Random, split: str | None = None, target=Non
                 return r["parts"], {"requirements": CAR_REQUIREMENTS, "vehicle": True, "base": name,
                                     "moving": {f"door_{i}": (g, 90) for i, g in enumerate(groups)}}
         raise ValueError("no door car found")
+    if family in ("tv", "laptop") and target is not None:  # a photo: the full-size appliance builders
+        from .appliances import build_laptop, build_tv
+
+        r = (build_tv if family == "tv" else build_laptop)(target)
+        return r["parts"], {"requirements": [{k: v for k, v in q.items()} for q in r["requirements"]],
+                            "moving": r["moving"]}
     if family in ("tv", "laptop"):
         w = rng.choice((4, 6, 8))
         if family == "tv":
