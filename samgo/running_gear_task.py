@@ -496,9 +496,15 @@ def frame_mistake(answer: list[dict], rng: random.Random) -> list[dict]:
     bad = json.loads(json.dumps(answer))
     beams = [e for e in bad if e["part"]["type"] == "technic_brick"]
     bushes = [e for e in bad if e["part"]["type"] == "bush"]
-    kinds = ["flawed"] + ["shift_beam", "drop_beam"] * bool(beams) + ["drop_bush"] * bool(bushes)
+    short = [e for e in beams if e["part"]["w"] >= 6]
+    kinds = ["flawed"] + ["shift_beam", "drop_beam"] * bool(beams) + ["drop_bush"] * bool(bushes) + \
+        ["short_beam", "short_beam"] * bool(short)
     kind = rng.choice(kinds)
-    if kind == "shift_beam":
+    if kind == "short_beam":  # the run-4 blind spot: Technic bricks one size too short, same centre
+        for e in short:
+            e["part"]["w"] -= 2
+            e["part"]["x"] += 1
+    elif kind == "shift_beam":
         rng.choice(beams)["part"][rng.choice(["x", "z"])] += rng.choice([-1, 1])
     elif kind == "drop_beam":
         bad.remove(rng.choice(beams))

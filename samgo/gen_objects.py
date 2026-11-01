@@ -15,6 +15,8 @@ import argparse
 import copy
 import json
 import random
+
+import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -32,9 +34,19 @@ from .audit_objects import (
 from .running_gear_task import FEEDBACK
 
 HELD_OUT = ("skateboard", "microwave")          # whole families kept out of training
-TRAIN_FAMILIES = ("car", "train", "chair", "bicycle", "door", "tv", "laptop")
+TRAIN_FAMILIES = ("car", "train", "chair", "bicycle", "door", "door_var", "tv", "laptop")
 CORRECTION_SHARE = 0.4
 PALETTE = ("red", "blue", "yellow", "black", "white", "light_gray", "dark_gray", "green", "orange", "tan")
+
+
+_NAMES: list[str] = []
+
+
+def _base_names() -> list[str]:
+    if not _NAMES:
+        _NAMES.extend(sorted(p.stem for p in Path("runs/bases_shell").glob("*.json")
+                             if p.with_suffix(".npz").exists()))
+    return _NAMES
 
 
 def shifted(parts: list[dict], dx: int, dy: int) -> list[dict]:
@@ -57,7 +69,7 @@ def recolored(parts: list[dict], rng: random.Random) -> list[dict]:
             for p in parts]
 
 
-def _model(family: str, rng: random.Random) -> tuple[list[dict], dict]:
+def _model(family: str, rng: random.Random, split: str | None = None) -> tuple[list[dict], dict]:
     """A verified model of `family` with the context its native checks need."""
     if family == "chair":
         from .chair import build_chair
@@ -93,6 +105,24 @@ def _model(family: str, rng: random.Random) -> tuple[list[dict], dict]:
         groups = moving_groups(parts, {"hinge_top"})
         return parts, {"requirements": CAR_REQUIREMENTS, "vehicle": True,
                        "moving": {f"door_{i}": (g, 90) for i, g in enumerate(groups)}}
+    if family == "door_var":
+        from .doors import CAR_REQUIREMENTS, add_car_doors
+        from .gen_running_gear import split_of
+
+        names = [n for n in _base_names() if split is None or split_of(n) == split]  # test cars: unseen vehicles
+        for _ in range(12):
+            name = rng.choice(names)
+            parts = json.loads(Path(f"runs/bases_shell/{name}.json").read_text())
+            target = np.load(f"runs/bases_shell/{name}.npz")["target"]
+            try:
+                r = add_car_doors(parts, target)
+            except ValueError:
+                continue
+            if all(v if isinstance(v, bool) else v[0] for v in r["checks"].values()):
+                groups = moving_groups(r["parts"], {"hinge_top"})
+                return r["parts"], {"requirements": CAR_REQUIREMENTS, "vehicle": True, "base": name,
+                                    "moving": {f"door_{i}": (g, 90) for i, g in enumerate(groups)}}
+        raise ValueError("no door car found")
     if family in ("tv", "laptop"):
         w = rng.choice((4, 6, 8))
         if family == "tv":
@@ -125,6 +155,7 @@ BREAKS = {
     "microwave": [(("hinge_top",), "pin_x", (-1, 1)), (("turntable_top",), "x", (-1, 1)),
                   (("turntable_top",), "y", (-1, 1))],
     "door": [(("hinge_top",), "pin_x", (-1, 1))],
+    "door_var": [(("hinge_top",), "pin_x", (-1, 1))],
     "tv": [(("turntable_top",), "x", (-1, 1)), (("turntable_top",), "z", (1,))],
     "laptop": [(("click_b",), "pin_y", (-1, 1)), (("click_a",), "pin_y", (-1, 1))],
 }
@@ -196,9 +227,11 @@ def place_case(parts: list[dict], family: str, ctx: dict, case_id: str, only: se
 def place_variant(family: str, seed: int) -> dict | None:
     """A randomized placement task (translated, recolored); None if the reference fails or nothing is missing."""
     rng = random.Random(f"place-{family}-{seed}")
-    parts, ctx = _model(family, rng)
-    dx, dy = (rng.randint(0, 6), rng.randint(0, 6)) if family != "door" else (0, 0)
-    case = place_case(recolored(shifted(parts, dx, dy), rng), family, ctx, f"place_{family}_{seed}")
+    parts, ctx = _model(family, rng, "val" if seed >= 100000 else "train")
+    dx, dy = (rng.randint(0, 6), rng.randint(0, 6)) if family not in ("door", "door_var") else (0, 0)
+    only = {"hinge_base", "hinge_top"} if family == "door_var" and rng.random() < 0.7 else None
+    case = place_case(recolored(shifted(parts, dx, dy), rng), "door" if family == "door_var" else family, ctx,
+                      f"place_{family}_{seed}", only)
     if not _ok(native_checks(case, case["reference"])):
         return None
     if inspect_case(case, []).get("passed"):
@@ -270,22 +303,25 @@ def main() -> None:
     ap.add_argument("--test-instances", type=int, default=6, help="held-out instances per training family")
     ap.add_argument("--test-held-out", type=int, default=12, help="cases per held-out family")
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--families", nargs="+", help="only these training families (no held-out families)")
     args = ap.parse_args()
     if (args.test / "cases.json").exists():
         raise ValueError("refusing to overwrite a frozen test set; use a new --test directory")
     # Test seeds are drawn from a separate range so no test instance reuses a training seed.
-    modes = lambda f: ("gear",) if f in ("car", "train") else ("repair", "place")
-    test_jobs = [(f, 100000 + s, False, m) for f in TRAIN_FAMILIES for m in modes(f)
+    modes = lambda f: ("gear",) if f in ("car", "train") else ("place",) if f == "door_var" else ("repair", "place")
+    families = tuple(args.families) if args.families else TRAIN_FAMILIES
+    held = () if args.families else HELD_OUT
+    test_jobs = [(f, 100000 + s, False, m) for f in families for m in modes(f)
                  for s in range(args.test_instances * 3)]
-    test_jobs += [(f, 200000 + s, False, m) for f in HELD_OUT for m in modes(f) for s in range(args.test_held_out * 3)]
-    count = lambda f: args.per_family // 2 if f == "door" else args.per_family  # 400-part cars are slow to check
-    train_jobs = [(f, s, True, m) for f in TRAIN_FAMILIES for m in modes(f) for s in range(count(f))]
+    test_jobs += [(f, 200000 + s, False, m) for f in held for m in modes(f) for s in range(args.test_held_out * 3)]
+    count = lambda f: args.per_family // 2 if f in ("door", "door_var") else args.per_family  # big cars check slowly
+    train_jobs = [(f, s, True, m) for f in families for m in modes(f) for s in range(count(f))]
     with ProcessPoolExecutor(args.workers) as pool:
         test_out = list(pool.map(_job, test_jobs))
         train_out = list(pool.map(_job, train_jobs))
     cases, per = [], {}
     for (case, _), (family, _, _, mode) in zip(test_out, test_jobs):
-        want = args.test_held_out if family in HELD_OUT else args.test_instances
+        want = args.test_held_out if family in held else args.test_instances
         key = f"{family}/{mode}"
         if case is not None and per.get(key, 0) < want:
             cases.append(case)
@@ -305,8 +341,8 @@ def main() -> None:
             f.write(json.dumps(r) + "\n")
     skipped = [e for _, e in train_out + test_out if e]
     print(json.dumps({"test_cases": per, "train_rows": len(rows), "dropped_as_test_duplicates": len(leaked),
-                      "train_rows_by_family_mode": {f"{f}/{m}": sum(r["family"] == f and r["mode"] == m for r in rows)
-                                                    for f in TRAIN_FAMILIES for m in ("gear", "repair", "place")},
+                      "train_rows_by_family_mode": {f"{f}/{m}": sum(r["case"].startswith(f"place_{f}_") or (r["family"] == f and r["mode"] == m) for r in rows)
+                                                    for f in families for m in ("gear", "repair", "place")},
                       "two_turn_rows": sum(r["turns"] == 2 for r in rows), "skipped_variants": len(skipped),
                       "skip_examples": skipped[:4]}, indent=1))
 
