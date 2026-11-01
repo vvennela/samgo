@@ -244,80 +244,6 @@ def _gear_path_ok(parts: list[dict], body: list[int], placed_gear: list[int], i:
         raise CertificateError(f"{p['type']} part {i} has no clear way in (blocked by part {hit[0]})")
 
 
-def plans(parts: list[dict], groups: list[list[int]]) -> list[tuple[str, int | None, list[tuple[str, list[int]]]]]:
-    """Candidate build orders as (name, base layer, [(frame, units)]): bottom up; upside down; and from the
-    each other layer out (largest first) - that layer on the table, everything above it, then turned over for
-    everything below."""
-    z = [parts[g[0]]["z"] for g in groups]
-    levels = sorted(set(z))
-    area = {lv: sum(parts[g[0]]["w"] * parts[g[0]]["l"] for g, gz in zip(groups, z) if gz == lv) for lv in levels}
-    layer = lambda lv: [k for k, gz in enumerate(z) if gz == lv]
-    out = [("upright", None, [("up", layer(lv)) for lv in levels]),
-           ("upside down, then turned over", None, [("down", layer(lv)) for lv in reversed(levels)])]
-    for base in sorted(levels[1:], key=lambda lv: -area[lv]):  # every other layer as the start, largest first
-        out.append((f"from layer z={base} up, then turned over for the layers below", base,
-                    [("up", layer(lv)) for lv in levels if lv >= base] +
-                    [("down", layer(lv)) for lv in reversed(levels) if lv < base]))
-    return out
-
-
-def _body_steps(parts, groups, plan, base, tension, deadline):
-    """(certified steps of original indices, None) or (None, why)."""
-    frames = {"up": pieces(parts, groups, False, base), "down": pieces(parts, groups, True)}
-    try:
-        ps = frames["up"]
-        for i, a in enumerate(ps):
-            for j, b in enumerate(ps[:i]):
-                if xy_overlap(a, b) and max(a.z, b.z) < min(a.z + a.h, b.z + b.h):
-                    raise CertificateError(f"body parts {groups[j]} and {groups[i]} overlap")
-        if not _connected(ps):
-            raise CertificateError("the finished body is not one stud-connected assembly")
-        placed, steps = [], []
-        for frame, units_ in plan:
-            ps = frames[frame]
-            for k in units_:
-                check_path(ps, placed, k)
-                placed.append(k)
-            witness, issue = _solve(ps, placed, tension, deadline)
-            if issue:
-                raise CertificateError(f"step {len(steps) + 1}: {issue}")
-            steps.append({"kind": "layer", "frame": frame, "units": units_,
-                          "parts": [i for k in units_ for i in groups[k]], "forces": witness})
-        return steps, None
-    except CertificateError as e:
-        return None, str(e)
-
-
-def _greedy_steps(parts, groups, flipped, tension, deadline):
-    """Part by part: at each step add the lowest unit that can go in (clear path) and keeps the placed body in
-    exact balance. (certified steps, None) or (None, why)."""
-    frame = "down" if flipped else "up"
-    ps = pieces(parts, groups, flipped)
-    remaining = sorted(range(len(ps)), key=lambda k: (ps[k].z, ps[k].x, ps[k].y))
-    placed, steps = [], []
-    while remaining:
-        if time.monotonic() > deadline:
-            return None, "time budget exhausted"
-        # Never cover a part still waiting to go in: first try units with no unplaced unit beneath their footprint.
-        free = [k for k in remaining if not any(j != k and ps[j].z < ps[k].z and xy_overlap(ps[j], ps[k])
-                                                 for j in remaining)]
-        for k in free + [k for k in remaining if k not in free]:
-            try:
-                check_path(ps, placed, k)
-            except CertificateError:
-                continue
-            witness, _ = _solve(ps, placed + [k], tension, deadline)
-            if witness is not None:
-                placed.append(k)
-                remaining.remove(k)
-                steps.append({"kind": "layer", "frame": frame, "units": [k], "parts": list(groups[k]),
-                              "forces": witness})
-                break
-        else:
-            return None, f"stuck after {len(placed)} of {len(ps)} parts: no remaining part can go in and stay balanced"
-    return steps, None
-
-
 MAX_STEP = 6  # parts per step, as in LEGO's own manuals
 
 
@@ -438,31 +364,24 @@ def certify_manual(parts: list[dict], *, timeout: float = 600) -> dict:
     groups = units(parts, body)
     tension = rational(TENSION)
     failures = []
-    for name, base, plan in plans(parts, groups):
-        steps, issue = _body_steps(parts, groups, plan, base, tension, start + timeout)
+    # How manuals are made: steps of up to MAX_STEP parts, each locking what it adds, in one orientation or built
+    # from a layer up and then turned over for the layers below.
+    everything = list(range(len(groups)))
+    z = {k: parts[groups[k][0]]["z"] for k in everything}
+    levels = sorted(set(z.values()))
+    area = {lv: sum(parts[groups[k][0]]["w"] * parts[groups[k][0]]["l"] for k in everything if z[k] == lv)
+            for lv in levels}
+    options = [("upright, steps of up to 6", None, [("up", everything)]),
+               ("upside down, steps of up to 6", None, [("down", everything)])]
+    options += [(f"from layer z={b} up, then turned over; steps of up to 6", b,
+                 [("up", [k for k in everything if z[k] >= b]), ("down", [k for k in everything if z[k] < b])])
+                for b in sorted(levels[1:], key=lambda lv: -area[lv])[:4]]
+    for name, base, phases in options:
+        steps, issue = _closure_steps(parts, groups, phases, base, tension, start + timeout)
         if steps is not None:
             report.update(orientation=name, base=base, steps=steps)
             break
         failures.append(f"{name}: {issue}")
-    else:
-        # How manuals are made: steps of up to MAX_STEP parts, each locking what it adds, in one orientation or
-        # built from a layer up and then turned over for the layers below.
-        everything = list(range(len(groups)))
-        z = {k: parts[groups[k][0]]["z"] for k in everything}
-        levels = sorted(set(z.values()))
-        area = {lv: sum(parts[groups[k][0]]["w"] * parts[groups[k][0]]["l"] for k in everything if z[k] == lv)
-                for lv in levels}
-        options = [("upright, steps of up to 6", None, [("up", everything)]),
-                   ("upside down, steps of up to 6", None, [("down", everything)])]
-        options += [(f"from layer z={b} up, then turned over; steps of up to 6", b,
-                     [("up", [k for k in everything if z[k] >= b]), ("down", [k for k in everything if z[k] < b])])
-                    for b in sorted(levels[1:], key=lambda lv: -area[lv])[:4]]
-        for name, base, phases in options:
-            steps, issue = _closure_steps(parts, groups, phases, base, tension, start + timeout)
-            if steps is not None:
-                report.update(orientation=name, base=base, steps=steps)
-                break
-            failures.append(f"{name}: {issue}")
     if not report["steps"]:
         report["issues"] += failures
         report["seconds"] = time.monotonic() - start
