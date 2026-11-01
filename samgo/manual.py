@@ -285,35 +285,45 @@ def _feasible(ps, placed, tension: Fraction) -> bool:
     return res.status == 0
 
 
-def _closure_steps(parts, groups, phases, base, tension, deadline):
-    """Steps of at most MAX_STEP units, each leaving the placed body in exact balance with no temporary support.
-    A unit that cannot stand alone goes in together with what locks it: the units directly on top of it (caps)
-    and the caps' own unplaced supports. `phases`: [(frame, allowed units)], e.g. upright then turned over."""
-    frames = {"up": pieces(parts, groups, False, base), "down": pieces(parts, groups, True)}
-    placed, steps = [], []
-    for frame, allowed in phases:
-        ps = frames[frame]
-        on = {k: [j for j in allowed if ps[j].z == ps[k].z + ps[k].h and xy_overlap(ps[j], ps[k])] for k in allowed}
-        under = {k: [j for j in allowed if ps[k].z == ps[j].z + ps[j].h and xy_overlap(ps[j], ps[k])] for k in allowed}
+def frame(parts, groups, spec):
+    """Pieces of a building frame and the unit -> piece index map. spec: {"subset": units on/over the table,
+    "flipped": upside down, "base": the layer standing on the table (upright; default the lowest)}."""
+    sub = spec["subset"]
+    ps = pieces(parts, [groups[k] for k in sub], spec.get("flipped", False), spec.get("base"))
+    return ps, {k: n for n, k in enumerate(sub)}
+
+
+def _closure_steps(parts, groups, phases, tension, deadline, assembly="main", placed=None):
+    """Steps of at most MAX_STEP units, each leaving the placed assembly in exact balance with no temporary
+    support. A unit that cannot stand alone goes in together with what locks it: the units directly on top of it
+    (caps) and the caps' own unplaced supports. `phases`: [(frame spec, units to add)]."""
+    placed, steps = list(placed or []), []
+    for spec, allowed in phases:
+        ps, local = frame(parts, groups, spec)
+        loc = lambda ks: [local[k] for k in ks]
+        on = {k: [j for j in allowed if ps[local[j]].z == ps[local[k]].z + ps[local[k]].h
+                  and xy_overlap(ps[local[j]], ps[local[k]])] for k in allowed}
+        under = {k: [j for j in allowed if ps[local[k]].z == ps[local[j]].z + ps[local[j]].h
+                     and xy_overlap(ps[local[j]], ps[local[k]])] for k in allowed}
         remaining = set(allowed)
+        P = lambda k: ps[local[k]]
         while remaining:
             if time.monotonic() > deadline:
                 return None, "time budget exhausted"
             accepted = None
-            for k in sorted(remaining, key=lambda k: (ps[k].z, ps[k].x, ps[k].y)):
+            for k in sorted(remaining, key=lambda k: (P(k).z, P(k).x, P(k).y)):
                 group = [k]
                 while len(group) <= MAX_STEP and accepted is None:
-                    # never cover a unit still waiting to go in
-                    if not any(j not in group and j in remaining and ps[j].z < ps[g].z and xy_overlap(ps[j], ps[g])
-                               for g in group for j in remaining):
-                        order = sorted(group, key=lambda g: (ps[g].z, ps[g].x, ps[g].y))
+                    if not any(j not in group and P(j).z < P(g).z and xy_overlap(P(j), P(g))
+                               for g in group for j in remaining):  # never cover a unit still waiting
+                        order = sorted(group, key=lambda g: (P(g).z, P(g).x, P(g).y))
                         try:
                             trial = list(placed)
                             for g in order:
-                                check_path(ps, trial, g)
+                                check_path(ps, loc(trial), local[g])
                                 trial.append(g)
-                            if _feasible(ps, trial, tension):
-                                witness, _ = _solve(ps, trial, tension, deadline)
+                            if _feasible(ps, loc(trial), tension):
+                                witness, _ = _solve(ps, loc(trial), tension, deadline)
                                 if witness is not None:
                                     accepted = (order, witness)
                         except CertificateError:
@@ -330,11 +340,22 @@ def _closure_steps(parts, groups, phases, base, tension, deadline):
                 if accepted is not None:
                     break
             if accepted is None:
-                return None, f"stuck after {len(placed)} units: no step of up to {MAX_STEP} parts stands on its own"
+                low = sorted(remaining, key=lambda k: (P(k).z, P(k).x, P(k).y))[:3]
+                why = []
+                for k in low:
+                    try:
+                        check_path(ps, loc(placed), local[k])
+                        reason = "path clear, but it cannot stand alone or with its caps"
+                    except CertificateError as e:
+                        reason = str(e)
+                    p = parts[groups[k][0]]
+                    why.append(f"{p['type']} {p.get('w')}x{p.get('l')} at ({p['x']},{p['y']},{p['z']}): {reason}")
+                return None, (f"stuck after {len(placed)} units: no step of up to {MAX_STEP} parts stands on its own; "
+                              "lowest waiting: " + "; ".join(why))
             order, witness = accepted
             placed += order
             remaining -= set(order)
-            steps.append({"kind": "layer", "frame": frame, "units": order,
+            steps.append({"kind": "layer", "assembly": assembly, "frame": spec, "units": order,
                           "parts": [i for k in order for i in groups[k]], "forces": witness})
     return _merged(steps), None
 
@@ -345,11 +366,55 @@ def _merged(steps):
     out = []
     for st in steps:
         last = out[-1] if out else None
-        if last and last["frame"] == st["frame"] and len(last["parts"]) + len(st["parts"]) <= MAX_STEP:
+        if last and last["frame"] == st["frame"] and last.get("assembly") == st.get("assembly") \
+                and len(last["parts"]) + len(st["parts"]) <= MAX_STEP:
             last.update(units=last["units"] + st["units"], parts=last["parts"] + st["parts"], forces=st["forces"])
         else:
             out.append(dict(st))
     return out
+
+
+def _with_module(parts, groups, z, levels, area, tension, deadline):
+    """Lower body built from its largest low layer (then turned over for what lies below it), an upper
+    sub-assembly (everything from a cut layer up) built on its own upside down, then the lower body set upright and
+    the module set on in one step. Tries cut layers from the top down. (steps, name, None) or (None, None, why)."""
+    everything = list(range(len(groups)))
+    last = "no cut layer tried"
+    for cut in sorted(levels[2:], reverse=True):
+        lower = [k for k in everything if z[k] < cut]
+        upper = [k for k in everything if z[k] >= cut]
+        lower_levels = sorted({z[k] for k in lower})
+        b = max(lower_levels[1:] or lower_levels, key=lambda lv: area[lv])
+        low_phases = [({"subset": lower, "flipped": False, "base": b}, [k for k in lower if z[k] >= b]),
+                      ({"subset": lower, "flipped": True, "base": None}, [k for k in lower if z[k] < b])]
+        low, issue = _closure_steps(parts, groups, low_phases, tension, deadline)
+        if low is None:
+            last = f"cut z={cut}: lower body: {issue}"
+            continue
+        mod, issue = _closure_steps(parts, groups, [({"subset": upper, "flipped": True, "base": None}, upper)],
+                                    tension, deadline, assembly="module")
+        if mod is None:
+            last = f"cut z={cut}: module: {issue}"
+            continue
+        final = {"subset": everything, "flipped": False, "base": None}
+        ps, local = frame(parts, groups, final)
+        try:
+            for k in upper:  # the whole module comes straight down onto the lower body
+                check_path(ps, [local[j] for j in lower], local[k])
+        except CertificateError as e:
+            last = f"cut z={cut}: setting the module on: {e}"
+            continue
+        upright, _ = _solve(ps, [local[j] for j in lower], tension, deadline)  # lower body turned upright, alone
+        attached, _ = _solve(ps, [local[j] for j in everything], tension, deadline)
+        if upright is None or attached is None:
+            last = f"cut z={cut}: {'the lower body cannot stand upright' if upright is None else 'the joined model cannot stand'}"
+            continue
+        steps = low + mod + [{"kind": "layer", "assembly": "main", "frame": final, "units": [], "parts": [],
+                              "forces": upright},
+                             {"kind": "attach", "assembly": "main", "frame": final, "units": upper,
+                              "parts": [i for k in upper for i in groups[k]], "forces": attached}]
+        return steps, f"lower body from layer z={b}; upper sub-assembly from layer z={cut} built upside down, set on", None
+    return None, None, f"with a sub-assembly: {last}"
 
 
 def certify_manual(parts: list[dict], *, timeout: float = 600) -> dict:
@@ -364,24 +429,31 @@ def certify_manual(parts: list[dict], *, timeout: float = 600) -> dict:
     groups = units(parts, body)
     tension = rational(TENSION)
     failures = []
-    # How manuals are made: steps of up to MAX_STEP parts, each locking what it adds, in one orientation or built
-    # from a layer up and then turned over for the layers below.
+    # How manuals are made: steps of up to MAX_STEP parts, each locking what it adds; built upright, upside down,
+    # from a layer out (then turned over), or with a sub-assembly built on its own and set on in one step.
     everything = list(range(len(groups)))
     z = {k: parts[groups[k][0]]["z"] for k in everything}
     levels = sorted(set(z.values()))
     area = {lv: sum(parts[groups[k][0]]["w"] * parts[groups[k][0]]["l"] for k in everything if z[k] == lv)
             for lv in levels}
-    options = [("upright, steps of up to 6", None, [("up", everything)]),
-               ("upside down, steps of up to 6", None, [("down", everything)])]
-    options += [(f"from layer z={b} up, then turned over; steps of up to 6", b,
-                 [("up", [k for k in everything if z[k] >= b]), ("down", [k for k in everything if z[k] < b])])
-                for b in sorted(levels[1:], key=lambda lv: -area[lv])[:4]]
-    for name, base, phases in options:
-        steps, issue = _closure_steps(parts, groups, phases, base, tension, start + timeout)
+    allspec = lambda flipped=False, base=None: {"subset": everything, "flipped": flipped, "base": base}
+    options = [("upright", [(allspec(), everything)]), ("upside down", [(allspec(True), everything)])]
+    for b in sorted(levels[1:], key=lambda lv: -area[lv])[:4]:
+        options.append((f"from layer z={b} up, then turned over",
+                        [(allspec(False, b), [k for k in everything if z[k] >= b]),
+                         (allspec(True), [k for k in everything if z[k] < b])]))
+    for name, phases in options:
+        steps, issue = _closure_steps(parts, groups, phases, tension, start + timeout)
         if steps is not None:
-            report.update(orientation=name, base=base, steps=steps)
+            report.update(orientation=name, steps=steps)
             break
         failures.append(f"{name}: {issue}")
+    if not report["steps"]:
+        steps, name, issue = _with_module(parts, groups, z, levels, area, tension, start + timeout)
+        if steps is not None:
+            report.update(orientation=name, steps=steps)
+        else:
+            failures.append(issue)
     if not report["steps"]:
         report["issues"] += failures
         report["seconds"] = time.monotonic() - start
@@ -417,23 +489,33 @@ def check(parts: list[dict], report: dict) -> dict:
         if sorted(listed) != sorted(body + gear):
             raise CertificateError("the manual's parts differ from the model's parts")
         groups = units(parts, body)
-        frames = {"up": pieces(parts, groups, False, report.get("base")), "down": pieces(parts, groups, True)}
-        ps = frames["up"]
-        placed: list[int] = []
+        placed = {"main": [], "module": []}
         done: list[int] = []
+        tension = rational(TENSION)
         for s in report["steps"]:
-            if s["kind"] == "layer":
+            if s["kind"] in ("layer", "attach"):
                 if sorted(i for k in s["units"] for i in groups[k]) != sorted(s["parts"]):
                     raise CertificateError("a step's units and parts disagree")
-                ps = frames[s["frame"]]
-                for k in s["units"]:
-                    check_path(ps, placed, k)
-                    placed.append(k)
-                _forces_ok(ps, placed, s["forces"], rational(TENSION))
+                ps, local = frame(parts, groups, s["frame"])
+                mine = placed[s.get("assembly", "main")]
+                if s["kind"] == "attach":  # a finished module, set on as one piece
+                    if sorted(s["units"]) != sorted(placed["module"]):
+                        raise CertificateError("the attached module is not the module that was built")
+                    for k in s["units"]:
+                        check_path(ps, [local[j] for j in mine], local[k])
+                    mine.extend(s["units"])
+                else:
+                    for k in s["units"]:
+                        check_path(ps, [local[j] for j in mine], local[k])
+                        mine.append(k)
+                _forces_ok(ps, [local[j] for j in mine], s["forces"], tension)
             else:
                 for i in s["parts"]:
                     _gear_path_ok(parts, body, done, i)
                     done.append(i)
+        if sorted(placed["main"]) != list(range(len(groups))):
+            raise CertificateError("not every body part ends up in the finished model")
+        ps, _ = frame(parts, groups, {"subset": list(range(len(groups))), "flipped": False, "base": None})
         if not _connected(ps):
             raise CertificateError("the finished body is not one stud-connected assembly")
         return {"passed": True, "steps": len(report["steps"])}
