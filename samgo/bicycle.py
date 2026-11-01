@@ -143,7 +143,9 @@ def _joint_moving(parts, bodies, joints, part: int):
         sides = _sides(bodies, joints, k)
         if sides is None:
             continue
-        side = next(s for s in sides if root in s)
+        side = next((s for s in sides if root in s), None)
+        if side is None:  # the joint does not separate this part (it sits on neither side, e.g. a loose group)
+            continue
         moving = [i for r in side for i in bodies[r]]
         if len(moving) < len(parts) / 2:   # the part's own small side, not the whole bike
             out.append((j, moving))
