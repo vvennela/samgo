@@ -26,7 +26,12 @@ LEGO-compatible bricks that work like the real thing.
 
 Answer with one JSON object and nothing else:
 {"object": "<short name>", "kind": "vehicle" or "static", "wheels": <number of road wheels, 0 if none>,
- "axles": <number of wheel axles, 0 if none>, "rolls_along": "length" or null}
+ "axles": <number of wheel axles, 0 if none>, "rolls_along": "length" or null,
+ "symmetric": true or false, "body_color": "<main paint color>"}
+
+"symmetric": the real object is left-right symmetric (a car is, even if the photo shows one side).
+"body_color": one of black, blue, green, red, yellow, white, orange, tan, reddish_brown, light_gray, dark_gray -
+the closest to the object's main paint color.
 
 "vehicle" means it rolls on wheels (cars, trucks, toy vehicles). Count wheels the real object has,
 including ones hidden from view (a car has 4 even if the photo shows 2)."""

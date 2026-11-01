@@ -130,7 +130,8 @@ def mirror_plane(mesh: trimesh.Trimesh, samples: int = 4000) -> tuple[float, flo
     return angle, best[1], best[2]
 
 
-def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric: bool = True) -> np.ndarray:
+def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric: bool = True,
+             exact_mirror: bool = False) -> np.ndarray:
     """Mesh -> grid of COLOR_INDEX values (x, y studs; z plates).
 
     With `symmetric`, a left-right symmetric object is first turned so its mirror plane runs along x through the
@@ -184,7 +185,7 @@ def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric
     grid = smooth_shape(grid)
     votes = votes.reshape(*shape, len(COLORS))
     if plane is not None:
-        grid = _mirror(grid, votes)
+        grid = _mirror(grid, votes, exact=exact_mirror)
     return merge_small_regions(smooth_colors(grid, mirrored=plane is not None))
 
 
@@ -212,15 +213,17 @@ def smooth_shape(grid: np.ndarray) -> np.ndarray:
     return np.where(best, grid[tuple(nearest)], 0).astype(np.int32)
 
 
-def _mirror(grid: np.ndarray, votes: np.ndarray) -> np.ndarray:
+def _mirror(grid: np.ndarray, votes: np.ndarray, exact: bool = False) -> np.ndarray:
     """Make the grid symmetric across the middle of y, except connected one-sided regions of at least ONE_SIDED of
-    the object (an open door, a spare wheel), which stay as they are. Pairs take the color with more votes."""
+    the object (an open door, a spare wheel), which stay as they are. Pairs take the color with more votes. With
+    `exact` (an object known to be symmetric, e.g. a car: the photo shows one side), every one-sided feature is
+    mirrored to the other side - both side mirrors, both doors."""
     occ = grid > 0
     mocc = occ[:, ::-1, :]
     one_sided = occ ^ mocc
     labels, n = ndimage.label(one_sided)
     keep = np.zeros_like(occ)
-    if n:
+    if n and not exact:
         sizes = ndimage.sum(one_sided, labels, range(1, n + 1))
         for i, size in enumerate(sizes, 1):
             if size >= ONE_SIDED * occ.sum():

@@ -217,47 +217,70 @@ def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attem
     edges = sorted({int(round(a["x"])) for a in gear if a["type"] == "axle"})
     front, rear = edges[0], edges[-1]
 
-    doors, removed, gaps = [], set(), []
-    for side in ("left", "right"):
-        chosen = None
-        for d0, length, ys, zb, zt in _plan(occ, side, deck, front, rear):
-            pin_y = ys if side == "left" else ys + 1
-            color = COLOR_NAME[Counter(col[d0:d0 + length, ys, zb:zt + 1].ravel()).most_common(1)[0][0]]
-            plan = _hinge_layers(occ, d0, ys, zb, zt)
-            if plan is None:
-                continue
-            layers, holders = plan
-            bases, moving = door(d0, length, ys, zb, zt, pin_y, color, hinges=layers)
-            cut = {k for k, p in enumerate(grid) if _overlaps(p, d0 - 2, d0 + length + 1, ys, ys + 1, zb - 1, zt + 2)
-                   or any(_overlaps(p, h["x"], h["x"] + h["w"], ys, ys + 1, h["z"], h["z"] + 1) for h in holders)}
-            if any(grid[k]["type"] == "technic_brick" for k in cut):
-                continue
-            gap = [(slice(d0, d0 + length), ys, zb - 1), (slice(d0, d0 + length), ys, zt + 1),
-                   (d0 + length, ys, slice(zb - 1, zt + 2))]
-            # Quick sweep against everything that will stay: kept parts and 1x1 stand-ins for the cells to rebuild.
-            left_over = np.zeros_like(occ)
-            for k in cut:
-                left_over[_cells(grid[k])] = True
-            left_over[d0 - 2:d0 + length, ys, zb:zt + 1] = False
-            for g in gap:
-                left_over[g] = False
-            stand_ins = [{"type": "plate", "w": 1, "l": 1, "x": int(x), "y": int(y), "z": int(z)}
-                         for x, y, z in np.argwhere(left_over)]
-            for h in holders:
-                left_over[_cells(h)] = False
-            trial = [p for k, p in enumerate(grid) if k not in cut] + stand_ins + holders + bases + moving
-            m0 = len(trial) - len(moving)
-            pin = np.array([d0 * 8.0, pin_y * 8.0, zb * 3.2])
-            if not any(sweep(trial, list(range(m0, len(trial))), pin, np.array([0.0, 0, 1]), s * 90,
-                             ignore=set(range(m0 - len(bases), m0))) is None for s in (1, -1)):
-                continue
-            chosen = (side, d0, length, ys, zb, zt, holders + bases, moving, cut, gap, layers)
+    def try_side(side, d0, length, ys, zb, zt):
+        """The door in one side wall at this plan, or None if it does not fit / swing clear."""
+        pin_y = ys if side == "left" else ys + 1
+        color = COLOR_NAME[Counter(col[d0:d0 + length, ys, zb:zt + 1].ravel()).most_common(1)[0][0]]
+        plan = _hinge_layers(occ, d0, ys, zb, zt)
+        if plan is None:
+            return None
+        layers, holders = plan
+        bases, moving = door(d0, length, ys, zb, zt, pin_y, color, hinges=layers)
+        cut = {k for k, p in enumerate(grid) if _overlaps(p, d0 - 2, d0 + length + 1, ys, ys + 1, zb - 1, zt + 2)
+               or any(_overlaps(p, h["x"], h["x"] + h["w"], ys, ys + 1, h["z"], h["z"] + 1) for h in holders)}
+        if any(grid[k]["type"] == "technic_brick" for k in cut):
+            return None
+        gap = [(slice(d0, d0 + length), ys, zb - 1), (slice(d0, d0 + length), ys, zt + 1),
+               (d0 + length, ys, slice(zb - 1, zt + 2))]
+        # Quick sweep against everything that will stay: kept parts and 1x1 stand-ins for the cells to rebuild.
+        left_over = np.zeros_like(occ)
+        for k in cut:
+            left_over[_cells(grid[k])] = True
+        left_over[d0 - 2:d0 + length, ys, zb:zt + 1] = False
+        for g in gap:
+            left_over[g] = False
+        stand_ins = [{"type": "plate", "w": 1, "l": 1, "x": int(x), "y": int(y), "z": int(z)}
+                     for x, y, z in np.argwhere(left_over)]
+        for h in holders:
+            left_over[_cells(h)] = False
+        trial = [p for k, p in enumerate(grid) if k not in cut] + stand_ins + holders + bases + moving
+        m0 = len(trial) - len(moving)
+        pin = np.array([d0 * 8.0, pin_y * 8.0, zb * 3.2])
+        if not any(sweep(trial, list(range(m0, len(trial))), pin, np.array([0.0, 0, 1]), s * 90,
+                         ignore=set(range(m0 - len(bases), m0))) is None for s in (1, -1)):
+            return None
+        return (side, d0, length, ys, zb, zt, holders + bases, moving, cut, gap, layers)
+
+    # Symmetric by construction: plan the left door, put the right one at its mirror position, and accept a plan
+    # only when both doors fit and swing clear (cars are left-right symmetric; the body is built mirrored).
+    Y = occ.shape[1]
+    doors = None
+    for d0, length, ys, zb, zt in _plan(occ, "left", deck, front, rear):
+        left = try_side("left", d0, length, ys, zb, zt)
+        right = try_side("right", d0, length, Y - 1 - ys, zb, zt) if left else None
+        if left and right:
+            doors = [left, right]
             break
-        if chosen is None:
-            raise ValueError(f"no room for a door in the {side} wall")
-        doors.append(chosen)
-        removed |= chosen[8]
-        gaps += chosen[9]
+    if doors is None:
+        raise ValueError("no room for a pair of mirrored doors")
+    removed, gaps = set(), []
+    for d in doors:
+        removed |= d[8]
+        gaps += d[9]
+    # Mirror-closed: whatever is cut on one side, the parts over the mirror image of those cells are cut too, so the
+    # rebuilt walls (and what hangs on them, like a side mirror) come back the same on both sides.
+    def cellset(p):
+        h = HEIGHT[p["type"]]
+        return {(x, y, z) for x in range(p["x"], p["x"] + p["w"]) for y in range(p["y"], p["y"] + p["l"])
+                for z in range(p["z"], p["z"] + h)}
+    while True:
+        cells = set().union(*(cellset(grid[k]) for k in removed)) if removed else set()
+        mirrored = {(x, Y - 1 - y, z) for x, y, z in cells}
+        extra = {k for k, p in enumerate(grid) if k not in removed and p["type"] != "technic_brick"
+                 and cellset(p) & mirrored}
+        if not extra:
+            break
+        removed |= extra
 
     kept = [p for k, p in enumerate(grid) if k not in removed]
     pivots = [q for d in doors for q in d[6] + d[7]]
