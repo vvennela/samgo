@@ -161,15 +161,17 @@ def part_ids(p: dict) -> list[str]:
     return [SIMPLE[t]]
 
 
-def color_code(p: dict) -> int:
+def color_code(p: dict, part_num: str | None = None) -> int:
+    """The LDraw color for `p`; with `part_num`, one that part was actually produced in (colors.legal_code)."""
     from .parts import COLORS
 
     c = p.get("color")
-    if c in COLORS:
-        return COLORS[c][0]
-    if c in EXTRA_COLORS:
-        return EXTRA_COLORS[c]
-    return DEFAULT_COLOR.get(p["type"], 71)
+    code = COLORS[c][0] if c in COLORS else EXTRA_COLORS.get(c, DEFAULT_COLOR.get(p["type"], 71))
+    if part_num is None:
+        return code
+    from .colors import legal_code
+
+    return legal_code(p | {"color": c if c in COLORS or c in EXTRA_COLORS else None}, part_num, [code])
 
 
 # ---- geometry ---------------------------------------------------------------------------------------------------
@@ -235,7 +237,7 @@ def _place_swivel(p: dict, name: str) -> tuple[str, float]:
     R = max(_rotations(True), key=lambda m: (m @ local)[[0, 2]] @ away)
     top = -(p["z"] + 1) * 8
     m = " ".join(f"{v:g}" for v in R.ravel())
-    return f"1 {color_code(p)} {px:g} {top:g} {py:g} {m} {name}.dat", 0.0
+    return f"1 {color_code(p, name)} {px:g} {top:g} {py:g} {m} {name}.dat", 0.0
 
 
 def place(p: dict, name: str) -> tuple[str, float]:
@@ -266,7 +268,7 @@ def place(p: dict, name: str) -> tuple[str, float]:
     err, R = best
     t = want_c - R @ centre
     m = " ".join(f"{v:g}" for v in R.ravel())
-    return f"1 {color_code(p)} {t[0]:g} {t[1]:g} {t[2]:g} {m} {name}.dat", err / 2.5
+    return f"1 {color_code(p, name)} {t[0]:g} {t[1]:g} {t[2]:g} {m} {name}.dat", err / 2.5
 
 
 def export(parts: list[dict], name: str = "model") -> tuple[str, list[dict]]:
