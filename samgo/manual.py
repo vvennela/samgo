@@ -21,6 +21,7 @@ Not modelled: gear weight and gear loads, insertion force, hand access, toleranc
 """
 
 import json
+import re
 import sys
 import time
 from fractions import Fraction
@@ -374,13 +375,18 @@ def _merged(steps):
     return out
 
 
-def _with_module(parts, groups, z, levels, area, tension, deadline):
+def _with_module(parts, groups, z, levels, area, tension, deadline, hint=None):
     """Lower body built from its largest low layer (then turned over for what lies below it), an upper
     sub-assembly (everything from a cut layer up) built on its own upside down, then the lower body set upright and
     the module set on in one step. Tries cut layers from the top down. (steps, name, None) or (None, None, why)."""
     everything = list(range(len(groups)))
     last = "no cut layer tried"
-    for cut in sorted(levels[2:], reverse=True):
+    cuts = levels[2:]
+    if hint is not None:  # start at the height where whole-model orders got stuck: the module begins there
+        cuts = sorted(cuts, key=lambda c: (abs(c - hint), -c))
+    else:
+        cuts = sorted(cuts, reverse=True)
+    for cut in cuts:
         lower = [k for k in everything if z[k] < cut]
         upper = [k for k in everything if z[k] >= cut]
         lower_levels = sorted({z[k] for k in lower})
@@ -417,9 +423,10 @@ def _with_module(parts, groups, z, levels, area, tension, deadline):
     return None, None, f"with a sub-assembly: {last}"
 
 
-def certify_manual(parts: list[dict], *, timeout: float = 600) -> dict:
+def certify_manual(parts: list[dict], *, timeout: float | None = None) -> dict:
     """The manual (steps of original part indices) and its certificate, or why it could not be certified."""
     start = time.monotonic()
+    timeout = timeout or (600 + 6 * len(parts))  # bigger models get more search time
     body, gear, other = split(parts)
     report = {"version": VERSION, "model": MODEL, "build_sha256": digest(parts), "passed": False, "steps": [],
               "uncertified_parts": [{"index": i, "type": parts[i]["type"]} for i in other], "issues": []}
@@ -449,7 +456,11 @@ def certify_manual(parts: list[dict], *, timeout: float = 600) -> dict:
             break
         failures.append(f"{name}: {issue}")
     if not report["steps"]:
-        steps, name, issue = _with_module(parts, groups, z, levels, area, tension, start + timeout)
+        # The attempt that got furthest shows where a sub-assembly has to begin.
+        stuck = [(int(m.group(1)), int(m.group(2))) for f in failures
+                 for m in [re.search(r"stuck after (\d+) units.*?lowest waiting: \S+ \S+ at \(\d+,\d+,(\d+)\)", f)] if m]
+        steps, name, issue = _with_module(parts, groups, z, levels, area, tension, start + timeout,
+                                          hint=max(stuck)[1] if stuck else None)
         if steps is not None:
             report.update(orientation=name, steps=steps)
         else:
