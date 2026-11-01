@@ -23,6 +23,11 @@ from .running_gear_task import FEEDBACK, edits_from
 H = {"plate": 1, "brick": 3}
 
 
+# Wheels hang below a body: an object that needs them is raised this many plates first (a Technic brick's holes
+# are 5.6 mm up, so a 30.4 mm wheel on a brick at z=3 touches the ground; a 3-plate column joins it to the body).
+LIFT = 12
+
+
 def setup(folder: Path):
     body = json.loads((folder / "body40.json").read_text())
     labels = np.load(folder / "regions40.npy")
@@ -33,6 +38,10 @@ def setup(folder: Path):
         return int(np.bincount(cells).argmax()) if cells.size else 0
 
     return body, [region_of(p) for p in body]
+
+
+def lifted(body: list[dict], lift: int = LIFT) -> list[dict]:
+    return [p | {"z": p["z"] + lift} for p in body]
 
 
 def tasks(body, regions):
@@ -58,9 +67,9 @@ def tasks(body, regions):
     xg = int(np.median(xs))
     yc = int(np.median([body[i]["y"] for i in fus]))
     patch = [i for i in lower if abs(body[i]["x"] - xg) <= 4 and abs(body[i]["y"] - yc) <= 3]
-    zb = min(body[i]["z"] for i in patch) if patch else 0
+    zb = min(body[i]["z"] for i in patch) + LIFT if patch else LIFT  # gear tasks run on the raised body
     flap = [{"name": "flap", "kind": "swing", "axis": "horizontal", "degrees": 20, "count": 1}]
-    gear = [{"name": "gear", "kind": "spin", "count": 2}]
+    gear = [{"name": "gear", "kind": "spin", "count": 2, "stands": False}]  # one leg of several
     return [
         ("flap", "L0", allp, "This is a Boeing 747. Add one flap on a wing's trailing edge: free a strip of the "
                              "trailing edge and hinge it so it swings about a horizontal axis.", flap),
@@ -69,10 +78,11 @@ def tasks(body, regions):
         ("flap", "L2", strip, "These are the parts along the trailing edge of a wing. Turn the rear of them into a "
                               "flap: free it and hinge it about a horizontal axis along the edge.", flap),
         ("flap", "L3", strip, f"These are the parts along the trailing edge of a wing. Make a flap behind the line "
-                              f"x = {xh} (rows y = {span[0]}..{span[-1]}): remove what is at x = {xh} to leave a "
-                              f"one-stud gap, keep the parts behind it as the flap, and hinge it with bar plates "
-                              f"(facing +x, ending at x = {xh}) and clip plates (facing -x, starting at x = {xh + 1}) "
-                              f"at z = {zs}.", flap),
+                              f"x = {xh} (rows y = {span[0]}..{span[-1]}): clear the column x = {xh} in those rows to "
+                              f"leave a one-stud gap (shorten or split parts that cross it), keep the parts behind it "
+                              f"as the flap, and hinge it with bar plates (w=2, l=1, facing +x, at x = {xh - 2}, so "
+                              f"they end at x = {xh - 1}) and clip plates (w=2, l=1, facing -x, at x = {xh + 1}) at "
+                              f"z = {zs}.", flap),
         ("gear", "L0", allp, "This is a Boeing 747. Add one landing-gear leg with an axle and two wheels that spin; "
                              "the wheels must be the lowest parts.", gear),
         ("gear", "L1", lower, "These are the lower parts of the fuselage of a Boeing 747. Add one landing-gear leg "
@@ -83,9 +93,9 @@ def tasks(body, regions):
          gear),
         ("gear", "L3", patch, f"These are the belly parts of an airplane around one spot. Add a landing-gear leg: a "
                               f"2x2 column of bricks from the belly down to two 1x2 Technic bricks (w=2, l=1) at "
-                              f"x = {xg - 1}, y = {yc - 1} and y = {yc}, z = 0; an axle along y on stud edge "
-                              f"x = {xg}, z = 0, from y = {yc - 4}, length 10; wheels at y = {yc - 3} and "
-                              f"y = {yc + 1}; bushes outboard. The column must reach the belly bottom at "
+                              f"x = {xg - 1}, y = {yc - 1} and y = {yc}, z = 3; an axle along y on stud edge "
+                              f"x = {xg}, z = 3, from y = {yc - 4}, length 8; wheels at y = {yc - 3} and "
+                              f"y = {yc + 1}; bushes at y = {yc - 4} and y = {yc + 3}. The column must reach the belly bottom at "
                               f"z = {zb}.", gear),
     ]
 
@@ -147,7 +157,8 @@ def main() -> None:
     body, regions = setup(args.folder)
     work = tasks(body, regions)
     with ThreadPoolExecutor(max_workers=len(work)) as pool:
-        results = list(pool.map(lambda t: run_one(body, t, args.model, precise=not args.coarse_feedback), work))
+        results = list(pool.map(lambda t: run_one(lifted(body) if t[0] == "gear" else body, t, args.model,
+                                                  precise=not args.coarse_feedback), work))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(results, indent=1))
     for r in results:

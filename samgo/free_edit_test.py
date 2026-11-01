@@ -47,7 +47,8 @@ def messages(obj: str, parts: list[dict], reqs: list[dict]) -> list[dict]:
                                                                        for i, p in enumerate(parts))}]
 
 
-def check(original: list[dict], parts: list[dict], sources: list[int | None], reqs: list[dict]) -> dict:
+def check(original: list[dict], parts: list[dict], sources: list[int | None], reqs: list[dict],
+          stand: bool = True) -> dict:
     """Generic verdicts. `sources[i]`: the original index of candidate part i (None if added)."""
     from .kinematics import _sides, analyse, connected, locked, requirement_met, sweep
     from .mechanism_bases import PIVOT_AS, structural
@@ -60,7 +61,11 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
     rule = [i for i in r.issues if i.code not in ("floating", "disconnected")]
     out["structure"] = (not rule, "; ".join(i.message for i in rule[:4]) or "valid parts, no overlaps")
     out["connected"] = (connected(parts), "one structure through studs and joints")
-    st = stability(locked(parts, PIVOT_AS), vehicle=any(p["type"] == "wheel" for p in parts))
+    if stand:
+        st = stability(locked(parts, PIVOT_AS), vehicle=any(p["type"] == "wheel" for p in parts))
+    else:  # a part-level task: the whole object's balance is checked when every mechanism is in
+        from types import SimpleNamespace
+        st = SimpleNamespace(passed=True, issues=[])
     out["stands"] = (st.passed, "; ".join(i.message for i in st.issues) or "stands")
     bodies, joints = analyse(parts)
     swings = {"horizontal": 0, "vertical": 0}
@@ -86,7 +91,8 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
             ok, why = requirement_met(parts, {"kind": "spin", "count": q["count"], "parallel": True})
             fn = verify_function(parts, min_axle_lines=2)
             lowest = not any(i.code == "body_drags" for i in fn.issues)
-            out[q["name"]] = (ok and lowest and st.passed, f"{why}; wheels lowest: {lowest}")
+            stands = st.passed or not q.get("stands", True)  # one leg of several is not asked to stand alone
+            out[q["name"]] = (ok and lowest and stands, f"{why}; wheels lowest: {lowest}")
     need = {"horizontal": sum(q["count"] for q in reqs if q["kind"] == "swing" and q["axis"] == "horizontal"),
             "vertical": sum(q["count"] for q in reqs if q["kind"] == "swing" and q["axis"] == "vertical")}
     for which in ("horizontal", "vertical"):
