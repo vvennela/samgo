@@ -53,3 +53,15 @@ Runs in parallel where independent: H (training) overlaps I–J; A/B/C touch sep
 2. Rotate the Fireworks API key printed in an earlier error, before the repo is public.
 3. Open one exported `.ldr` in BrickLink Studio; optionally build one model.
 4. Record the demo video from the script; submit by Wed Nov 4, 6 PM PT; post on X.
+
+## Status at the end of the night (Nov 1, 03:30)
+
+Done: produced colors; glass; rigid 6x30 skateboard; demo pipeline (Glimmer running gear + door hinges, glass,
+colors, checks, viewer, LDraw, instructions); photo -> any mechanism object (research step -> builder -> Glimmer);
+TV and laptop at scale; clip-and-bar hinge (accurate horizontal hinge); formally certified manuals (chair,
+skateboard, microwave, both photo cars with --buildable); run 5 (doors on unseen cars 0/10 -> 7/10, cars 49/50);
+the Camry passes the complete spec live from its photo with a certified 49-step manual.
+
+Not done: higher-resolution bicycle (needs a redesign for 4-stud wheels); placing whole mechanisms in never-seen
+object families (0/20; the honest 747 test would be Glimmer making every edit itself); Beetle doors on the buildable
+body (Glimmer's answer overlaps; it passed on the color-layout body).

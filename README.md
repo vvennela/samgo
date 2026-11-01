@@ -63,14 +63,17 @@ What Glimmer learned, measured on frozen test sets made before training (Muse Gl
 
 - **Live from photos** (cached SAM 3D meshes), run 5: the Camry and the Beetle each get Glimmer's running gear and
   Glimmer's door hinges (first try), glass and produced colors; structure, function, stability and the doors' swing
-  all pass.
+  all pass. With `--buildable` (structure-first layout) the **Camry passes the complete spec end to end with a
+  formally certified 49-step manual**; on that Beetle body Glimmer's running gear passes but its door hinges overlap
+  (one of the ~30% of door cases run 5 still misses).
 - Glimmer learns the mechanisms it is shown and transfers *repairs* to unseen object families, and door placement
   to unseen cars once its data varies; it does not yet *place* a whole mechanism in an object family it never saw.
   Run 5 traded some accuracy on two fixed door cars (where it now places only hinges) for that generality.
 - **Physical evidence:** every model exports to LDraw with no part off by more than 0.4 mm from the official library
   geometry. Building instructions are **formally certified** (exact per-step equilibrium with a declared stud-grip
-  capacity, insertion paths, no temporary support, steps of at most 6 parts, independent checker) for the chair,
-  skateboard and microwave. The cars are not certified yet: their shells of small plates only lock as a whole.
+  capacity, insertion paths, no temporary support, steps of at most 6 parts, sub-assemblies, independent checker)
+  for the chair, skateboard, microwave and both photo cars (Beetle 42 steps, Camry 41-49 steps, built with
+  `--buildable`: bricks laid out for structure first, then colored by the photo; color accuracy 0.82-0.85).
 
 | Built by | What |
 |---|---|
@@ -89,8 +92,8 @@ uv sync --locked --inexact
 # Photo -> verified build + instructions (needs SAM/Spark keys in .env)
 PYTHONPATH=. uv run --no-sync python -m samgo.pipeline photos/camry.jpg --prompt car --car -o runs/photo-camry
 # ... with Glimmer placing the running gear and door hinges (Fireworks sampler checkpoint; see docs/photo-pipeline.md)
-PYTHONPATH=. uv run --no-sync python -m samgo.pipeline photos/beetle.jpg --prompt car --car --assembly learned \
-    --model <sampler path> --doors -o runs/photo-beetle
+PYTHONPATH=. uv run --no-sync python -m samgo.pipeline photos/camry.jpg --prompt car --car --assembly learned \
+    --model <sampler path> --doors --buildable --manual -o runs/photo-camry
 
 # Certified instructions and LDraw for any model
 PYTHONPATH=. uv run --no-sync python -m samgo.manual runs/demo/skateboard/skateboard.json
