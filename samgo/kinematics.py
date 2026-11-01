@@ -19,7 +19,8 @@ from .technic import HOLE_HEIGHT, LENGTH, PLATE, STUD, WHEELS, DEFAULT_WHEEL, ex
 
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "hinge_base": 1, "hinge_top": 1, "tile": 1, "slope": 3,
           "invslope": 3, "curve": 2, "roundbrick": 3, "roundplate": 1, "arch": 3,
-          "car_door": 3, "click_a": 1, "click_b": 1, "turntable_base": 1, "turntable_top": 1}
+          "car_door": 3, "click_a": 1, "click_b": 1, "turntable_base": 1, "turntable_top": 1,
+          "bar_plate": 1, "clip_plate": 1}
 # Real parts behind the pivoting kinds (LDraw): swivel hinge 2429/2430, car door 3821/3822 (1x3x1),
 # click hinge plates 44301/44302, turntable 2x2 3680/3679.
 TOL = 0.5  # mm
@@ -53,6 +54,20 @@ def box(p: dict) -> tuple[np.ndarray, np.ndarray]:
         return np.array(lo), np.array(hi)
     lo = np.array([p["x"] * STUD, p["y"] * STUD, p["z"] * PLATE])
     return lo, lo + np.array([p["w"] * STUD, p["l"] * STUD, HEIGHT[p["type"]] * PLATE])
+
+
+def clip_axis(p: dict) -> tuple[np.ndarray, np.ndarray, float]:
+    """(axis, start point, length) of the hinge line of a bar plate (60478) or clip plate (63868), measured from
+    the LDraw parts: the bar / clip centre is 1.5 studs from the plate centre, i.e. half a stud past the end it
+    faces, 2 LDU (0.8 mm) below the plate's top, across the plate's width. A bar plate and a clip plate at one
+    height, facing each other with one stud between their ends, share this line."""
+    f = p.get("facing", "+x")
+    top = (p["z"] + 1) * PLATE - 0.8
+    if f in ("+x", "-x"):
+        x = (p["x"] + p["w"] + 0.5) if f == "+x" else (p["x"] - 0.5)
+        return np.array([0.0, 1, 0]), np.array([x * STUD, p["y"] * STUD, top]), p["l"] * STUD
+    y = (p["y"] + p["l"] + 0.5) if f == "+y" else (p["y"] - 0.5)
+    return np.array([1.0, 0, 0]), np.array([p["x"] * STUD, y * STUD, top]), p["w"] * STUD
 
 
 def connectors(p: dict) -> list[Connector]:
@@ -102,6 +117,9 @@ def connectors(p: dict) -> list[Connector]:
     if t == "car_door":  # 3821/3822: turns about a vertical axis through the stud at its hinge end
         pin = np.array([(p["pin_x"] + 0.5) * STUD, (p["pin_y"] + 0.5) * STUD, p["z"] * PLATE])
         return [Connector("door_pin", pin, z_axis, (-PLATE, 3 * PLATE))]
+    if t in ("bar_plate", "clip_plate"):  # 60478 / 63868: bar or clip past the end the plate faces
+        ax, end, line = clip_axis(p)
+        return [Connector("bar_end" if t == "bar_plate" else "clip_end", end, ax, (0.0, line))]
     if t in ("click_a", "click_b"):  # click hinge plates 44301/44302: a horizontal pin along `pin_axis`
         ax = {"x": np.array([1.0, 0, 0]), "y": y_axis}[p.get("pin_axis", "x")]
         pin = np.array([p["pin_x"] * STUD, p["pin_y"] * STUD, p["z"] * PLATE + 2 / 20 * STUD])
@@ -153,6 +171,7 @@ JOINT = {  # (kind, kind) -> joint type
     frozenset(["pin_free", "round_hole"]): "revolute",
     frozenset(["hinge_pin_a", "hinge_pin_b"]): "revolute",
     frozenset(["click_pin_a", "click_pin_b"]): "revolute",
+    frozenset(["bar_end", "clip_end"]): "revolute",
     frozenset(["turn_a", "turn_b"]): "revolute",
     frozenset(["door_pin", "stud"]): "revolute",
 }
@@ -471,12 +490,13 @@ def locked(parts: list[dict], as_type: dict) -> list[dict]:
     hinge lying side by side at one height become one plate (click hinges hold their angle; swivel hinges by
     friction); other pivoting parts become the plain parts they occupy."""
     out, used = [], set()
+    clip = ("bar_plate", "clip_plate")  # these pair across their one-stud gap, below, never side by side
     for i, p in enumerate(parts):
-        if i in used or p.get("type") not in as_type:
+        if i in used or p.get("type") not in as_type or p["type"] in clip:
             continue
         for j in range(i + 1, len(parts)):
             q = parts[j]
-            if j in used or q.get("type") not in as_type or q["z"] != p["z"]:
+            if j in used or q.get("type") not in as_type or q["type"] in clip or q["z"] != p["z"]:
                 continue
             xs = sorted((p["x"], p["x"] + p["w"], q["x"], q["x"] + q["w"]))
             ys = sorted((p["y"], p["y"] + p["l"], q["y"], q["y"] + q["l"]))
@@ -486,6 +506,20 @@ def locked(parts: list[dict], as_type: dict) -> list[dict]:
                 used |= {i, j}
                 out.append({"type": as_type[p["type"]], "w": xs[-1] - xs[0], "l": ys[-1] - ys[0], "x": xs[0],
                             "y": ys[0], "z": p["z"], "color": p.get("color", "dark_gray")})
+                break
+    for i, p in enumerate(parts):  # a clip on its bar, one stud apart: held still, one rigid plate across the gap
+        if i in used or p.get("type") != "bar_plate":
+            continue
+        for j, q in enumerate(parts):
+            if j in used or q.get("type") != "clip_plate" or q["z"] != p["z"]:
+                continue
+            (a1, s1, _), (a2, s2, _) = clip_axis(p), clip_axis(q)
+            if abs(abs(float(a1 @ a2)) - 1) < 1e-6 and np.linalg.norm((s1 - s2) - ((s1 - s2) @ a1) * a1) <= TOL:
+                xs = sorted((p["x"], p["x"] + p["w"], q["x"], q["x"] + q["w"]))
+                ys = sorted((p["y"], p["y"] + p["l"], q["y"], q["y"] + q["l"]))
+                used |= {i, j}
+                out.append({"type": "plate", "w": xs[-1] - xs[0], "l": ys[-1] - ys[0], "x": xs[0], "y": ys[0],
+                            "z": p["z"], "color": p.get("color", "dark_gray")})
                 break
     return out + [p if p.get("type") not in as_type else p | {"type": as_type[p["type"]]}
                   for k, p in enumerate(parts) if k not in used]

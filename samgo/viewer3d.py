@@ -21,7 +21,7 @@ from .technic import (BEAM_HEIGHT, DEFAULT_WHEEL, HOLE_HEIGHT, LENGTH, PIN_RADIU
                       extent, wheel_studs)
 
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "tile": 1, "slope": 3, "invslope": 3, "curve": 2,
-          "roundbrick": 3, "roundplate": 1, "arch": 3, "hinge_base": 1, "hinge_top": 1, "car_door": 3, "click_a": 1,
+          "roundbrick": 3, "roundplate": 1, "arch": 3, "hinge_base": 1, "hinge_top": 1, "car_door": 3, "bar_plate": 1, "clip_plate": 1, "click_a": 1,
           "click_b": 1, "turntable_base": 1, "turntable_top": 1}
 EXTRA = {"trans_clear": (205, 225, 240), "trans_black": (45, 60, 75)}
 SHAPE = {"slope": 1, "curve": 2, "invslope": 3, "roundbrick": 4, "roundplate": 4}  # 0 = box

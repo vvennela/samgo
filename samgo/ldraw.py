@@ -129,10 +129,11 @@ TILES = {(1, 1): "3070b", (1, 2): "3069b", (1, 3): "63864", (1, 4): "2431", (1, 
          (2, 2): "3068b"}
 SIMPLE = {"bush": "3713", "half_bush": "32123b", "axle_pin": "43093", "axle_joiner": "6538a", "cross_block": "6536",
           "hinge_base": "2429", "hinge_top": "2430", "click_a": "44301a", "click_b": "44302a",
-          "turntable_base": "3680", "turntable_top": "3679", "car_door": "3821"}
+          "turntable_base": "3680", "turntable_top": "3679", "car_door": "3821", "bar_plate": "60478",
+          "clip_plate": "63868"}
 EXTRA_COLORS = {"trans_clear": 47, "trans_black": 40}
 DEFAULT_COLOR = {"axle": 0, "pin": 0, "bush": 71, "half_bush": 71, "axle_pin": 1, "liftarm": 71}
-STUDDED = {"plate", "brick", "technic_brick", "tile", "hinge_base", "hinge_top", "click_a", "click_b",
+STUDDED = {"plate", "brick", "technic_brick", "tile", "hinge_base", "hinge_top", "click_a", "click_b", "bar_plate", "clip_plate",
            "turntable_base", "turntable_top", "car_door"}
 AXIS_PARTS = {"axle", "pin", "bush", "half_bush", "axle_pin", "axle_joiner"}
 
@@ -240,8 +241,19 @@ def _place_swivel(p: dict, name: str) -> tuple[str, float]:
     return f"1 {color_code(p, name)} {px:g} {top:g} {py:g} {m} {name}.dat", 0.0
 
 
+def _place_clip(p: dict, name: str) -> tuple[str, float]:
+    """60478 / 63868: the library plate is centred at its origin, top at Y=0, its bar / clip end toward +X.
+    Turned so that end faces `facing`; the plate body sits exactly on our footprint."""
+    turn = {"+x": "1 0 0 0 1 0 0 0 1", "-x": "-1 0 0 0 1 0 0 0 -1", "+y": "0 0 -1 0 1 0 1 0 0",
+            "-y": "0 0 1 0 1 0 -1 0 0"}[p.get("facing", "+x")]
+    cx, cz = (p["x"] + p["w"] / 2) * 20, (p["y"] + p["l"] / 2) * 20
+    return f"1 {color_code(p, name)} {cx:g} {-(p['z'] + 1) * 8:g} {cz:g} {turn} {name}.dat", 0.0
+
+
 def place(p: dict, name: str) -> tuple[str, float]:
     """One LDraw line for library part `name` standing in for SAMgo part `p`, and the worst size mismatch (mm)."""
+    if p["type"] in ("bar_plate", "clip_plate"):
+        return _place_clip(p, name)
     if p["type"] in ("hinge_base", "hinge_top") and "pin_x" in p:
         return _place_swivel(p, name)
     lo, hi, compare = expected_box(p)

@@ -17,7 +17,7 @@ from .parts import COLOR_INDEX
 from .stability import stability
 
 PIVOT_AS = {"turntable_base": "plate", "turntable_top": "plate", "hinge_base": "plate", "hinge_top": "plate",
-            "click_a": "plate", "click_b": "plate", "car_door": "brick"}
+            "click_a": "plate", "click_b": "plate", "car_door": "brick", "bar_plate": "plate", "clip_plate": "plate"}
 REQUIREMENTS = {
     "turntable": {"kind": "swing", "axis": "vertical", "degrees": 60},
     "lid": {"kind": "swing", "axis": "horizontal", "degrees": 60},

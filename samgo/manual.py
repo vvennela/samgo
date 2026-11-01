@@ -36,7 +36,7 @@ MODEL = {"weight": "w*l*height per part, at its centre", "contacts": "4 points p
          "tension_per_stud": TENSION, "insertion": "body straight down; axles along their line; wheels/bushes along "
          "the axle", "not_modelled": ["gear weight and loads", "insertion force", "hand access", "tolerances",
                                        "final motion (sampled check elsewhere)"]}
-AS_PLATE = {"hinge_base", "hinge_top", "click_a", "click_b", "turntable_base", "turntable_top"}
+AS_PLATE = {"hinge_base", "hinge_top", "click_a", "click_b", "turntable_base", "turntable_top", "bar_plate", "clip_plate"}
 BODY = {"plate", "brick", "technic_brick"} | AS_PLATE
 AXIAL = {"axle", "wheel", "bush", "half_bush"}
 
