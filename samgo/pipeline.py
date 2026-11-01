@@ -225,8 +225,10 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             elif assembly == 'learned':
                 from .learned_mechanisms import car_door_context, place
                 chooser = sampler if sampler is not None else FireworksSampler(model)
+                # Only the hinges are left out: the running gear is already Glimmer's own, from the stage before.
                 placed, door_trace = place(built['parts'], 'door', car_door_context(built['parts']), chooser,
-                                           run_dir / 'doors', rounds=rounds, max_tokens=max_tokens, timeout=timeout)
+                                           run_dir / 'doors', rounds=rounds, max_tokens=max_tokens, timeout=timeout,
+                                           only={'hinge_base', 'hinge_top'})
                 summary['doors_passed'] = door_trace['passed']
                 summary['artifacts']['door_trace'] = str(run_dir / 'doors' / 'trace.json')
                 if placed is not None:  # no procedural fallback: a failed placement leaves the car without doors

@@ -40,6 +40,9 @@ COLORS = {
     "dark_gray": (72, (100, 100, 100)),
 }
 
+# Transparent colors for glass (LDraw codes). Valid on parts, but never chosen when voxelizing a photo's colors.
+GLASS_COLORS = {"trans_clear": 47, "trans_black": 40}
+
 # Target grids store colors as these indices; 0 means empty.
 COLOR_INDEX = {name: i + 1 for i, name in enumerate(COLORS)}
 
@@ -87,6 +90,6 @@ def parse_piece(raw: dict) -> Piece:
         raise PartError(f"unknown type {raw['type']!r}")
     if tuple(sorted((raw["w"], raw["l"]))) not in FOOTPRINTS:
         raise PartError(f"no {raw['w']}x{raw['l']} {raw['type']} in the palette")
-    if raw["color"] not in COLORS:
+    if raw["color"] not in COLORS and raw["color"] not in GLASS_COLORS:
         raise PartError(f"unknown color {raw['color']!r}")
     return Piece(**{f: raw[f] for f in fields})

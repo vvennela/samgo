@@ -88,7 +88,7 @@ def verify(raw_pieces: list, target: np.ndarray | None = None, bounds: tuple[int
     for i, p in enumerate(pieces):
         count[p.cells] += 1
         owner[p.cells] = i
-        colors[p.cells] = COLOR_INDEX[p.color]
+        colors[p.cells] = COLOR_INDEX.get(p.color, -1)  # -1: glass, a deliberate change from the photo
 
     overlapping = [i for i, p in enumerate(pieces) if count[p.cells].max() > 1]
     if overlapping:
@@ -111,7 +111,8 @@ def verify(raw_pieces: list, target: np.ndarray | None = None, bounds: tuple[int
         union = int((built | wanted).sum())
         both = built & wanted
         iou = int(both.sum()) / union if union else 1.0
-        color_accuracy = float((colors[both] == target[both]).mean()) if both.any() else 0.0
+        judged = both & (colors != -1)  # glass cells are not judged against the photo's colors
+        color_accuracy = float((colors[judged] == target[judged]).mean()) if judged.any() else 0.0
         metrics.update(iou=iou, color_accuracy=color_accuracy)
         if iou < config.min_iou or color_accuracy < config.min_color_accuracy:
             issues.append(Issue("off_target", f"IoU {iou:.3f} (need {config.min_iou}), "

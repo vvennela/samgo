@@ -24,10 +24,10 @@ def car_door_context(parts: list[dict]) -> dict:
 
 
 def place(parts: list[dict], family: str, ctx: dict, sampler, out: Path, *, rounds: int = 3,
-          max_tokens: int = 8000, timeout: float = 180) -> tuple[list[dict] | None, dict]:
-    """(the accepted model or None, the trace)."""
+          max_tokens: int = 8000, timeout: float = 180, only: set | None = None) -> tuple[list[dict] | None, dict]:
+    """(the accepted model or None, the trace). `only`: the part types left for Glimmer to place."""
     out.mkdir(parents=True, exist_ok=True)
-    case = place_case(parts, family, ctx, f"pipeline_{family}")
+    case = place_case(parts, family, ctx, f"pipeline_{family}", only)
     chat = messages(case)
     trace = {"family": family, "sampler": sampler.metadata, "removed": len(case["oracle"]),
              "input_parts": len(case["input"]), "rounds": [], "passed": False}

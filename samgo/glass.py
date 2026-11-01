@@ -47,9 +47,17 @@ def add_glass(parts: list[dict], shrink: float = 0.8) -> tuple[list[dict], int]:
         b_pillar = side and not end and x == (x0 + x1) // 2
         return (side or end) and not corner and not b_pillar
 
+    from .colors import NAMED, exists
+    from .parts import LDRAW_IDS
+
+    def made_in_glass(p: dict) -> bool:  # only sizes LEGO produced in this color, so no piece is ever split
+        pid = LDRAW_IDS.get((p["type"], *sorted((p["w"], p["l"]))))
+        return pid is not None and exists(pid, NAMED[GLASS])
+
     out, n = [], 0
     for p in parts:
-        if p["type"] in BODY_TYPES and p["z"] in window_z and all(z in window_z and glassy(x, y, z) for x, y, z in _cells(p)):
+        if p["type"] in BODY_TYPES and p["z"] in window_z and made_in_glass(p) \
+                and all(z in window_z and glassy(x, y, z) for x, y, z in _cells(p)):
             p = p | {"color": GLASS}
             n += 1
         out.append(p)

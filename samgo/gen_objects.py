@@ -176,10 +176,11 @@ def _is_mechanism(p: dict) -> bool:
     return p["type"] in MECHANISM or (p["type"] == "liftarm" and "axle_hole" in p)  # crank arms
 
 
-def place_case(parts: list[dict], family: str, ctx: dict, case_id: str) -> dict:
+def place_case(parts: list[dict], family: str, ctx: dict, case_id: str, only: set | None = None) -> dict:
     """The placement task for a verified model: its moving-part connections removed (the answer adds them back);
-    payload checks name the input parts that stay, so the answer's order is free."""
-    removed = [i for i, p in enumerate(parts) if _is_mechanism(p)]
+    payload checks name the input parts that stay, so the answer's order is free. `only`: remove just these types
+    (e.g. a car's hinges, when its running gear is already in place)."""
+    removed = [i for i, p in enumerate(parts) if (p["type"] in only if only else _is_mechanism(p))]
     kept = [i for i in range(len(parts)) if i not in removed]
     new_index = {old: k for k, old in enumerate(kept)} | {old: len(kept) + j for j, old in enumerate(removed)}
     ctx = copy.deepcopy(ctx)
