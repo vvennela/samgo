@@ -302,6 +302,16 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         if car:  # paint: one body color (Spark's, else the photo's most common), black frame and underbody
             from .colors import body_color, paint
             from .parts import COLORS
+            if spec is None:  # car given explicitly: still ask Spark for the paint color (cached per photo)
+                key = digest({'photo': photo_sha, 'model': SPEC_MODEL, 'code': summary['code_sha256']['function_spec.py']})
+                path = cache / f'spec-{key}.json'
+                spec = _cached_json(path) if reuse else None
+                if spec is None:
+                    try:
+                        spec = asyncio.run(async_stage(infer(photo), 120))
+                        save(path, spec)
+                    except Exception:  # noqa: BLE001 - no Spark: fall back to the photo's most common color
+                        spec = {}
             chosen = (spec or {}).get('body_color')
             summary['body_color'] = chosen if chosen in COLORS else body_color(original)
             parts = paint(parts, summary['body_color'])
