@@ -54,11 +54,20 @@ def add_glass(parts: list[dict], shrink: float = 0.8) -> tuple[list[dict], int]:
         pid = LDRAW_IDS.get((p["type"], *sorted((p["w"], p["l"]))))
         return pid is not None and exists(pid, NAMED[GLASS])
 
-    out, n = [], 0
-    for p in parts:
-        if p["type"] in BODY_TYPES and p["z"] in window_z and made_in_glass(p) \
-                and all(z in window_z and glassy(x, y, z) for x, y, z in _cells(p)):
-            p = p | {"color": GLASS}
-            n += 1
-        out.append(p)
-    return out, n
+    chosen = {i for i, p in enumerate(parts)
+              if p["type"] in BODY_TYPES and p["z"] in window_z and made_in_glass(p)
+              and all(z in window_z and glassy(x, y, z) for x, y, z in _cells(p))}
+    # A mirror-symmetric body gets mirror-symmetric windows: its two sides may be tiled with different parts, so
+    # keep only glass whose mirror cells are glass too, until both sides agree.
+    occupied = {c for p in body for c in _cells(p)}
+    y_lo, y_hi = min(y for _, y, _ in occupied), max(y for _, y, _ in occupied)
+    mirror = lambda c: (c[0], y_lo + y_hi - c[1], c[2])
+    if sum(mirror(c) in occupied for c in occupied) >= 0.95 * len(occupied):
+        while True:
+            glass = {c for i in chosen for c in _cells(parts[i])}
+            keep = {i for i in chosen if all(mirror(c) in glass for c in _cells(parts[i]))}
+            if keep == chosen:
+                break
+            chosen = keep
+    out = [p | {"color": GLASS} if i in chosen else p for i, p in enumerate(parts)]
+    return out, len(chosen)
