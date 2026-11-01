@@ -185,8 +185,13 @@ def _gear_path_ok(parts: list[dict], body: list[int], placed_gear: list[int], i:
     from .technic import HOLE_HEIGHT, PLATE, STUD, WHEELS, wheel_studs
 
     p = parts[i]
+    if p.get("axis", "y") == "x":  # the same check with x and y swapped
+        swap = lambda q: q | {"x": q["y"], "y": q["x"], "w": q.get("l", q.get("w")), "l": q.get("w", q.get("l")),
+                              "axis": "y"} if "w" in q else q | {"x": q["y"], "y": q["x"], "axis": "y"}
+        view = [swap(q) for q in parts]
+        return _gear_path_ok(view, body, placed_gear, i)
     if p.get("axis", "y") != "y":
-        raise CertificateError(f"part {i}: only axle lines across the model (axis y) are covered")
+        raise CertificateError(f"part {i}: vertical axle lines are not covered")
     edge, zc = Fraction(p["x"]), Fraction(p["z"]) + Fraction(str(HOLE_HEIGHT)) / Fraction(str(PLATE))  # plates
     y0 = Fraction(str(p["y"]))
     span = {"axle": Fraction(p.get("length", 0)), "wheel": Fraction(wheel_studs(p.get("size", "30.4x14"))),
@@ -197,28 +202,46 @@ def _gear_path_ok(parts: list[dict], body: list[int], placed_gear: list[int], i:
         radius = Fraction(str(WHEELS[p.get("size", "30.4x14")][0])) / 2 / Fraction(str(STUD))  # studs
     else:
         radius = Fraction(9, 20)
-    lo_y, hi_y = min(parts[b]["y"] for b in body), max(parts[b]["y"] + parts[b]["l"] for b in body)
-    from_low = (y0 + span / 2) < (lo_y + hi_y) / 2          # slide in from the nearer side
-    sweep_lo, sweep_hi = (Fraction(-10**6), y0 + span) if from_low else (y0, Fraction(10**6))
     hh = {"plate": 1, "brick": 3, "technic_brick": 3} | {t: 1 for t in AS_PLATE}
-    for b in body:
-        q = parts[b]
-        if not (q["y"] < sweep_hi and sweep_lo < q["y"] + q["l"]):
-            continue
-        if p["type"] == "axle":
-            on_line = q["x"] < edge < q["x"] + q["w"] and q["z"] < zc < q["z"] + hh[q["type"]]
-            if on_line and not (q["type"] == "technic_brick" and q["z"] == p["z"]):
-                raise CertificateError(f"axle part {i} would have to pass through solid part {b}")
-            continue
-        # A wheel/bush disc (radius in studs, centre (edge, zc in plates)) against the part's x-z rectangle.
-        x0, x1 = Fraction(q["x"]), Fraction(q["x"] + q["w"])
-        z0, z1 = Fraction(q["z"]) * Fraction(str(PLATE)) / Fraction(str(STUD)), \
-            Fraction(q["z"] + hh[q["type"]]) * Fraction(str(PLATE)) / Fraction(str(STUD))  # studs
-        cz = zc * Fraction(str(PLATE)) / Fraction(str(STUD))
-        dx = max(x0 - edge, Fraction(0), edge - x1)
-        dz = max(z0 - cz, Fraction(0), cz - z1)
-        if dx * dx + dz * dz < radius * radius:
-            raise CertificateError(f"{p['type']} part {i} would hit part {b} while sliding on")
+    to_studs = Fraction(str(PLATE)) / Fraction(str(STUD))
+    cz = zc * to_studs                                       # disc centre height, in studs
+
+    def slide(sweep_lo, sweep_hi) -> int | None:
+        """The first body part met when sweeping along the axle line over y in (sweep_lo, sweep_hi), else None."""
+        for b in body:
+            q = parts[b]
+            if not (q["y"] < sweep_hi and sweep_lo < q["y"] + q["l"]):
+                continue
+            if p["type"] == "axle":
+                on_line = q["x"] < edge < q["x"] + q["w"] and q["z"] < zc < q["z"] + hh[q["type"]]
+                if on_line and not (q["type"] == "technic_brick" and q["z"] == p["z"]):
+                    return b
+                continue
+            dx = max(Fraction(q["x"]) - edge, Fraction(0), edge - (q["x"] + q["w"]))
+            dz = max(Fraction(q["z"]) * to_studs - cz, Fraction(0), cz - Fraction(q["z"] + hh[q["type"]]) * to_studs)
+            if dx * dx + dz * dz < radius * radius:
+                return b
+        return None
+
+    def drop(direction: int) -> int | None:
+        """The first body part met when the disc comes straight down (+1: from above) or up (-1: from below)."""
+        for b in body:
+            q = parts[b]
+            if not (q["y"] < y0 + span and y0 < q["y"] + q["l"]):
+                continue
+            if not (q["x"] < edge + radius and edge - radius < q["x"] + q["w"]):
+                continue
+            qz0, qz1 = Fraction(q["z"]) * to_studs, Fraction(q["z"] + hh[q["type"]]) * to_studs
+            if (direction > 0 and qz1 > cz - radius) or (direction < 0 and qz0 < cz + radius):
+                return b
+        return None
+
+    if p["type"] == "axle":  # an axle goes in from one end, through Technic holes only
+        hit = [slide(Fraction(-10**6), y0 + span), slide(y0, Fraction(10**6))]
+    else:                    # a wheel or bush slides on from either end, or drops into a gap from above or below
+        hit = [slide(Fraction(-10**6), y0 + span), slide(y0, Fraction(10**6)), drop(1), drop(-1)]
+    if all(h is not None for h in hit):
+        raise CertificateError(f"{p['type']} part {i} has no clear way in (blocked by part {hit[0]})")
 
 
 def plans(parts: list[dict], groups: list[list[int]]) -> list[tuple[str, int | None, list[tuple[str, list[int]]]]]:
@@ -295,6 +318,114 @@ def _greedy_steps(parts, groups, flipped, tension, deadline):
     return steps, None
 
 
+MAX_STEP = 6  # parts per step, as in LEGO's own manuals
+
+
+def _feasible(ps, placed, tension: Fraction) -> bool:
+    """Fast floating-point screen (HiGHS) for the same equilibrium; only steps that pass get an exact Z3 witness,
+    and only exact witnesses enter the certificate."""
+    import numpy as np
+    from scipy.optimize import linprog
+    from scipy.sparse import lil_matrix
+
+    cs = contacts(ps, placed)
+    if not cs:
+        return False
+    row = {k: n for n, k in enumerate(placed)}
+    a_eq = lil_matrix((3 * len(placed), len(cs)))
+    b_eq = np.zeros(3 * len(placed))
+    for n, (up, down, x, y, _) in enumerate(cs):
+        for k, sign in ((up, 1), (down, -1)):
+            if k is None:
+                continue
+            p, r = ps[k], 3 * row[k]
+            a_eq[r, n] += sign
+            a_eq[r + 1, n] += sign * float(x - p.x - Fraction(p.w, 2))
+            a_eq[r + 2, n] += sign * float(y - p.y - Fraction(p.l, 2))
+    for k in placed:
+        b_eq[3 * row[k]] = ps[k].w * ps[k].l * ps[k].h
+    studs = {}
+    for n, (_, _, _, _, stud) in enumerate(cs):
+        if stud is not None:
+            studs.setdefault(stud, []).append(n)
+    a_ub = lil_matrix((len(studs), len(cs)))
+    for r, ns in enumerate(studs.values()):
+        for n in ns:
+            a_ub[r, n] = -1.0                                  # -(sum) <= tension
+    bounds = [(0, None) if down is None else (None, None) for (_, down, _, _, _) in cs]
+    res = linprog(np.zeros(len(cs)), A_ub=a_ub.tocsr() if studs else None,
+                  b_ub=np.full(len(studs), float(tension) * 0.999) if studs else None,
+                  A_eq=a_eq.tocsr(), b_eq=b_eq, bounds=bounds, method="highs")
+    return res.status == 0
+
+
+def _closure_steps(parts, groups, phases, base, tension, deadline):
+    """Steps of at most MAX_STEP units, each leaving the placed body in exact balance with no temporary support.
+    A unit that cannot stand alone goes in together with what locks it: the units directly on top of it (caps)
+    and the caps' own unplaced supports. `phases`: [(frame, allowed units)], e.g. upright then turned over."""
+    frames = {"up": pieces(parts, groups, False, base), "down": pieces(parts, groups, True)}
+    placed, steps = [], []
+    for frame, allowed in phases:
+        ps = frames[frame]
+        on = {k: [j for j in allowed if ps[j].z == ps[k].z + ps[k].h and xy_overlap(ps[j], ps[k])] for k in allowed}
+        under = {k: [j for j in allowed if ps[k].z == ps[j].z + ps[j].h and xy_overlap(ps[j], ps[k])] for k in allowed}
+        remaining = set(allowed)
+        while remaining:
+            if time.monotonic() > deadline:
+                return None, "time budget exhausted"
+            accepted = None
+            for k in sorted(remaining, key=lambda k: (ps[k].z, ps[k].x, ps[k].y)):
+                group = [k]
+                while len(group) <= MAX_STEP and accepted is None:
+                    # never cover a unit still waiting to go in
+                    if not any(j not in group and j in remaining and ps[j].z < ps[g].z and xy_overlap(ps[j], ps[g])
+                               for g in group for j in remaining):
+                        order = sorted(group, key=lambda g: (ps[g].z, ps[g].x, ps[g].y))
+                        try:
+                            trial = list(placed)
+                            for g in order:
+                                check_path(ps, trial, g)
+                                trial.append(g)
+                            if _feasible(ps, trial, tension):
+                                witness, _ = _solve(ps, trial, tension, deadline)
+                                if witness is not None:
+                                    accepted = (order, witness)
+                        except CertificateError:
+                            pass
+                    if accepted is not None:
+                        break
+                    caps = {j for g in group for j in on[g] if j in remaining} - set(group)
+                    if not caps:
+                        break
+                    grown = set(group) | caps | {j for c in caps for j in under[c] if j in remaining}
+                    if len(grown) > MAX_STEP or grown == set(group):
+                        break
+                    group = sorted(grown)
+                if accepted is not None:
+                    break
+            if accepted is None:
+                return None, f"stuck after {len(placed)} units: no step of up to {MAX_STEP} parts stands on its own"
+            order, witness = accepted
+            placed += order
+            remaining -= set(order)
+            steps.append({"kind": "layer", "frame": frame, "units": order,
+                          "parts": [i for k in order for i in groups[k]], "forces": witness})
+    return _merged(steps), None
+
+
+def _merged(steps):
+    """Consecutive small steps in one frame joined up to MAX_STEP parts: the joined step ends in the last one's
+    certified state, and its insertion order is kept, so the certificate is unchanged in substance."""
+    out = []
+    for st in steps:
+        last = out[-1] if out else None
+        if last and last["frame"] == st["frame"] and len(last["parts"]) + len(st["parts"]) <= MAX_STEP:
+            last.update(units=last["units"] + st["units"], parts=last["parts"] + st["parts"], forces=st["forces"])
+        else:
+            out.append(dict(st))
+    return out
+
+
 def certify_manual(parts: list[dict], *, timeout: float = 600) -> dict:
     """The manual (steps of original part indices) and its certificate, or why it could not be certified."""
     start = time.monotonic()
@@ -314,13 +445,24 @@ def certify_manual(parts: list[dict], *, timeout: float = 600) -> dict:
             break
         failures.append(f"{name}: {issue}")
     else:
-        for flipped in (False, True):  # finer: part by part
-            steps, issue = _greedy_steps(parts, groups, flipped, tension, start + timeout)
+        # How manuals are made: steps of up to MAX_STEP parts, each locking what it adds, in one orientation or
+        # built from a layer up and then turned over for the layers below.
+        everything = list(range(len(groups)))
+        z = {k: parts[groups[k][0]]["z"] for k in everything}
+        levels = sorted(set(z.values()))
+        area = {lv: sum(parts[groups[k][0]]["w"] * parts[groups[k][0]]["l"] for k in everything if z[k] == lv)
+                for lv in levels}
+        options = [("upright, steps of up to 6", None, [("up", everything)]),
+                   ("upside down, steps of up to 6", None, [("down", everything)])]
+        options += [(f"from layer z={b} up, then turned over; steps of up to 6", b,
+                     [("up", [k for k in everything if z[k] >= b]), ("down", [k for k in everything if z[k] < b])])
+                    for b in sorted(levels[1:], key=lambda lv: -area[lv])[:4]]
+        for name, base, phases in options:
+            steps, issue = _closure_steps(parts, groups, phases, base, tension, start + timeout)
             if steps is not None:
-                report.update(orientation=("upside down, then turned over" if flipped else "upright") + ", part by part",
-                              base=None, steps=steps)
+                report.update(orientation=name, base=base, steps=steps)
                 break
-            failures.append(f"part by part {'upside down' if flipped else 'upright'}: {issue}")
+            failures.append(f"{name}: {issue}")
     if not report["steps"]:
         report["issues"] += failures
         report["seconds"] = time.monotonic() - start
