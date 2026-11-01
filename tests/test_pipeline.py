@@ -42,10 +42,20 @@ def test_learned_pipeline_exports_the_checked_model_and_replays(setup_pipeline):
     assert not result['procedural_fallback']
     final = json.loads(Path(result['artifacts']['build']).read_text())
     trace = json.loads(Path(result['artifacts']['trace']).read_text())
-    # Colors may change after assembly (produced colors, glass); geometry is exactly the accepted assembly's, and
-    # the final checks ran on the saved, recolored model.
-    strip = lambda parts: [{k: v for k, v in p.items() if k != 'color'} for p in parts]
-    assert strip(final) == strip(trace['steps'][-1]['accepted'])
+    # Colors may change after assembly (produced colors, glass: a plate across a window's edge is cut into glass
+    # and body pieces), so the final model fills exactly the accepted assembly's cells with the same kinds of part,
+    # and the final checks ran on the saved, recolored model.
+    def filled(parts):
+        out = set()
+        for p in parts:
+            if p['type'] in ('plate', 'brick'):
+                h = 1 if p['type'] == 'plate' else 3
+                out |= {(p['type'], x, y, z) for x in range(p['x'], p['x'] + p['w'])
+                        for y in range(p['y'], p['y'] + p['l']) for z in range(p['z'], p['z'] + h)}
+            else:
+                out.add(json.dumps({k: v for k, v in p.items() if k != 'color'}, sort_keys=True))
+        return out
+    assert filled(final) == filled(trace['steps'][-1]['accepted'])
     assert 'checks passed' in Path(result['artifacts']['viewer']).read_text()
     assert Path(result['artifacts']['instructions']).is_file()
     replay = pipeline.run(photo, 'car', out, car=True, assembly='learned', mesh=mesh,
