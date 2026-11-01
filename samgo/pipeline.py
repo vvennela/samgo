@@ -89,19 +89,45 @@ def _door_reports(parts):
     return bool(passed), reports
 
 
+def place_case_input(model: list[dict], family: str, ctx: dict) -> list[dict]:
+    from .gen_objects import place_case
+    return place_case(model, family, ctx, 'input')['input']
+
+
+def _mechanism_reports(parts, family, ctx):
+    """Final checks for a mechanism object: its family's native checks (structure, stability, every motion)."""
+    from .audit_objects import native_checks
+    from .learned_mechanisms import moving_groups
+
+    ctx = dict(ctx)
+    if 'moving' in ctx:  # recompute the moving groups on the final parts (their order may differ)
+        kinds = {'tv': {'turntable_top'}, 'laptop': {'click_b'}}.get(family, {'hinge_top'})
+        groups = moving_groups(parts, kinds)
+        ctx['moving'] = {k: (groups[n], d) for n, (k, (_, d)) in enumerate(ctx['moving'].items()) if n < len(groups)}
+    if 'seat' in ctx:
+        i = max((i for i, p in enumerate(parts) if p['type'] == 'turntable_top'), default=None)
+        ctx['seat'] = list(range(i, len(parts))) if i is not None else []
+    out = native_checks({'family': family, 'mode': 'repair', 'context': ctx}, parts)
+    ok = lambda v: v if isinstance(v, bool) else v[0]
+    motion = {k: v for k, v in out.items() if k not in ('structure', 'connected', 'stands')}
+    reports = {'structure': {'passed': all(ok(out[k]) for k in ('structure', 'connected') if k in out)},
+               'function': {'passed': all(ok(v) for v in motion.values())},
+               'stability': {'passed': ok(out.get('stands', True))},
+               'checks': {k: list(v) if not isinstance(v, bool) else v for k, v in out.items()}}
+    return all(ok(v) for v in out.values()), reports
+
+
 def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str = 'medium', reuse: bool = True,
         *, assembly: str = 'procedural', model: str | None = None, rounds: int = 3, max_tokens: int = 8000,
         timeout: float = 120, sequential: bool = True, mesh: Path | None = None,
         replay: Path | None = None, sampler=None, require_certificate: bool = False,
-        certificate_timeout: float = 20, doors: bool = False, glass: bool = True) -> dict:
+        certificate_timeout: float = 20, doors: bool = False, glass: bool = True, mechanisms: bool = True) -> dict:
     if assembly not in ('procedural', 'learned') or size not in SIZES:
         raise ValueError('unknown assembly mode or size')
     if assembly == 'procedural' and (model or replay or sampler is not None):
         raise ValueError('model, replay and sampler require learned assembly mode')
     if replay and (model or sampler is not None):
         raise ValueError('replay cannot be combined with a live model or sampler')
-    if assembly == 'learned' and car is False:
-        raise ValueError('learned assembly currently supports cars only')
     config = Config(rounds, max_tokens, timeout, sequential)
     if not np.isfinite(certificate_timeout) or certificate_timeout <= 0:
         raise ValueError('certificate timeout must be positive and finite')
@@ -149,8 +175,6 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             summary['spec_source'] = 'explicit_vehicle' if car else 'explicit_static'
         summary.update(function_spec=spec, vehicle=car)
         save(run_dir / 'function_spec.json', {'source': summary['spec_source'], 'spec': spec, 'vehicle': car})
-        if assembly == 'learned' and not car:
-            raise ValueError('learned assembly currently supports cars only')
         summary['timings']['function_spec'] = time.monotonic() - tick
 
         tick = time.monotonic()
@@ -183,6 +207,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         render(original, run_dir / 'target.png')
         summary.update(target_shape=list(original.shape), cells=int((original > 0).sum()))
         target = original
+        family, mechanism_ctx = None, None
         if car:
             # The builder returns its last candidate even when no stable layout was found.
             # Validate scaffolding before spending model calls, with a small deterministic search.
@@ -211,6 +236,37 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 parts = reference.parts
         else:
             parts = build(target).pieces
+            # A known mechanism object: the research step says what it is and what must move; the matching builder
+            # makes it, sized from the photo, and (learned mode) Glimmer places its moving-part connections.
+            if mechanisms:
+                stage('research')
+                from .learned_mechanisms import family_of, model_for, place
+                from .research import research
+                key = digest({'photo': photo_sha, 'code': summary['code_sha256']['research.py']})
+                path = cache / f'research-{key}.json'
+                found = _cached_json(path) if reuse else None
+                if found is None:
+                    found = asyncio.run(async_stage(research(photo=photo), 180))
+                    save(path, found)
+                save(run_dir / 'research.json', found)
+                family = family_of(found.get('object', ''), found.get('moving_parts'))
+                summary.update(research_object=found.get('object'), mechanism_family=family,
+                               research_requirements=found.get('requirements'))
+            if family is not None:
+                stage('mechanism')
+                reference_model, mechanism_ctx = model_for(family, original)
+                save(run_dir / 'mechanism_reference.json', reference_model)
+                if assembly == 'learned':
+                    chooser = sampler if sampler is not None else FireworksSampler(model)
+                    placed, mech_trace = place(reference_model, family, mechanism_ctx, chooser, run_dir / 'mechanism',
+                                               rounds=rounds, max_tokens=max_tokens, timeout=timeout)
+                    summary['mechanism_passed'] = mech_trace['passed']
+                    summary['artifacts']['mechanism_trace'] = str(run_dir / 'mechanism' / 'trace.json')
+                    # no procedural fallback: if Glimmer fails, the result is the object without its mechanism
+                    parts = placed if placed is not None else place_case_input(reference_model, family, mechanism_ctx)
+                else:
+                    summary['mechanism_passed'] = True
+                    parts = reference_model
         door_reports = None
         if car and doors:
             stage('doors')
@@ -243,8 +299,10 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         parts, recolored = legalize(parts)
         summary['recolored_to_produced'] = len(recolored)
         save(run_dir / 'recolored.json', recolored)
-        if any(p['type'].startswith('hinge') for p in parts):
+        if any(p['type'].startswith('hinge') for p in parts) and car:
             door_reports = _door_reports(parts)
+        elif family is not None:
+            door_reports = _mechanism_reports(parts, family, mechanism_ctx)
         np.savez_compressed(run_dir / 'assembly_target.npz', target=target)
         save(run_dir / 'build.json', parts)
         summary['artifacts']['build'] = str(run_dir / 'build.json')
@@ -265,7 +323,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         reports['assembly_access'] = {
             'status': 'certified_vertical_envelope_path' if formal['passed'] else 'not_certified',
             'physical_validation': 'not_performed'}
-        summary['passed'] = passed and summary.get('assembly_passed', True) and summary.get('doors_passed', True)
+        summary['passed'] = passed and summary.get('assembly_passed', True) and summary.get('doors_passed', True) \
+            and summary.get('mechanism_passed', True)
         if require_certificate:
             summary['passed'] = summary['passed'] and formal['passed']
         summary.update(structure_passed=reports['structure']['passed'],
@@ -325,6 +384,7 @@ def main() -> None:
     ap.add_argument('--joint', action='store_true', help='solve both axle lines in one task')
     ap.add_argument('--doors', action='store_true', help='cut a hinged door in each side; with --assembly learned, Glimmer places the hinges')
     ap.add_argument('--no-glass', action='store_true', help='keep the cabin walls opaque')
+    ap.add_argument('--no-mechanisms', action='store_true', help='static objects: skip the research step')
     ap.add_argument('--require-certificate', action='store_true', help='require the exact static assembly certificate; unsupported mechanisms fail closed')
     ap.add_argument('--certificate-timeout', type=float, default=20, help='solver budget for static certification')
     args = ap.parse_args()
@@ -332,7 +392,7 @@ def main() -> None:
                  assembly=args.assembly, model=args.model, replay=args.replay, mesh=args.mesh,
                  rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint,
                  require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout,
-                 doors=args.doors, glass=not args.no_glass)
+                 doors=args.doors, glass=not args.no_glass, mechanisms=not args.no_mechanisms)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['passed'] else 1)
 

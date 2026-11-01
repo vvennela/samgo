@@ -15,6 +15,32 @@ from .gen_objects import place_case
 from .running_gear_task import FEEDBACK, edits_from
 
 
+# What the research step calls an object -> the mechanism family that builds and checks it.
+FAMILY_WORDS = {"chair": ("office chair", "swivel chair", "desk chair", "rolling chair", "chair"),
+                "bicycle": ("bicycle", "bike", "cycle"), "skateboard": ("skateboard", "longboard"),
+                "microwave": ("microwave",), "tv": ("television", "tv", "monitor"), "laptop": ("laptop", "notebook")}
+
+
+def family_of(name: str, moving_parts: list[dict] | None = None) -> str | None:
+    """The mechanism family for an object the research step identified (None: no mechanism builder for it)."""
+    if moving_parts is not None and not moving_parts:
+        return None  # e.g. a plain chair: the research found nothing that moves, so it stays a static model
+    text = (name or "").lower()
+    for family, words in FAMILY_WORDS.items():
+        if any(w in text for w in words):
+            return family
+    return None
+
+
+def model_for(family: str, target) -> tuple[list[dict], dict]:
+    """The verified mechanism model of `family`, sized from the photo's target, and its checks context."""
+    import random
+
+    from .gen_objects import _model
+
+    return _model(family, random.Random(0), None, target)
+
+
 def car_door_context(parts: list[dict]) -> dict:
     from .doors import CAR_REQUIREMENTS
 

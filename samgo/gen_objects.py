@@ -69,29 +69,31 @@ def recolored(parts: list[dict], rng: random.Random) -> list[dict]:
             for p in parts]
 
 
-def _model(family: str, rng: random.Random, split: str | None = None) -> tuple[list[dict], dict]:
-    """A verified model of `family` with the context its native checks need."""
+def _model(family: str, rng: random.Random, split: str | None = None, target=None) -> tuple[list[dict], dict]:
+    """A verified model of `family` with the context its native checks need; with `target` (a photo's voxel grid),
+    the builder sizes the model from it instead of choosing a random size."""
     if family == "chair":
         from .chair import build_chair
 
-        r = build_chair(size=rng.choice((12, 16)))
+        r = build_chair(target) if target is not None else build_chair(size=rng.choice((12, 16)))
         parts = r["parts"]
         i = max(i for i, p in enumerate(parts) if p["type"] == "turntable_top")
         return parts, {"requirements": r["requirements"], "seat": list(range(i, len(parts)))}
     if family == "bicycle":
         from .bicycle import build_bicycle
 
-        r = build_bicycle(length=rng.randint(14, 20))
+        r = build_bicycle(target) if target is not None else build_bicycle(length=rng.randint(14, 20))
         return r["parts"], {"requirements": r["requirements"]}
     if family == "skateboard":
         from .skateboard import build_skateboard
 
-        r = build_skateboard(length=rng.choice((16, 20, 24, 30)), width=rng.choice((4, 6)))
+        r = build_skateboard(target) if target is not None else \
+            build_skateboard(length=rng.choice((16, 20, 24, 30)), width=rng.choice((4, 6)))
         return r["parts"], {"requirements": r["requirements"]}
     if family == "microwave":
         from .doors import build_microwave
 
-        r = build_microwave(size=rng.choice((10, 12)))
+        r = build_microwave(target) if target is not None else build_microwave(size=rng.choice((10, 12)))
         parts = r["parts"]
         doors = moving_groups(parts, {"hinge_top"})
         dish = moving_groups(parts, {"turntable_top"})[0]

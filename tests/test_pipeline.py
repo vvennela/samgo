@@ -108,10 +108,29 @@ def test_perception_failure_leaves_failed_manifest(setup_pipeline, monkeypatch):
     assert 'private service' not in (out / 'summary.json').read_text()
 
 
-def test_learned_static_is_explicitly_unsupported(setup_pipeline):
-    photo, _, out, _, _ = setup_pipeline
-    with pytest.raises(ValueError, match='cars only'):
-        pipeline.run(photo, 'chair', out, car=False, assembly='learned')
+def test_a_known_mechanism_object_goes_to_its_builder_and_glimmer(setup_pipeline, monkeypatch):
+    """Research names the object; its family's builder makes it from the photo; Glimmer is asked to place the
+    moving-part connections. An empty answer fails closed: no procedural fallback, no instructions."""
+    photo, mesh, out, _, _ = setup_pipeline
+    import samgo.research
+    from samgo.assembly import Sample
+
+    async def fake_research(photo=None, name=None, client=None):
+        return {'object': 'office chair', 'moving_parts': [{'name': 'seat swivel', 'motion': 'swing'}],
+                'requirements': []}
+
+    monkeypatch.setattr(samgo.research, 'research', fake_research)
+
+    class Empty:
+        metadata = {'source': 'test_empty_answers'}
+
+        def __call__(self, messages, **_):
+            return Sample('[]', 1)
+
+    result = pipeline.run(photo, 'chair', out, car=False, mesh=mesh, assembly='learned', sampler=Empty(), rounds=1)
+    assert result['mechanism_family'] == 'chair' and result['research_object'] == 'office chair'
+    assert result['mechanism_passed'] is False and not result['passed']
+    assert 'instructions' not in result['artifacts']
 
 
 def test_body_search_rejects_bad_scaffolding_before_sampling(setup_pipeline, monkeypatch):
@@ -145,7 +164,7 @@ def test_static_path_remains_available(setup_pipeline, monkeypatch):
     photo, mesh, out, _, _ = setup_pipeline
     target = np.ones((2, 2, 1), dtype=int)
     monkeypatch.setattr(pipeline, 'voxelize', lambda *a: target)
-    result = pipeline.run(photo, 'block', out, car=False, mesh=mesh)
+    result = pipeline.run(photo, 'block', out, car=False, mesh=mesh, mechanisms=False)
     assert result['passed'] and result['stands']
     assert result['function_passed'] is None
     assert 'trace' not in result['artifacts']
@@ -166,7 +185,8 @@ def test_strict_certificate_gate_accepts_supported_static_build(setup_pipeline, 
     import numpy as np
     photo, mesh, out, _, _ = setup_pipeline
     monkeypatch.setattr(pipeline, 'voxelize', lambda *a: np.ones((2, 2, 1), dtype=int))
-    result = pipeline.run(photo, 'block', out, car=False, mesh=mesh, require_certificate=True)
+    result = pipeline.run(photo, 'block', out, car=False, mesh=mesh, require_certificate=True,
+                          mechanisms=False)
     assert result['passed'] and result['certified_under_model']
     assert 'gravity equilibrium' in Path(result['artifacts']['instructions']).read_text()
 
