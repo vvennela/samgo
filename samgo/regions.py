@@ -10,14 +10,21 @@ import numpy as np
 from scipy import ndimage
 
 
-def split(target: np.ndarray, core_radius: int = 1, min_cells: int = 6) -> np.ndarray:
-    """Region labels (0 empty, 1 the core, 2.. appendages) over the voxel grid."""
+def split(target: np.ndarray, core_mm: float = 7.0, min_cells: int = 6) -> np.ndarray:
+    """Region labels (0 empty, 1 the thick core, 2.. thin appendages) over the voxel grid.
+
+    Thickness is measured in millimetres (a stud is 8 mm wide, a plate 3.2 mm tall): cells deeper than `core_mm`
+    inside the object, grown back out to the surface they sit under, form the core; the rest splits into connected
+    thin appendages, whatever the object's pose."""
     occ = target > 0
-    ball = ndimage.generate_binary_structure(3, 1)
-    core = ndimage.binary_opening(occ, structure=ball, iterations=core_radius)
-    labels, n = ndimage.label(core)
+    depth = ndimage.distance_transform_edt(occ, sampling=(8.0, 8.0, 3.2))
+    seed = depth >= core_mm
+    labels, n = ndimage.label(seed)
     if n:
-        core = labels == (np.bincount(labels.ravel())[1:].argmax() + 1)  # the largest thick body
+        seed = labels == (np.bincount(labels.ravel())[1:].argmax() + 1)
+    # grow the core back out by the depth it was cut at, inside the object only
+    dist_to_seed = ndimage.distance_transform_edt(~seed, sampling=(8.0, 8.0, 3.2))
+    core = occ & (dist_to_seed <= core_mm)
     rest = occ & ~core
     parts, m = ndimage.label(rest)
     out = np.where(core, 1, 0)

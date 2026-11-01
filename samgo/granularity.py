@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from .edits import apply_edits
-from .free_edit_test import RULES, check
+from .free_edit_test import RULES, check, explain
 from .running_gear_task import FEEDBACK, edits_from
 
 H = {"plate": 1, "brick": 3}
@@ -90,7 +90,7 @@ def tasks(body, regions):
     ]
 
 
-def run_one(body, task, model, rounds=3, max_tokens=12000):
+def run_one(body, task, model, rounds=3, max_tokens=12000, precise=True):
     from .assembly import FireworksSampler
 
     name, level, local, instruction, reqs = task
@@ -113,9 +113,14 @@ def run_one(body, task, model, rounds=3, max_tokens=12000):
             v = check(body, a.parts, a.sources, reqs)
             keep = {k: v[k] for k in v if k in ("structure", "connected", "gear") or k.endswith("surfaces")}
             entry.update(edits=len(edits), valid=True, passed=all(x[0] for x in keep.values()),
+                         ops={op: sum(e["op"] == op for e in edits) for op in ("remove", "set", "add")},
                          checks={k: [bool(x[0]), str(x[1])[:100]] for k, x in keep.items()})
+            issues = (explain(body, a.parts, a.sources, a.changed, keep, local) if precise
+                      else [f"{k}: {x[1]}" for k, x in keep.items() if not x[0]])
+            entry["feedback"] = issues
         except Exception as e:  # noqa: BLE001
             keep = {"answer": (False, f"{type(e).__name__}: {e}"[:150])}
+            issues = [f"answer: {keep['answer'][1]}"]
             entry.update(valid=False, passed=False, checks={"answer": [False, keep["answer"][1]]})
             s = locals().get("s")
         record["rounds"].append(entry)
@@ -124,7 +129,7 @@ def run_one(body, task, model, rounds=3, max_tokens=12000):
         if s is not None:
             chat = chat + [{"role": "assistant", "content": s.text},
                            {"role": "user", "content": FEEDBACK.format(
-                               issues="\n".join(f"- {k}: {x[1]}" for k, x in keep.items() if not x[0]))}]
+                               issues="\n".join(f"- {i}" for i in issues))}]
     record["passed"] = any(r["passed"] for r in record["rounds"])
     return record
 
@@ -137,11 +142,12 @@ def main() -> None:
     ap.add_argument("folder", type=Path)
     ap.add_argument("--model", default=None)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--coarse-feedback", action="store_true", help="the old check-level feedback, for comparison")
     args = ap.parse_args()
     body, regions = setup(args.folder)
     work = tasks(body, regions)
     with ThreadPoolExecutor(max_workers=len(work)) as pool:
-        results = list(pool.map(lambda t: run_one(body, t, args.model), work))
+        results = list(pool.map(lambda t: run_one(body, t, args.model, precise=not args.coarse_feedback), work))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(results, indent=1))
     for r in results:

@@ -97,6 +97,126 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
     return out
 
 
+def explain(original: list[dict], parts: list[dict], sources: list[int | None], changed, verdict: dict,
+            local: list[int] | None = None) -> list[str]:
+    """Say what is wrong in terms the model can act on, for any object: which of its parts overlap which numbered
+    input part (and that the input part must be removed first), which parts rest on nothing, what a hinge's swing
+    runs into, why no freed surface turns, what sits below the wheels."""
+    import numpy as np
+
+    from .kinematics import HEIGHT as HGT, STUD, box, _corners, _inside, _sides, analyse
+    from .running_gear_task import describe
+
+    local_of = {i: k for k, i in enumerate(local if local is not None else range(len(original)))}
+
+    def name(n):
+        s = sources[n]
+        k = local_of.get(s) if s is not None else None
+        label = ("your added" if s is None else f"your changed part {k}" if n in changed
+                 else f"input part {k}" if k is not None else "a body part you were not shown")
+        return f"{label} ({describe(parts[n])})"
+
+    msgs = []
+    owners: dict = {}
+    for n, p in enumerate(parts):
+        if p.get("type") in HGT and "w" in p and "l" in p:
+            for x in range(p["x"], p["x"] + p["w"]):
+                for y in range(p["y"], p["y"] + p["l"]):
+                    for z in range(p["z"], p["z"] + HGT[p["type"]]):
+                        owners.setdefault((x, y, z), []).append(n)
+    pairs = sorted({(o[a], o[b]) for o in owners.values() if len(o) > 1
+                    for a in range(len(o)) for b in range(a + 1, len(o))})
+    for a, b in pairs[:6]:
+        old = [n for n in (a, b) if sources[n] is not None and n not in changed]
+        hint = (f": remove {name(old[0]).split(' (')[0].replace('input ', '')} first (add a remove edit for it)"
+                if old and len(old) == 1 else ": move one of them")
+        msgs.append(f"overlap: {name(a)} and {name(b)} fill the same cells{hint}")
+    if len(pairs) > 6:
+        msgs.append(f"overlap: {len(pairs) - 6} more overlapping pair(s) of the same kind")
+    for key, (ok, why) in verdict.items():
+        if ok or (key == "structure" and pairs):
+            continue
+        if key.endswith("_surfaces"):
+            which = key.split("_")[0]
+            bodies, joints = analyse(parts)
+            hinges = [k for k, j in enumerate(joints)
+                      if ("vertical" if abs(j[4][2]) > 0.9 else "horizontal") == which]
+            if not hinges:
+                msgs.append(f"{key}: there is no hinge with a {which} axis yet: put a bar plate on the body and a clip "
+                            "plate on the surface, at one height, facing each other with one empty stud between")
+            for k in hinges[:3]:
+                a, b, kind, point, axis, partners = joints[k]
+                sides = _sides(bodies, joints, k)
+                where = f"the hinge at (x={point[0] / STUD:.1f}, y={point[1] / STUD:.1f}) studs"
+                if sides is None:
+                    msgs.append(f"{key}: {where} cannot turn: the surface is still attached to the body by studs "
+                                "elsewhere; remove the input parts that join them so the hinge is its only link")
+                    continue
+                small = min(sides, key=lambda g: sum(len(bodies[x]) for x in g))
+                moving = [i for x in small for i in bodies[x]]
+                if not any(sources[i] is not None for i in moving):
+                    msgs.append(f"{key}: {where} turns only parts you added; the surface must be parts of the input "
+                                "model, freed from it and hung on the hinge")
+                    continue
+                fixed = [n for n in range(len(parts)) if n not in moving and n not in partners
+                         and parts[n].get("type") in HGT]
+                pts = np.vstack([_corners(parts[i]) for i in moving if parts[i].get("type") in HGT] or [np.zeros((0, 3))])
+                ax = np.asarray(axis, float) / np.linalg.norm(axis)
+                K = np.array([[0, -ax[2], ax[1]], [ax[2], 0, -ax[0]], [-ax[1], ax[0], 0]])
+                hits = set()
+                for deg in (20, -20):
+                    for s in range(1, 5):
+                        th = np.radians(deg * s / 4)
+                        R = np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
+                        moved = (pts - point) @ R.T + point
+                        hits |= {n for n in fixed if len(pts) and _inside(moved, parts[n])}
+                if hits:
+                    msgs.append(f"{key}: the {len(moving)} part(s) on {where} hit "
+                                + "; ".join(name(n) for n in sorted(hits)[:3])
+                                + " when they swing: remove or shorten those to leave a gap")
+            continue
+        if key == "connected":
+            bodies, joints = analyse(parts)
+            link: dict = {}
+            for j in joints:
+                link.setdefault(j[0], set()).add(j[1])
+                link.setdefault(j[1], set()).add(j[0])
+            groups, seen = [], set()
+            for b0 in bodies:
+                if b0 in seen:
+                    continue
+                todo, g = [b0], []
+                seen.add(b0)
+                while todo:
+                    b = todo.pop()
+                    g += bodies[b]
+                    for c in link.get(b, ()):
+                        if c not in seen:
+                            seen.add(c)
+                            todo.append(c)
+                groups.append(g)
+            groups.sort(key=len)
+            loose = [n for g in groups[:-1] for n in g]
+            msgs.append("connected: these parts are not attached to the rest of the model: "
+                        + "; ".join(name(n) for n in loose[:4])
+                        + " - each must share studs with a part that stays, or sit on a joint")
+            continue
+        if key != "structure":
+            msgs.append(f"{key}: {why}")
+            if "lowest: False" in why:
+                wheels = [p for p in parts if p.get("type") == "wheel"]
+                if wheels:
+                    low = min(box(p)[0][2] for p in wheels)
+                    under = sorted((n for n, p in enumerate(parts) if p.get("type") in HGT and "w" in p
+                                    and box(p)[0][2] < low + 3), key=lambda n: box(parts[n])[0][2])[:3]
+                    if under:
+                        msgs.append("  parts as low as the wheels: " + "; ".join(name(n) for n in under)
+                                    + " - the leg must be long enough that the wheels hang below everything")
+        else:
+            msgs.append(f"structure: {why}")
+    return msgs[:12]
+
+
 def main() -> None:
     import os
 
