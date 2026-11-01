@@ -20,6 +20,9 @@ from .parts import COLORS
 from .technic import (BEAM_HEIGHT, DEFAULT_WHEEL, HOLE_HEIGHT, LENGTH, PIN_RADIUS, PLATE, STUD, TUBE_RADIUS, WHEELS,
                       extent, wheel_studs)
 
+# Highlighted as mechanism parts (with axles and wheels): what holds and turns the moving parts.
+MECHANISM_PARTS = {"technic_brick", "hinge_base", "hinge_top", "turntable_base", "turntable_top", "bar_plate",
+                   "clip_plate", "click_a", "click_b", "car_door"}
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "tile": 1, "slope": 3, "invslope": 3, "curve": 2,
           "roundbrick": 3, "roundplate": 1, "arch": 3, "hinge_base": 1, "hinge_top": 1, "car_door": 3, "bar_plate": 1, "clip_plate": 1, "click_a": 1,
           "click_b": 1, "turntable_base": 1, "turntable_top": 1}
@@ -93,7 +96,7 @@ def _part(p: dict, boxes: list, axles: list, wheels: list, cyls: list) -> None:
     elif t in HEIGHT:
         rgb = COLORS.get(p.get("color", "light_gray"), (None, EXTRA.get(p.get("color"), (150, 150, 150))))[1]
         boxes.append([p["x"] * STUD, p["z"] * PLATE, p["y"] * STUD, p["w"] * STUD, HEIGHT[t] * PLATE,
-                      p["l"] * STUD, _hex(rgb), 1 if t == "technic_brick" else 0, SHAPE.get(t, 0),
+                      p["l"] * STUD, _hex(rgb), 1 if t in MECHANISM_PARTS else 0, SHAPE.get(t, 0),
                       p.get("facing") or "", 1 if str(p.get("color", "")).startswith("trans") else 0])
     elif t in ("axle", "wheel"):
         size = p.get("size", DEFAULT_WHEEL)
@@ -186,7 +189,7 @@ h1 b { color: var(--accent); }
 <header><h1>SAMgo <b>Build Viewer</b></h1><p class="note">Drag to rotate, scroll to zoom, right-drag to pan. True LEGO scale in mm.</p></header>
 <div class="bar" id="models"></div>
 <div class="bar">
-  <label><input type="checkbox" id="hl"> Highlight running gear (Technic bricks, axles, wheels)</label>
+  <label><input type="checkbox" id="hl"> Highlight mechanisms (Technic bricks, axles, wheels, hinges, turntables)</label>
   <label><input type="checkbox" id="xray"> See-through body</label>
   <button type="button" id="sim" aria-pressed="false" hidden>Preview motion (sampled)</button>
   <button type="button" id="side">Side view</button><button type="button" id="three">3/4 view</button><button type="button" id="under">Underside</button>
