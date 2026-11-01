@@ -275,7 +275,10 @@ def _greedy_steps(parts, groups, flipped, tension, deadline):
     while remaining:
         if time.monotonic() > deadline:
             return None, "time budget exhausted"
-        for k in remaining:
+        # Never cover a part still waiting to go in: first try units with no unplaced unit beneath their footprint.
+        free = [k for k in remaining if not any(j != k and ps[j].z < ps[k].z and xy_overlap(ps[j], ps[k])
+                                                 for j in remaining)]
+        for k in free + [k for k in remaining if k not in free]:
             try:
                 check_path(ps, placed, k)
             except CertificateError:
