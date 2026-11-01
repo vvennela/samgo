@@ -19,7 +19,7 @@ instances of trained families, 20/20 repairs on never-seen families, 0/20 placem
 | 3 | Verifiers + feedback | already done (audit-corrected); all tests pass |
 | 4 | Demo: photo → car that rolls, has glass, clean colors, opening doors | one command produces it; viewer + instructions + LDraw |
 | S1 | Scope: bicycle, chair, skateboard, microwave, laptop lid, TV turntable | each builds, passes its checks, animates; Glimmer places/repairs (run 4); skateboard hinge fixed; bicycle and skateboard at higher resolution |
-| S2 | Physically real | every model exports to LDraw with no part-size mismatch over 1 mm; a verified instruction manual (each step stands and can be inserted) |
+| S2 | Physically real | every model exports to LDraw with no part-size mismatch over 1 mm; a formally certified instruction manual (exact per-step inventory, insertion, connectivity and force-balance certificates under stated assumptions) |
 | S3 | Evidence | frozen run 3 vs run 4 comparison, honest limits (placement on unseen families) |
 | P | Submission package | README, write-up, demo video script, viewer links, cached demo artifacts |
 
@@ -32,7 +32,7 @@ instances of trained families, 20/20 repairs on never-seen families, 0/20 placem
 | 04:30–06:00 | C. Skateboard + hi-res | click hinges end to end (LDraw mismatch → 0); bicycle ~32 long with largest wheels, skateboard 6×30 with kick tails; every check passes; tests |
 | 06:00–07:00 | D. Small-car gap | why `car/gear` synthetic cars pass 1/6 under run 4; fix the data/prompt or the posing |
 | 07:00–09:30 | E. Demo pipeline | `pipeline.py` uses run 4: body → colors → glass → Glimmer running gear (step by step) → Glimmer doors → final checks → viewer (with motion preview), instructions, LDraw; run on Camry and Beetle photos (cached meshes and fresh perception); fix what fails |
-| 09:30–12:00 | F. Verified manual | `samgo/manual.py`: per step, the partial build stands (structure + stability, mechanisms locked) and each new part can go in (straight down; axles/pins along their axis) without hitting placed parts; gear as sub-assemblies; manual inventory == LDraw inventory; fix the step order where a check fails; run on every demo model |
+| 09:30–12:00 | F. Certified manual | Extend the audit's exact certificates (`certificates.py`, independent rational checker) from bricks/plates to mechanism parts. Per step, exactly: inventory == model == LDraw (set equality); every new part inserts without collision (integer geometry; straight down, axles/pins along their axis); the partial build is connected (graph); it is in exact force balance under the declared model (rigid parts, stated stud-clutch capacity, joints locked while building). Gear goes in as sub-assemblies; the step order is searched/repaired until every prefix certifies. The manual embeds the certificate and states its assumptions; final motion stays a sampled check, labeled as such. Run on every demo model |
 | 12:00–13:00 | G. Physical check | re-export all models to LDraw; mismatches over 1 mm = 0; user opens one in BrickLink Studio (10 min) |
 | 13:00–16:00 | H. Run 5 (background, optional) | placement on unseen families: randomized mechanism layouts on arbitrary bodies + glass task; train free; frozen test on the same r4-frozen-v2 cases; claim only if it improves held-out placement |
 | 13:00–17:00 | I. Evidence + README | README rewrite (what Glimmer does / code does / checks establish), results tables, limits, how to run; fix local paths in docs |
