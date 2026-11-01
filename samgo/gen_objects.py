@@ -74,9 +74,8 @@ def _model(family: str, rng: random.Random) -> tuple[list[dict], dict]:
     if family == "skateboard":
         from .skateboard import build_skateboard
 
-        r = build_skateboard(length=rng.choice((12, 16, 20, 24)))
-        return r["parts"], {"requirements": [q for q in r["requirements"] if q["kind"] == "spin"],
-                            "steer": r["requirements"][1]}
+        r = build_skateboard(length=rng.choice((16, 20, 24, 30)), width=rng.choice((4, 6)))
+        return r["parts"], {"requirements": r["requirements"]}
     if family == "microwave":
         from .doors import build_microwave
 
@@ -122,7 +121,7 @@ BREAKS = {
               (("half_bush",), "y", (-1, 1))],
     "bicycle": [(("wheel",), "z", (-1, 1)), (("axle",), "z", (-1, 1)), (("turntable_top",), "x", (-1, 1)),
                 (("liftarm",), "axle_hole", None)],
-    "skateboard": [(("wheel",), "z", (-1, 1)), (("axle",), "z", (-1, 1)), (("click_b",), "pin_y", (-1, 1))],
+    "skateboard": [(("wheel",), "z", (-1, 1)), (("axle",), "z", (-1, 1)), (("technic_brick",), "z", (-1, 1))],
     "microwave": [(("hinge_top",), "pin_x", (-1, 1)), (("turntable_top",), "x", (-1, 1)),
                   (("turntable_top",), "y", (-1, 1))],
     "door": [(("hinge_top",), "pin_x", (-1, 1))],

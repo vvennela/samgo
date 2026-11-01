@@ -146,7 +146,8 @@ def native_checks(case, parts):
 
             fn = verify_function(parts)
             out["rolls"] = (fn.passed, "; ".join(i.message for i in fn.issues))
-            out["steer"] = steer(parts, ctx["steer"])
+            if "steer" in ctx:  # frozen cases from the older, click-hinge board
+                out["steer"] = steer(parts, ctx["steer"])
         return out
     if family == "bicycle":
         from . import bicycle as b
@@ -396,7 +397,6 @@ def make_cases(out: Path, *, include_local_fixtures=False, single_axle=False):
             ctx["seat"] = list(range(i, len(parts)))
         if family == "skateboard":
             ctx["requirements"] = [q for q in r["requirements"] if q["kind"] == "spin"]
-            ctx["steer"] = r["requirements"][1]
         i = next(i for i, p in enumerate(parts) if p["type"] == "wheel")
         cases.append(
             repair_case(f"{family}_wheel_alignment", family, parts, i, {"z": parts[i]["z"] + 1}, ctx)

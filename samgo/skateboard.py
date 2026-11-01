@@ -1,18 +1,18 @@
-"""A skateboard in real LEGO: a plate deck on two steering trucks, four spinning wheels.
+"""A skateboard in real LEGO: a plate deck with kicked-up nose and tail on two trucks, four spinning wheels.
 
 Design (studs in x/y, plates in z, the board along x; LDraw numbers in brackets):
 
-- Deck, 4 wide and `length` long: a bottom layer of 2x4 plates [3020] laid across the board, and a top layer of
-  2x8 / 2x4 plates [3034 / 3020] along it, the two rows' seams staggered so every plate is held.
-- Truck (one near each end), hanging from the deck by a pair of click hinge plates [44301 + 44302, 1x2] whose pin
-  runs along the board at its centre line: real trucks steer by leaning about an axis along the board, and the
-  click hinge is that pivot. A 1x2 plate [3023] above the deck's half (the other half has a one-plate gap above it)
-  and one below the truck's half (a gap below the deck's half) keep the hinge the only link. Under it: a 2x4 plate
-  [3020] across the board, a 1x2 Technic brick [3700] at each end, an axle [3707, 8 long] through both holes and a
-  30.4x14 wheel [6014 + 6578] on each end, outboard of the deck.
+- Deck, `width` (4 or 6) wide and `length` long: a bottom layer of 2xW plates laid across the board in the deck
+  color, and a top layer of black 2-wide strips along it (grip tape), the strips' seams staggered so every plate is
+  held. Nose and tail kick up in two steps (plates over the last two studs, then the last one).
+- Truck (one near each end), rigid: a 2x2 brick under the deck's centre, a 2xW plate across the board, a 1x2
+  Technic brick [3700] at each edge, an axle through both holes (W + 4 long: 8 [3707] or 10 [3737]) and a 30.4x14
+  wheel [6014 + 6578] on each end, outboard of the deck.
 
-Moves: each axle turns in its truck's round holes (4 wheels spin, all axes across the board), and each truck leans
-on its hinge (horizontal axis along the board) 15 degrees each way without hitting the deck.
+Moves: each axle turns in its truck's round holes (4 wheels spin, axes across the board). Steering is not modelled:
+a real truck leans on a kingpin and bushings; the LDraw check showed the click-hinge version did not match the
+real 44301/44302 geometry (their pivot sits past the plate ends, off the stud grid), so the trucks are rigid, as in
+LEGO's own skateboard models.
 """
 
 import numpy as np
@@ -23,57 +23,65 @@ from .technic import verify_function
 
 REQUIREMENTS = [
     {"name": "wheels_spin", "kind": "spin", "count": 4, "parallel": True},
-    {"name": "trucks_steer", "kind": "swing", "axis": "horizontal", "degrees": 15, "count": 2},
 ]
-UNSUPPORTED = ["truck bushings: the click hinge holds its lean by friction clicks, it does not spring back to centre",
-               "steering coupling: the lean is checked, not that leaning turns the wheels' axle (real trucks' "
-               "kingpin geometry is not modelled)"]
+STEER = {"name": "trucks_steer", "kind": "swing", "axis": "horizontal", "degrees": 15, "count": 2}  # older boards
+UNSUPPORTED = ["steering: real trucks lean on a kingpin and bushings; LEGO click hinges pivot off the stud grid, so "
+               "these trucks are rigid (as in LEGO's skateboard models)"]
 
 
 def _plate(w, l, x, y, z, color, kind="plate"):
     return {"type": kind, "w": w, "l": l, "x": x, "y": y, "z": z, "color": color}
 
 
-def truck(t: int, zd: int, color: str = "light_gray") -> list[dict]:
-    """A truck under the deck (deck bottom at plate zd) in columns t..t+2 of a 4-wide board (y 0..4)."""
-    return [_plate(2, 1, t, 1, zd - 1, "black"),                                  # spacer above the deck half
-            {"type": "click_a", "w": 2, "l": 1, "x": t, "y": 1, "z": zd - 2, "pin_x": t, "pin_y": 2,
-             "pin_axis": "x", "color": "black"},
-            {"type": "click_b", "w": 2, "l": 1, "x": t, "y": 2, "z": zd - 2, "pin_x": t, "pin_y": 2,
-             "pin_axis": "x", "color": "black"},
-            _plate(2, 1, t, 2, zd - 3, color),                                     # spacer below the truck half
-            _plate(2, 4, t, 0, zd - 4, color),
+def truck(t: int, zd: int, width: int = 4, color: str = "light_gray") -> list[dict]:
+    """A rigid truck under the deck (deck bottom at plate zd) in columns t..t+2 of a `width`-wide board."""
+    mid = width // 2 - 1
+    return [_plate(2, 2, t, mid, zd - 3, color, "brick"),                         # column under the deck
+            _plate(2, width, t, 0, zd - 4, color),                                # across the board
             {"type": "technic_brick", "w": 2, "l": 1, "x": t, "y": 0, "z": zd - 7, "color": color, "hole": "round"},
-            {"type": "technic_brick", "w": 2, "l": 1, "x": t, "y": 3, "z": zd - 7, "color": color, "hole": "round"},
-            {"type": "axle", "axis": "y", "x": t + 1, "y": -2, "z": zd - 7, "length": 8},
+            {"type": "technic_brick", "w": 2, "l": 1, "x": t, "y": width - 1, "z": zd - 7, "color": color,
+             "hole": "round"},
+            {"type": "axle", "axis": "y", "x": t + 1, "y": -2, "z": zd - 7, "length": width + 4},
             {"type": "wheel", "axis": "y", "x": t + 1, "y": -2, "z": zd - 7, "size": "30.4x14"},
-            {"type": "wheel", "axis": "y", "x": t + 1, "y": 4, "z": zd - 7, "size": "30.4x14"}]
+            {"type": "wheel", "axis": "y", "x": t + 1, "y": width, "z": zd - 7, "size": "30.4x14"}]
 
 
-def build_skateboard(target: np.ndarray | None = None, length: int = 16) -> dict:
+def _strip(length: int, y: int, z: int, offset: int, color: str) -> list[dict]:
+    """2-wide plates along x covering 0..length, the first one `offset` long (staggers seams between strips)."""
+    out, x = [], 0
+    for n in ([offset] if offset else []) + [8] * length:
+        if x >= length:
+            break
+        n = min(n, length - x)
+        n = max((k for k in (8, 6, 4, 3, 2, 1) if k <= n), default=1)
+        out.append(_plate(n, 2, x, y, z, color))
+        x += n
+    return out
+
+
+def build_skateboard(target: np.ndarray | None = None, length: int = 30, width: int = 6) -> dict:
     """The skateboard's parts (shifted so every coordinate is >= 0), requirements and checks. With a target, the
-    deck length is its longest horizontal extent (rounded to 12 or 16)."""
+    deck length is its longest horizontal extent."""
     if target is not None:
         occ = np.argwhere(np.asarray(target) > 0)
         if len(occ):
             length = int((occ.max(axis=0) - occ.min(axis=0) + 1)[:2].max())
-    length = 16 if length >= 14 else 12
+    length = max(12, length - length % 2)
+    width = 6 if width >= 6 else 4
     zd = 7                                     # deck bottom: the trucks' Technic bricks land on z = 0
-    deck = "red"
-    parts = [_plate(2, 4, x, 0, zd, deck) for x in range(0, length, 2)]          # across the board
-    parts += [_plate(8, 2, 0, 0, zd + 1, deck), _plate(length - 8, 2, 8, 0, zd + 1, deck),
-              _plate(4, 2, 0, 2, zd + 1, deck)]                                  # seams staggered: 8 / 4 (+12)
-    parts += [_plate(8, 2, 4, 2, zd + 1, deck), _plate(4, 2, 12, 2, zd + 1, deck)] if length == 16 else \
-        [_plate(8, 2, 4, 2, zd + 1, deck)]
-    parts += truck(2, zd) + truck(length - 4, zd)
+    deck, grip = "red", "black"
+    parts = [_plate(2, width, x, 0, zd, deck) for x in range(0, length, 2)]                     # across
+    for k, y in enumerate(range(0, width, 2)):                                                   # grip strips
+        parts += _strip(length, y, zd + 1, (4, 2, 6)[k % 3], grip)
+    for x0, x1 in ((0, 2), (length - 2, length)):                                                # kick tails
+        parts += [_plate(2, width, x0, 0, zd + 2, grip)]
+        parts += [_plate(1, width, x0 if x0 == 0 else x1 - 1, 0, zd + 3, grip)]
+    parts += truck(3, zd, width) + truck(length - 5, zd, width)
     for p in parts:                            # wheels and axles reach to y = -2: shift the board to y >= 0
         p["y"] += 2
-        if "pin_y" in p:
-            p["pin_y"] += 2
-    out = checks(parts, [r for r in REQUIREMENTS if r["kind"] == "spin"])
+    out = checks(parts, REQUIREMENTS)
     fn = verify_function(parts)  # the full rolling-vehicle verifier: two parallel wheeled axles, wheels lowest
     out["rolls"] = (fn.passed, "; ".join(i.message for i in fn.issues) or "two parallel wheeled axles; it rolls")
-    out["trucks_steer"] = steer(parts, REQUIREMENTS[1])
     return {"parts": parts, "requirements": REQUIREMENTS, "checks": out, "unsupported": UNSUPPORTED}
 
 
