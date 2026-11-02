@@ -170,7 +170,7 @@ def frame_and_shell(shaped: np.ndarray, chassis: list[dict], floor: int) -> np.n
 
 
 def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool = True,
-           buildable: bool = False) -> ArchedCar | None:
+           buildable: bool = False, wheel_x: list[int] | None = None) -> ArchedCar | None:
     """None if no two tire outlines are found or the car is too narrow for wheels and chassis."""
     if target.shape[1] > target.shape[0]:
         target = target.transpose(1, 0, 2)[::-1].copy()  # length along x (a rotation, not a mirror)
@@ -183,6 +183,8 @@ def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool
         # each, sized to the body's height.
         d = min(0.55 * Z * PLATE, 4 * STUD)
         f, r = int(round(0.17 * X)), int(round(0.80 * X))
+        if wheel_x:  # Spark read the wheel centres from the photo
+            f, r = sorted(min(max(int(v), 2), X - 3) for v in wheel_x)
         tires = [(max(f - 1, 0), f + 1, d), (r - 1, min(r + 1, X - 1), d)]
     tires = [tires[0], tires[-1]]                     # front and rear
     occ = target > 0
@@ -278,7 +280,8 @@ def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool
                      verify_function(parts), sym)
 
 
-def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2, buildable: bool = False) -> ArchedCar | None:
+def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2, buildable: bool = False,
+                     wheel_x: list[int] | None = None) -> ArchedCar | None:
     """The car on Technic beams 1x4, else 1x6, else 1x8 (longer beams spread the car's weight over more studs):
     the first that passes structure, function and stability, else the last one tried. `buildable`: lay out for
     structure first, then color (long bonded plates, so certified building instructions exist)."""
@@ -286,7 +289,7 @@ def build_arched_car(target: np.ndarray, seed: int = 0, attempts: int = 2, build
 
     car = None
     for beam in (4, 6, 8):
-        car = _build(target, seed, attempts, beam, buildable=buildable)
+        car = _build(target, seed, attempts, beam, buildable=buildable, wheel_x=wheel_x)
         if car is None:
             return None
         if car.structure.passed and car.function.passed and stability(car.parts, vehicle=True).passed:

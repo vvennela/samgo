@@ -124,6 +124,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         timeout: float = 120, sequential: bool = True, mesh: Path | None = None,
         replay: Path | None = None, sampler=None, require_certificate: bool = False,
         certificate_timeout: float = 20, doors: bool = False, glass: bool = True, mechanisms: bool = True,
+        layout_from_spark: bool = False,
         buildable: bool = False, manual: bool = False) -> dict:
     if assembly not in ('procedural', 'learned') or size not in SIZES:
         raise ValueError('unknown assembly mode or size')
@@ -214,10 +215,23 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         if car:
             # The builder returns its last candidate even when no stable layout was found.
             # Validate scaffolding before spending model calls, with a small deterministic search.
+            # Spark (the knowing model) reads the car's layout: wheel centres and the door outline on the model.
+            layout = {}
+            if layout_from_spark:
+                try:
+                    from .car_layout import layout as read_layout
+                    oriented = original.transpose(1, 0, 2)[::-1].copy() if original.shape[1] > original.shape[0] \
+                        else original
+                    layout = read_layout(photo, oriented, run_dir / 'layout')
+                except Exception as e:  # noqa: BLE001 - no Spark: the geometry-only rules apply
+                    layout = {'error': f'{type(e).__name__}: {e}'[:200]}
+                summary['layout'] = layout
+            wheel_x = [layout['front_wheel_x'], layout['rear_wheel_x']] if 'front_wheel_x' in layout else None
             body_attempts = []
             for seed in range(3):
                 reference = build_arched_car(original, attempts=6, seed=seed,
-                                             **({'buildable': True} if buildable else {}))
+                                             **({'buildable': True} if buildable else {}),
+                                             **({'wheel_x': wheel_x} if wheel_x else {}))
                 ok, issues = check(reference.parts, reference.target) if reference else (False, ['no supported body'])
                 body_attempts.append({'seed': seed, 'attempts': 6, 'passed': ok, 'issues': issues})
                 save(run_dir / 'body_search.json', body_attempts)
@@ -276,7 +290,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             stage('doors')
             from .doors import add_car_doors
             try:
-                built = add_car_doors(parts, target)
+                built = add_car_doors(parts, target, **({'outline': layout['door']}
+                                                         if car and layout.get('door') else {}))
             except ValueError as e:  # no room for doors on this body: the car is built without them
                 built = {'parts': parts, 'checks': {'door_cut': (False, str(e))}}
             failed = {k: v for k, v in built['checks'].items() if not (v if isinstance(v, bool) else v[0])}
@@ -417,6 +432,7 @@ def main() -> None:
     ap.add_argument('--joint', action='store_true', help='solve both axle lines in one task')
     ap.add_argument('--doors', action='store_true', help='cut a hinged door in each side; with --assembly learned, Glimmer places the hinges')
     ap.add_argument('--no-glass', action='store_true', help='keep the cabin walls opaque')
+    ap.add_argument('--no-spark-layout', action='store_true', help='cars: geometry only, no wheel/door layout from Spark')
     ap.add_argument('--no-mechanisms', action='store_true', help='static objects: skip the research step')
     ap.add_argument('--buildable', action='store_true', help='cars: lay out for structure first, then color (certifiable)')
     ap.add_argument('--manual', action='store_true', help='also certify the building instructions (samgo.manual)')
@@ -427,7 +443,7 @@ def main() -> None:
                  assembly=args.assembly, model=args.model, replay=args.replay, mesh=args.mesh,
                  rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint,
                  require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout,
-                 doors=args.doors, glass=not args.no_glass, mechanisms=not args.no_mechanisms,
+                 doors=args.doors, glass=not args.no_glass, layout_from_spark=not args.no_spark_layout, mechanisms=not args.no_mechanisms,
                  buildable=args.buildable, manual=args.manual)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['passed'] else 1)

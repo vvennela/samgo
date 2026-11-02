@@ -201,7 +201,23 @@ def _plan(occ: np.ndarray, side: str, deck: int, front: int, rear: int):
     return [(d0, length, ys, zb, zt) for _, length, d0, ys, zb, zt in out]
 
 
-def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attempts: int = 4) -> dict:
+def _outline_plan(occ: np.ndarray, side: str, deck: int, outline: dict):
+    """The door Spark outlined (x0..x1, z0..z1 on the model), on the outermost wall face that is solid over the
+    whole outline; cells outboard of that face inside the outline (a flare, a sill) are shaved off with the cut."""
+    X, Y, Z = occ.shape
+    d0, d1 = outline["x0"], outline["x1"] + 1
+    zb, zt = max(outline["z0"], deck + 2), min(outline["z1"], Z - 2)
+    if d1 - d0 < 3 or zt - zb < 2 or d0 < 2:
+        return []
+    rng = range(Y) if side == "left" else range(Y - 1, -1, -1)
+    for ys in rng:
+        if occ[d0 - 2:d1, ys, zb:zt + 1].all():
+            return [(d0, d1 - d0, ys, zb, zt)]
+    return []
+
+
+def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attempts: int = 4,
+                  outline: dict | None = None) -> dict:
     """The car with a hinged door in each side wall (see the module docstring); `target` is unused beyond its
     shape check (the wall is read from the parts themselves, which is what was built)."""
     grid = [p for p in car_parts if p["type"] in HEIGHT]
@@ -226,17 +242,23 @@ def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attem
             return None
         layers, holders = plan
         bases, moving = door(d0, length, ys, zb, zt, pin_y, color, hinges=layers)
+        outboard = (0, ys) if side == "left" else (ys + 1, occ.shape[1])
         cut = {k for k, p in enumerate(grid) if _overlaps(p, d0 - 2, d0 + length + 1, ys, ys + 1, zb - 1, zt + 2)
-               or any(_overlaps(p, h["x"], h["x"] + h["w"], ys, ys + 1, h["z"], h["z"] + 1) for h in holders)}
+               or any(_overlaps(p, h["x"], h["x"] + h["w"], ys, ys + 1, h["z"], h["z"] + 1) for h in holders)
+               or (outline and _overlaps(p, d0, d0 + length + 1, *outboard, zb, zt + 1))}  # shaved bulges
         if any(grid[k]["type"] == "technic_brick" for k in cut):
             return None
         gap = [(slice(d0, d0 + length), ys, zb - 1), (slice(d0, d0 + length), ys, zt + 1),
                (d0 + length, ys, slice(zb - 1, zt + 2))]
+        if outline:  # the shaved bulge outboard of the door is not rebuilt
+            gap.append((slice(d0, d0 + length + 1), slice(*outboard), slice(zb, zt + 1)))
         # Quick sweep against everything that will stay: kept parts and 1x1 stand-ins for the cells to rebuild.
         left_over = np.zeros_like(occ)
         for k in cut:
             left_over[_cells(grid[k])] = True
         left_over[d0 - 2:d0 + length, ys, zb:zt + 1] = False
+        if outline:  # the shaved cells outboard of the door stay empty
+            left_over[d0:d0 + length + 1, outboard[0]:outboard[1], zb:zt + 1] = False
         for g in gap:
             left_over[g] = False
         stand_ins = [{"type": "plate", "w": 1, "l": 1, "x": int(x), "y": int(y), "z": int(z)}
@@ -255,7 +277,8 @@ def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attem
     # only when both doors fit and swing clear (cars are left-right symmetric; the body is built mirrored).
     Y = occ.shape[1]
     doors = None
-    for d0, length, ys, zb, zt in _plan(occ, "left", deck, front, rear):
+    plans = (_outline_plan(occ, "left", deck, outline) if outline else []) + _plan(occ, "left", deck, front, rear)
+    for d0, length, ys, zb, zt in plans:
         left = try_side("left", d0, length, ys, zb, zt)
         right = try_side("right", d0, length, Y - 1 - ys, zb, zt) if left else None
         if left and right:
