@@ -29,7 +29,7 @@ def run_case(c: dict, model: str, rounds: int = 3, max_tokens: int = 8000) -> di
         entry = {"round": rnd}
         try:
             s = sampler(chat, max_tokens=max_tokens, temperature=0.0 if rnd == 1 else 0.7, timeout=600)
-            entry.update(tokens=s.tokens, seconds=round(time.time() - t, 1))
+            entry.update(tokens=s.tokens, seconds=round(time.time() - t, 1), text=s.text)
             a = apply_edits(c["full"], edits_from(s.text), local=c["view"])
             v = check(c["full"], a.parts, a.sources, c["requirements"], stand=False)
             keep = {k: x for k, x in v.items() if k in KEEP or k.endswith("_surfaces")}
@@ -39,6 +39,7 @@ def run_case(c: dict, model: str, rounds: int = 3, max_tokens: int = 8000) -> di
         except Exception as e:  # noqa: BLE001 - unparsable or invalid answers are verdicts too
             entry.update(passed=False, failed=["answer"])
             issues = [f"answer: {type(e).__name__}: {e}"[:200]]
+        entry["feedback"] = issues
         out["rounds"].append(entry)
         if entry["passed"]:
             break

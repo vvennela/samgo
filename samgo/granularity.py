@@ -55,11 +55,14 @@ def tasks(body, regions):
         for y in range(p["y"], p["y"] + p["l"]):
             te[y] = max(te.get(y, -1), p["x"] + p["w"])
     rows = sorted(te)
-    span = rows[len(rows) // 4: len(rows) // 2] or rows          # an inboard stretch of the span
-    xh = min(te[y] for y in span) - 3
+    # a verified site (samgo.flap_sites: a plain answer there passes the generic checks), the biggest one nearest an
+    # inboard stretch of the span; hinge plates on top of the sheet, as in training
+    from .flap_sites import pick, sites
+    site = pick(sites(body, wing), near_y=float(np.mean(rows[len(rows) // 4: len(rows) // 2] or rows)))
+    span = list(range(site["y0"], site["y1"] + 1))
+    xh, zs, hinge_rows = site["xh"], site["z"], site["hinge_rows"]
     strip = [i for i in wing if body[i]["x"] + body[i]["w"] > xh - 2 and
              any(y in span for y in range(body[i]["y"], body[i]["y"] + body[i]["l"]))]
-    zs = max(body[i]["z"] for i in strip) if strip else 0
     fus = [i for i in allp if regions[i] == 1]
     zmid = float(np.median([body[i]["z"] for i in fus]))
     lower = [i for i in fus if body[i]["z"] <= zmid]
@@ -96,8 +99,8 @@ def tasks(body, regions):
                               f"x = {xh} (rows y = {span[0]}..{span[-1]}): clear the column x = {xh} in those rows and "
                               f"the rows y = {span[0] - 1} and y = {span[-1] + 1} beyond it, out to the edge, so the "
                               f"strip is free on three sides; keep the parts behind the line as the flap, and hinge it with bar plates (w=2, l=1, facing +x, at x = {xh - 2}, so "
-                              f"they end at x = {xh - 1}) and clip plates (w=2, l=1, facing -x, at x = {xh + 1}) at "
-                              f"z = {zs}.", flap),
+                              f"they end at x = {xh - 1}) and clip plates (w=2, l=1, facing -x, at x = {xh + 1}) on "
+                              f"top of the sheet at z = {zs}, in rows y = {', '.join(map(str, hinge_rows))}.", flap),
         ("gear", "L0", allp, "This is a Boeing 747. Add one landing-gear leg with an axle and two wheels that spin; "
                              "the wheels must be the lowest parts.", gear),
         ("gear", "L1", lower, "These are the lower parts of the fuselage of a Boeing 747. Add one landing-gear leg "
@@ -113,6 +116,27 @@ def tasks(body, regions):
                               f"y = {yc + 1}; bushes at y = {yc - 4} and y = {yc + 3}. The column must reach the belly bottom at "
                               f"z = {zb}.", gear),
     ]
+
+
+def spark_tasks(folder: Path, body, regions):
+    """Flap tasks grounded by Spark (samgo.part_layout): Spark reads the trailing edge and the flap's stretch on a
+    top view; code picks the verified site there; the handoff uses the training wording (samgo.flap_data)."""
+    from .flap_data import _view, instruction
+    from .part_layout import handoff, layout
+
+    wing = [i for i in range(len(body)) if regions[i] == 2]
+    sp = layout(folder / "photo.png", body, wing, folder / "part_layout", obj="airplane", part="main wing",
+                mech="flap", where="trailing edge inboard")
+    h = handoff(body, wing, sp) if "error" not in sp else None
+    if h is None:
+        return []
+    from .primitives import frame
+    swap, mirror, n = h["frame"]
+    turned = frame(body, swap, mirror, n)
+    view = _view(turned, h["site"], "L2", set(wing))
+    flap = [{"name": "flap", "kind": "swing", "axis": "horizontal", "degrees": 20, "count": 1}]
+    return [("flap", lv, view, instruction(lv.replace("S", "L"), "airplane", h["site"], (swap, mirror, n)), flap)
+            for lv in ("S2", "S3")]
 
 
 def run_one(body, task, model, rounds=3, max_tokens=12000, precise=True):
@@ -133,6 +157,7 @@ def run_one(body, task, model, rounds=3, max_tokens=12000, precise=True):
             entry.update(tokens=s.tokens, seconds=round(time.time() - t, 1))
             edits = edits_from(s.text)
             entry["repeat"] = s.text == last
+            entry["text"] = s.text
             last = s.text
             a = apply_edits(body, edits, local=local)
             v = check(body, a.parts, a.sources, reqs)
@@ -169,9 +194,13 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--coarse-feedback", action="store_true", help="the old check-level feedback, for comparison")
     ap.add_argument("--only", help="just this mechanism (flap or gear)")
+    ap.add_argument("--level", help="just this level (L0..L3, S2, S3)")
+    ap.add_argument("--spark", action="store_true", help="add the Spark-grounded flap levels S2 and S3")
     args = ap.parse_args()
     body, regions = setup(args.folder)
-    work = [t for t in tasks(body, regions) if not args.only or t[0] == args.only]
+    work = [t for t in tasks(body, regions) + (spark_tasks(args.folder, body, regions) if args.spark else [])
+            if (not args.only or t[0] == args.only)
+            and (not args.level or t[1] == args.level)]
     with ThreadPoolExecutor(max_workers=len(work)) as pool:
         results = list(pool.map(lambda t: run_one(lifted(body) if t[0] == "gear" else body, t, args.model,
                                                   precise=not args.coarse_feedback), work))
