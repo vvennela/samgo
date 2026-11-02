@@ -315,6 +315,9 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             chosen = (spec or {}).get('body_color')
             summary['body_color'] = chosen if chosen in COLORS else body_color(original)
             parts = paint(parts, summary['body_color'])
+            # fewer, bigger pieces: neighbouring same-color plates in one rigid body become one real plate
+            from .consolidate import consolidate
+            parts, summary['merged_plates'] = consolidate(parts)
         from .colors import legalize
         parts, recolored = legalize(parts)
         summary['recolored_to_produced'] = len(recolored)
