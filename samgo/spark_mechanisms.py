@@ -103,7 +103,7 @@ async def name_regions(photo: Path, labels: np.ndarray, obj: str, work: Path, cl
 
 
 def attempt(body: list[dict], local: list[int], instruction: str, sampler, rounds: int = 3,
-            max_tokens: int = 8000, timeout: int = 600) -> dict:
+            max_tokens: int = 8000, timeout: int = 600, reqs: list[dict] = FLAP) -> dict:
     """Glimmer edits the local view; the edited whole model is checked; precise feedback between rounds."""
     from .edits import apply_edits
     from .free_edit_test import RULES, check, explain
@@ -119,8 +119,9 @@ def attempt(body: list[dict], local: list[int], instruction: str, sampler, round
             s = sampler(chat, max_tokens=max_tokens, temperature=0.0 if rnd == 1 else 0.7, timeout=timeout)
             entry.update(tokens=s.tokens, seconds=round(time.time() - t, 1), text=s.text)
             a = apply_edits(body, edits_from(s.text), local=local)
-            v = check(body, a.parts, a.sources, FLAP, stand=False)
-            keep = {k: x for k, x in v.items() if k in ("structure", "connected") or k.endswith("_surfaces")}
+            v = check(body, a.parts, a.sources, reqs, stand=False)
+            names = {"structure", "connected"} | {q["name"] for q in reqs}
+            keep = {k: x for k, x in v.items() if k in names or k.endswith("_surfaces")}
             entry["passed"] = all(x[0] for x in keep.values())
             issues = explain(body, a.parts, a.sources, a.changed, keep, local)
             if entry["passed"]:
@@ -139,19 +140,27 @@ def attempt(body: list[dict], local: list[int], instruction: str, sampler, round
 
 
 def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler, work: Path, rounds: int = 3,
-          max_surfaces: int = 2) -> tuple[list[dict], dict]:
-    """Add the hinged surfaces Spark names that Glimmer can build. Returns (parts, report)."""
+          max_surfaces: int = 2, gear: bool = True) -> tuple[list[dict], dict]:
+    """Add the hinged surfaces Spark names that Glimmer can build, then the legs it stands on (samgo.spark_gear).
+    Returns (parts, report)."""
     from .regions import split
 
     labels = split(target)
+    scale = max(1.0, max(target.shape[:2]) / 40)  # surfaces sized to the model: a 92-stud model gets longer flaps
     loop = asyncio.new_event_loop()  # one loop for every Spark call of this build (its HTTP client lives in it)
     try:
-        return _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop)
+        parts, report = _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale)
+        if gear:
+            from . import spark_gear
+
+            parts, report["gear"] = spark_gear.build(photo, parts, obj, sampler, work / "gear", loop, rounds=rounds)
+            (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
+        return parts, report
     finally:
         loop.close()
 
 
-def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop):
+def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale=1.0):
     from .flap_data import _view, instruction
     from .part_layout import ask as ask_layout
     from .part_layout import handoff
@@ -177,7 +186,9 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop)
         sp = loop.run_until_complete(ask_layout(photo, parts, ids, work / f"layout_{region}_{h['name']}", obj=obj, part=part,
                                     mech=h["name"], where=h.get("where", "")))
         entry["spark_layout"] = sp
-        hand = handoff(parts, ids, sp) if "error" not in sp else None
+        sizes = dict(lengths=tuple(sorted({round(n * scale) for n in (3, 4, 5)})),
+                     chords=tuple(sorted({round(n * scale) for n in (2, 3, 4)})))
+        hand = handoff(parts, ids, sp, **sizes) if "error" not in sp else None
         if hand is None:
             entry["error"] = "no buildable site on that edge"
             continue
@@ -207,18 +218,26 @@ def main() -> None:
     ap.add_argument("--model", required=True)
     ap.add_argument("--object", default=None, help="what it is (default: the folder's research.json)")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--size", type=int, default=40, help="which body<size>.json / target<size>.npz")
+    ap.add_argument("--no-gear", action="store_true")
     args = ap.parse_args()
-    body = json.loads((args.folder / "body40.json").read_text())
-    target = np.load(args.folder / "target40.npz")
+    body = json.loads((args.folder / f"body{args.size}.json").read_text())
+    target = np.load(args.folder / f"target{args.size}.npz")
     target = target[target.files[0]]
     obj = args.object or json.loads((args.folder / "research.json").read_text()).get("object", "object")
     args.out.mkdir(parents=True, exist_ok=True)
-    parts, report = build(args.folder / "photo.png", target, body, obj, FireworksSampler(args.model), args.out)
+    parts, report = build(args.folder / "photo.png", target, body, obj, FireworksSampler(args.model), args.out,
+                          gear=not args.no_gear)
     (args.out / "build.json").write_text(json.dumps(parts))
     for s in report["surfaces"]:
         print(f"region {s['region']} {s['part']!r}: {s['name']} ({s.get('where')}) -> "
               f"{s.get('handoff')} passed={s.get('passed')} {s.get('error', '')}")
     print("unsupported:", [(u["part"], u["name"], u.get("axis")) for u in report["unsupported"]])
+    for g in report.get("gear", {}).get("legs", []):
+        print(f"leg {g['name']!r} at ({g['x']}, {g['y']}) -> {g.get('site')} passed={g.get('passed')} "
+              f"{g.get('error', '')}")
+    if "gear" in report:
+        print("stands on its wheels:", report["gear"].get("stands"))
 
 
 if __name__ == "__main__":

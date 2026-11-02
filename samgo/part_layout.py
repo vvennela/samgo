@@ -135,7 +135,7 @@ def to_frame(edge: str, X: int, Y: int) -> tuple[bool, bool, int]:
     return swap, mirror, (Y if swap else X) + 1
 
 
-def handoff(body: list[dict], part_ids: list[int], spark: dict) -> dict | None:
+def handoff(body: list[dict], part_ids: list[int], spark: dict, **sizes) -> dict | None:
     """The verified flap site on Spark's edge nearest Spark's stretch, in the model's own coordinates:
     {"edge", "axis", "rows": (lo, hi), "site" (in the turned frame), "frame"} or None if none is buildable."""
     from .flap_sites import pick, sites
@@ -145,7 +145,7 @@ def handoff(body: list[dict], part_ids: list[int], spark: dict) -> dict | None:
     Y = max(p["y"] + p["l"] for p in body)
     swap, mirror, n = to_frame(spark["edge"], X, Y)
     turned = frame(body, swap, mirror, n)
-    found = sites(turned, part_ids)
+    found = sites(turned, part_ids, **sizes)
     lo, hi = spark["from"], spark["to"]
     if not found:
         return None
