@@ -68,6 +68,21 @@ def tasks(body, regions):
     yc = int(np.median([body[i]["y"] for i in fus]))
     patch = [i for i in lower if abs(body[i]["x"] - xg) <= 4 and abs(body[i]["y"] - yc) <= 3]
     zb = min(body[i]["z"] for i in patch) + LIFT if patch else LIFT  # gear tasks run on the raised body
+    def ring(local, margin=2):
+        """The local parts plus their neighbours (as in training): parts within `margin` studs of the local box."""
+        if len(local) == len(body):
+            return local
+        x0 = min(body[i]["x"] for i in local) - margin
+        x1 = max(body[i]["x"] + body[i]["w"] for i in local) + margin
+        y0 = min(body[i]["y"] for i in local) - margin
+        y1 = max(body[i]["y"] + body[i]["l"] for i in local) + margin
+        z0 = min(body[i]["z"] for i in local) - 3
+        z1 = max(body[i]["z"] for i in local) + 3
+        near = [i for i, p in enumerate(body) if p["x"] < x1 and p["x"] + p["w"] > x0 and p["y"] < y1
+                and p["y"] + p["l"] > y0 and z0 <= p["z"] <= z1]
+        return sorted(set(local) | set(near))
+
+    wing, strip, lower, patch = ring(wing), ring(strip), ring(lower), ring(patch)
     flap = [{"name": "flap", "kind": "swing", "axis": "horizontal", "degrees": 20, "count": 1}]
     gear = [{"name": "gear", "kind": "spin", "count": 2, "stands": False}]  # one leg of several
     return [
@@ -153,9 +168,10 @@ def main() -> None:
     ap.add_argument("--model", default=None)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--coarse-feedback", action="store_true", help="the old check-level feedback, for comparison")
+    ap.add_argument("--only", help="just this mechanism (flap or gear)")
     args = ap.parse_args()
     body, regions = setup(args.folder)
-    work = tasks(body, regions)
+    work = [t for t in tasks(body, regions) if not args.only or t[0] == args.only]
     with ThreadPoolExecutor(max_workers=len(work)) as pool:
         results = list(pool.map(lambda t: run_one(lifted(body) if t[0] == "gear" else body, t, args.model,
                                                   precise=not args.coarse_feedback), work))
