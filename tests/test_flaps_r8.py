@@ -1,15 +1,15 @@
 import random
 
 from samgo.edits import apply_edits
-from samgo.flap_data import feedback_for, mistakes, wing_body
+from samgo.flap_data import feedback_for, mistakes, sheet_body
 from samgo.flap_sites import FLAP, pick, site_answer, sites
 from samgo.free_edit_test import check
 from samgo.part_layout import handoff, parse
 
 
 def slab():
-    """A small generated wing body (block + wing along +y, trailing edge at +x) that has flap sites."""
-    parts, out = wing_body(random.Random(1))
+    """A small generated body (block + thin structure, flap edge +x) that has flap sites."""
+    parts, out = sheet_body(random.Random(4))
     return parts, sorted(out)
 
 
@@ -45,7 +45,7 @@ def test_wing_bodies_and_mistakes():
     c = next(c for c in (case(s) for s in range(6)) if c)
     wrong = [m for m in mistakes(c, random.Random(0)) if feedback_for(c, m)]
     assert wrong and all(m != c["answer"] for m in wrong)
-    parts, out = wing_body(random.Random(5))
+    parts, out = sheet_body(random.Random(4))
     assert out and all(p["type"] == "plate" for p in parts)
 
 

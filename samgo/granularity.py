@@ -124,9 +124,18 @@ def spark_tasks(folder: Path, body, regions):
     from .flap_data import _view, instruction
     from .part_layout import handoff, layout
 
-    wing = [i for i in range(len(body)) if regions[i] == 2]
-    sp = layout(folder / "photo.png", body, wing, folder / "part_layout", obj="airplane", part="main wing",
-                mech="flap", where="trailing edge inboard")
+    # what to build and on which part comes from Spark's own region research (spark_regions_minimal.json):
+    # the first region where Spark named a hinged surface; nothing here is written for a particular object
+    spark_regions = json.loads((folder / "spark_regions_minimal.json").read_text())["regions"]
+    obj = json.loads((folder / "research.json").read_text()).get("object", "object")
+    hit = next(((int(r), d["part"], m) for r, d in spark_regions.items() for m in d["mechanisms"]
+                if m["name"] == "flap"), None)
+    if hit is None:
+        return []
+    region, part, mech = hit
+    wing = [i for i in range(len(body)) if regions[i] == region]
+    sp = layout(folder / "photo.png", body, wing, folder / "part_layout", obj=obj, part=part, mech=mech["name"],
+                where=mech["where"])
     h = handoff(body, wing, sp) if "error" not in sp else None
     if h is None:
         return []
@@ -135,7 +144,7 @@ def spark_tasks(folder: Path, body, regions):
     turned = frame(body, swap, mirror, n)
     view = _view(turned, h["site"], "L2", set(wing))
     flap = [{"name": "flap", "kind": "swing", "axis": "horizontal", "degrees": 20, "count": 1}]
-    return [("flap", lv, view, instruction(lv.replace("S", "L"), "airplane", h["site"], (swap, mirror, n)), flap)
+    return [("flap", lv, view, instruction(lv.replace("S", "L"), obj, h["site"], (swap, mirror, n)), flap)
             for lv in ("S2", "S3")]
 
 
