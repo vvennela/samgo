@@ -19,7 +19,7 @@ def _cells(p: dict):
                 yield x, y, z
 
 
-def add_glass(parts: list[dict], shrink: float = 0.8) -> tuple[list[dict], int]:
+def add_glass(parts: list[dict], shrink: float = 0.8, cut: bool = True) -> tuple[list[dict], int]:
     """(parts with the cabin's windows made glass, how many parts became glass)."""
     body = [p for p in parts if p["type"] in BODY_TYPES]
     if not body:
@@ -144,8 +144,8 @@ def add_glass(parts: list[dict], shrink: float = 0.8) -> tuple[list[dict], int]:
         if len(glass_cols) == p["w"] * p["l"] and made_in_glass(p):
             out[i] = p | {"color": GLASS}
             continue
-        if p["type"] != "plate":
-            continue  # bricks are not cut (a cut brick changes how the layers above grip it)
+        if p["type"] != "plate" or not cut:
+            continue  # bricks are not cut (a cut brick changes how the layers above grip it); cut=False: whole parts
         rest = {(x, y) for x, y, _ in cs} - glass_cols
         fewest = lambda cs: min((tile_cells(cs, 0), tile_cells(cs, 1)), key=len)
         pieces = [dict(p, x=x, y=y, w=w, l=l, color=GLASS) for x, y, w, l in fewest(glass_cols)]

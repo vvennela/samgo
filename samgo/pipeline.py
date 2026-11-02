@@ -318,9 +318,11 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             else:
                 summary['doors_passed'] = True
                 parts = built['parts']
+        before_glass = parts
         if car and glass:
             from .glass import add_glass
             parts, summary['glass_parts'] = add_glass(parts)
+            summary['glass_cuts'] = len(parts) - len(before_glass)
         if car:  # paint: one body color (Spark's, else the photo's most common), black frame and underbody
             from .colors import body_color, paint
             from .parts import COLORS
@@ -343,6 +345,26 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         from .colors import legalize
         parts, recolored = legalize(parts)
         summary['recolored_to_produced'] = len(recolored)
+        certified = None
+        if manual and car and glass and parts:
+            # The manual is part of the verified result: if cutting plates at window edges leaves pieces no step
+            # order can place, the windows are made of whole parts instead (fewer glass pieces, same shape).
+            from .manual import certify_manual
+            stage('manual')
+            certified = certify_manual(parts)
+            if not certified['passed'] and summary.get('glass_cuts'):
+                from .colors import paint as repaint
+                from .consolidate import consolidate as merge
+                alt, summary['glass_parts'] = add_glass(before_glass, cut=False)
+                alt, summary['merged_plates'] = merge(repaint(alt, summary['body_color']))
+                alt, recolored = legalize(alt)
+                second = certify_manual(alt)
+                summary['glass_mode'] = 'whole parts (manual)' if second['passed'] else 'cut at window edges'
+                if second['passed']:
+                    parts, certified = alt, second
+                    summary['recolored_to_produced'] = len(recolored)
+            else:
+                summary['glass_mode'] = 'cut at window edges'
         save(run_dir / 'recolored.json', recolored)
         if any(p['type'].startswith('hinge') for p in parts) and car:
             door_reports = _door_reports(parts)
@@ -400,7 +422,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             summary['artifacts']['instructions'] = str(write(parts, run_dir / 'instructions', **options))
         if manual and parts:
             from .manual import certify_manual
-            certified = certify_manual(parts)
+            if certified is None:
+                certified = certify_manual(parts)
             save(run_dir / 'manual.json', certified)
             summary['artifacts']['manual'] = str(run_dir / 'manual.json')
             summary.update(manual_certified=certified['passed'], manual_steps=len(certified['steps']),
