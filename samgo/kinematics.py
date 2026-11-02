@@ -462,6 +462,17 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
     return False, (f"{passed} of {need} joints turn {req['degrees']} degrees clear; " if passed else "") + best
 
 
+JOINT_HALVES = {"bar_plate", "clip_plate", "hinge_base", "hinge_top", "click_a", "click_b", "turntable_base",
+                "turntable_top"}
+
+
+def dangling(parts: list[dict]) -> list[int]:
+    """Joint halves that hold nothing: a hinge, clip or turntable half whose studs grip no other part, so in real
+    LEGO it only hangs on its partner (a clip on a bar over empty space). Each half must be built into a side."""
+    bodies, _ = analyse(parts)
+    return sorted(m[0] for m in bodies.values() if len(m) == 1 and parts[m[0]].get("type") in JOINT_HALVES)
+
+
 def connected(parts: list[dict]) -> bool:
     """One structure through rigid links and joints together, standing on the ground (z = 0) or on wheels: the
     structural check for builds with moving parts, where a hinged lid hangs on its hinge, not on studs."""
@@ -482,7 +493,7 @@ def connected(parts: list[dict]) -> bool:
         parent[find(a)] = find(b)
     roots = {find(i) for i in range(n)}
     grounded = any(parts[i].get("z", 0) == 0 or parts[i].get("type") == "wheel" for i in range(n))
-    return len(roots) == 1 and grounded
+    return len(roots) == 1 and grounded and not dangling(parts)
 
 
 def locked(parts: list[dict], as_type: dict) -> list[dict]:

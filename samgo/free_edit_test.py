@@ -186,6 +186,13 @@ def explain(original: list[dict], parts: list[dict], sources: list[int | None], 
                                 + " when they swing: remove or shorten those to leave a gap")
             continue
         if key == "connected":
+            from .kinematics import dangling
+
+            held = dangling(parts)
+            if held:
+                msgs.append("connected: these hinge parts hold nothing - their studs grip no other part, so they "
+                            "only hang on their partner: " + "; ".join(name(n) for n in held[:4])
+                            + " - put each on (or under) a part of the side it carries")
             bodies, joints = analyse(parts)
             link: dict = {}
             for j in joints:
@@ -207,9 +214,10 @@ def explain(original: list[dict], parts: list[dict], sources: list[int | None], 
                 groups.append(g)
             groups.sort(key=len)
             loose = [n for g in groups[:-1] for n in g]
-            msgs.append("connected: these parts are not attached to the rest of the model: "
-                        + "; ".join(name(n) for n in loose[:4])
-                        + " - each must share studs with a part that stays, or sit on a joint")
+            if loose or not held:
+                msgs.append("connected: these parts are not attached to the rest of the model: "
+                            + "; ".join(name(n) for n in loose[:4])
+                            + " - each must share studs with a part that stays, or sit on a joint")
             continue
         if key != "structure":
             msgs.append(f"{key}: {why}")

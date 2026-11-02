@@ -24,6 +24,8 @@ def test_sites_are_verified_and_hinges_sit_on_top():
         a = apply_edits(parts, site_answer(parts, s))
         v = check(parts, a.parts, a.sources, FLAP, stand=False)
         assert v["structure"][0] and v["connected"][0]
+        from samgo.kinematics import dangling
+        assert not dangling(a.parts)  # both halves of every hinge are built into their side
         for y in s["hinge_rows"]:  # on top: the hinge cells are empty, the cells under them are not
             assert all((x, y, s["z"]) not in occ for x in range(s["xh"] - 2, s["xh"] + 3))
             assert any((x, y, s["z"] - 1) in occ for x in range(s["xh"] - 2, s["xh"] + 3))
@@ -62,3 +64,16 @@ def test_spark_answer_parsing_and_handoff_on_any_edge():
     turned = [swap_xy(p) for p in parts]  # the same wing with its trailing edge facing +y
     h2 = handoff(turned, wing, {"edge": "+y", "from": lo, "to": hi})
     assert h2 and h2["axis"] == "y" and h2["site"] == h["site"]
+
+
+def test_a_clip_over_empty_space_is_not_connected():
+    import json
+    from pathlib import Path
+
+    from samgo.kinematics import connected, dangling
+
+    build = Path("runs/spark_mech/747_r8/build.json")
+    if not build.exists():
+        return
+    parts = json.loads(build.read_text())  # r8's 747: one clip per surface hung only on its bar
+    assert dangling(parts) and not connected(parts)
