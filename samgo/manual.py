@@ -423,7 +423,30 @@ def _with_module(parts, groups, z, levels, area, tension, deadline, hint=None):
     return None, None, f"with a sub-assembly: {last}"
 
 
+LOCKING_STEP = 8  # when a hanging piece needs more to lock it, as some steps in LEGO's manuals have
+
+
 def certify_manual(parts: list[dict], *, timeout: float | None = None) -> dict:
+    """The manual and its certificate: steps of at most MAX_STEP parts; if no order of such steps stands, steps of up
+    to LOCKING_STEP, so a piece hanging from the layers above goes in together with what locks it."""
+    global MAX_STEP
+    small = MAX_STEP
+    report = _certify(parts, timeout=timeout)
+    report["max_step"] = small
+    if not report["passed"] and not report["steps"] and small < LOCKING_STEP:
+        try:
+            MAX_STEP = LOCKING_STEP
+            second = _certify(parts, timeout=timeout)
+        finally:
+            MAX_STEP = small
+        second["max_step"] = LOCKING_STEP
+        if second["passed"]:
+            second["issues_with_smaller_steps"] = report["issues"]
+            return second
+    return report
+
+
+def _certify(parts: list[dict], *, timeout: float | None = None) -> dict:
     """The manual (steps of original part indices) and its certificate, or why it could not be certified."""
     start = time.monotonic()
     timeout = timeout or (600 + 6 * len(parts))  # bigger models get more search time
