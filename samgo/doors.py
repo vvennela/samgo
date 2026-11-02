@@ -202,18 +202,33 @@ def _plan(occ: np.ndarray, side: str, deck: int, front: int, rear: int):
 
 
 def _outline_plan(occ: np.ndarray, side: str, deck: int, outline: dict):
-    """The door Spark outlined (x0..x1, z0..z1 on the model), on the outermost wall face that is solid over the
-    whole outline; cells outboard of that face inside the outline (a flare, a sill) are shaved off with the cut."""
+    """Doors near the one Spark outlined (x0..x1, z0..z1 on the model), best first. The outline comes from a photo, so
+    it is right about where the door is but may be off by a few studs: each edge may move up to four studs (a plate
+    or two in height) so that the door's wall and the hinge base's two studs in front of it are solid, on the
+    outermost wall face that is solid over the whole door; cells outboard of that face are shaved with the cut."""
     X, Y, Z = occ.shape
-    d0, d1 = outline["x0"], outline["x1"] + 1
-    zb, zt = max(outline["z0"], deck + 2), min(outline["z1"], Z - 2)
-    if d1 - d0 < 3 or zt - zb < 2 or d0 < 2:
-        return []
-    rng = range(Y) if side == "left" else range(Y - 1, -1, -1)
-    for ys in rng:
-        if occ[d0 - 2:d1, ys, zb:zt + 1].all():
-            return [(d0, d1 - d0, ys, zb, zt)]
-    return []
+    rows = range(Y) if side == "left" else range(Y - 1, -1, -1)
+    out = []
+    for a in range(outline["x0"] - 4, outline["x0"] + 5):
+        for b in range(outline["x1"] - 4, outline["x1"] + 5):
+            d0, d1 = a, b + 1
+            if d0 < 2 or d1 > X or d1 - d0 < 3:
+                continue
+            for zb in range(max(outline["z0"], deck + 2), max(outline["z0"], deck + 2) + 3):
+                for zt in range(min(outline["z1"], Z - 2), min(outline["z1"], Z - 2) - 3, -1):
+                    if zt - zb < 2:
+                        continue
+                    # the car's outer skin over the door: the outermost occupied row there, or one stud in
+                    filled = [y for y in rows if occ[d0:d1, y, zb:zt + 1].any()]
+                    if not filled:
+                        continue
+                    for ys in filled[:2]:
+                        if occ[d0 - 2:d1, ys, zb:zt + 1].all():
+                            shift = abs(a - outline["x0"]) + abs(b - outline["x1"])
+                            out.append(((d1 - d0) * (zt - zb + 1), -shift, d0, d1 - d0, ys, zb, zt))
+                            break
+    out.sort(key=lambda c: (-c[0], -c[1]))
+    return [(d0, length, ys, zb, zt) for _, _, d0, length, ys, zb, zt in out[:12]]
 
 
 def _flip_x(parts: list[dict], X: int) -> list[dict]:
@@ -310,11 +325,13 @@ def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, atte
     # Symmetric by construction: plan the left door, put the right one at its mirror position, and accept a plan
     # only when both doors fit and swing clear (cars are left-right symmetric; the body is built mirrored).
     Y = occ.shape[1]
+    ys_used = np.nonzero(occ.any(axis=(0, 2)))[0]
+    y_lo, y_hi = int(ys_used.min()), int(ys_used.max())  # mirror about the body, not the grid (it may have spare rows)
     doors = None
     plans = (_outline_plan(occ, "left", deck, outline) if outline else []) + _plan(occ, "left", deck, front, rear)
     for d0, length, ys, zb, zt in plans:
         left = try_side("left", d0, length, ys, zb, zt)
-        right = try_side("right", d0, length, Y - 1 - ys, zb, zt) if left else None
+        right = try_side("right", d0, length, y_lo + y_hi - ys, zb, zt) if left else None
         if left and right:
             doors = [left, right]
             break
@@ -332,7 +349,7 @@ def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, atte
                 for z in range(p["z"], p["z"] + h)}
     while True:
         cells = set().union(*(cellset(grid[k]) for k in removed)) if removed else set()
-        mirrored = {(x, Y - 1 - y, z) for x, y, z in cells}
+        mirrored = {(x, y_lo + y_hi - y, z) for x, y, z in cells}
         extra = {k for k, p in enumerate(grid) if k not in removed and p["type"] != "technic_brick"
                  and cellset(p) & mirrored}
         if not extra:
