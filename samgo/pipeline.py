@@ -270,6 +270,18 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 family = family_of(found.get('object', ''), found.get('moving_parts'))
                 summary.update(research_object=found.get('object'), mechanism_family=family,
                                research_requirements=found.get('requirements'))
+            if family is None and mechanisms and assembly == 'learned':
+                # Any other object: Spark names its parts and hinged surfaces and grounds each on the model, code
+                # makes a buildable handoff, Glimmer builds it, code checks (samgo.spark_mechanisms). Nothing
+                # Glimmer fails at is built by code instead.
+                stage('spark_mechanisms')
+                from .spark_mechanisms import build as spark_build
+                chooser = sampler if sampler is not None else FireworksSampler(model)
+                parts, spark_report = spark_build(photo, target, parts, found.get('object') or prompt, chooser,
+                                                  run_dir / 'spark_mechanisms', rounds=rounds)
+                summary['spark_mechanisms'] = [{k: s.get(k) for k in ('part', 'name', 'handoff', 'passed', 'error')}
+                                               for s in spark_report['surfaces']]
+                summary['spark_unsupported'] = [(u['part'], u['name']) for u in spark_report['unsupported']]
             if family is not None:
                 stage('mechanism')
                 reference_model, mechanism_ctx = model_for(family, original)

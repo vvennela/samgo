@@ -105,9 +105,9 @@ async def ask(photo: Path, body: list[dict], part_ids: list[int], work: Path, *,
     client = client or AsyncOpenAI(api_key=os.environ["BASETEN_API_KEY"], base_url=BASE_URL, max_retries=6)
     text = PROMPT.format(obj=f"a{'n' if obj[0] in 'aeiou' else ''} {obj}", part=part, mech=mech, where=where)
     out = {"error": "no answer"}
-    for _ in range(2):  # an empty answer now and then: ask once more
+    for _ in range(3):  # an empty answer now and then (reasoning used the budget): ask again
         r = await client.chat.completions.create(
-            model=MODEL, max_tokens=3000, extra_body={"reasoning_effort": "low"},
+            model=MODEL, max_tokens=8000, extra_body={"reasoning_effort": "low"},
             messages=[{"role": "user", "content": [{"type": "text", "text": text},
                                                    {"type": "image_url", "image_url": {"url": _data_url(photo)}},
                                                    {"type": "image_url",

@@ -1,0 +1,225 @@
+"""Spark knows, Glimmer does, code verifies - for any object, not just the families with a hand-written builder.
+
+1. Code splits the voxel model into regions (samgo.regions: a thick core and thin appendages; nothing object-specific)
+   and draws them numbered.
+2. Spark, from the photo and the numbered views, names each region and the hinged surfaces it has on the real object
+   (its own knowledge: "a flap on the trailing edge, inboard"; "a lid along the back edge").
+3. Spark grounds each surface on the model: which edge of the region it hangs from and where along it
+   (samgo.part_layout).
+4. Code turns that into a handoff it has checked is buildable (samgo.flap_sites: a site on that edge where a plain
+   answer passes the generic checks).
+5. Glimmer builds it from the local handoff (the parts near the site and a sentence: which edge, which rows), with
+   the checker's precise feedback for up to `rounds` rounds.
+6. Code checks the result on the whole model; a surface Glimmer cannot build is left out, never built by code.
+
+Only what Glimmer has a generic skill for is attempted: hinged surfaces on an edge, swinging about a horizontal axis.
+Everything else Spark names is reported as not supported yet.
+"""
+
+import asyncio
+import hashlib
+import json
+import re
+import time
+from pathlib import Path
+
+import numpy as np
+
+FLAP = [{"name": "flap", "kind": "swing", "axis": "horizontal", "degrees": 20, "count": 1}]
+H = {"plate": 1, "brick": 3}
+
+NAME_PROMPT = """The first image is a photo of {obj}. The second shows a LEGO-scale model of it split into numbered
+regions (a top view and a side view; each region has one colour and its number at its centre).
+
+For each numbered region, say which part of the real object it is, and list the hinged surfaces that part has on the
+real object: a panel along one edge of the part that swings about a hinge line along that edge. Use what you know
+about the real object; list only surfaces that really exist on it, and none if it has none. Answer with one JSON
+object and nothing else:
+{{"regions": {{"<number>": {{"part": "<name>",
+                           "hinged": [{{"name": "<name>", "where": "<which edge, where along it, in words>",
+                                       "axis": "horizontal" | "vertical"}}]}}}}}}
+"axis" is the hinge line's direction when the object stands as in the photo."""
+
+
+def region_of_parts(parts: list[dict], labels: np.ndarray) -> list[int]:
+    """The region label most of each part's cells fall in (0 if none)."""
+    X, Y, Z = labels.shape
+    out = []
+    for p in parts:
+        if p.get("type") not in H:
+            out.append(0)
+            continue
+        cells = labels[max(p["x"], 0):min(p["x"] + p["w"], X), max(p["y"], 0):min(p["y"] + p["l"], Y),
+                       max(p["z"], 0):min(p["z"] + H[p["type"]], Z)].ravel()
+        cells = cells[cells > 0]
+        out.append(int(np.bincount(cells).argmax()) if cells.size else 0)
+    return out
+
+
+async def name_regions(photo: Path, labels: np.ndarray, obj: str, work: Path, client=None) -> dict:
+    """Spark's names and hinged surfaces per region (cached per photo, regions and prompt)."""
+    from dotenv import load_dotenv
+    from openai import AsyncOpenAI
+
+    from .function_spec import BASE_URL, MODEL, _data_url
+    from .regions import render
+
+    work.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha256(Path(photo).read_bytes() + labels.tobytes() + str(labels.shape).encode()
+                         + (NAME_PROMPT + obj).encode()).hexdigest()[:16]
+    cache = Path("runs/research_cache") / f"regions_{key}.json"
+    if cache.exists():
+        return json.loads(cache.read_text())
+    view = work / "regions.png"
+    render(labels, view)
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    import os
+
+    client = client or AsyncOpenAI(api_key=os.environ["BASETEN_API_KEY"], base_url=BASE_URL, max_retries=6)
+    text = NAME_PROMPT.format(obj=f"a{'n' if obj[:1] in 'aeiou' else ''} {obj}")
+    out = {"error": "no answer"}
+    for _ in range(3):
+        r = await client.chat.completions.create(
+            model=MODEL, max_tokens=8000, extra_body={"reasoning_effort": "low"},
+            messages=[{"role": "user", "content": [{"type": "text", "text": text},
+                                                   {"type": "image_url", "image_url": {"url": _data_url(photo)}},
+                                                   {"type": "image_url",
+                                                    "image_url": {"url": _data_url(view, 1400)}}]}])
+        answer = r.choices[0].message.content or ""
+        m = re.search(r"\{.*\}", answer, re.S)
+        try:
+            d = json.loads(m.group()) if m else None
+            regions = {int(k): {"part": str(v.get("part", "")),
+                                "hinged": [h for h in v.get("hinged", []) if isinstance(h, dict) and h.get("name")]}
+                       for k, v in d["regions"].items()}
+            out = {"regions": regions}
+            break
+        except (AttributeError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            out = {"error": f"unparseable answer: {answer[:200]}"}
+    if "error" not in out:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(out))
+    return {"regions": {int(k): v for k, v in out["regions"].items()}} if "regions" in out else out
+
+
+def attempt(body: list[dict], local: list[int], instruction: str, sampler, rounds: int = 3,
+            max_tokens: int = 8000, timeout: int = 600) -> dict:
+    """Glimmer edits the local view; the edited whole model is checked; precise feedback between rounds."""
+    from .edits import apply_edits
+    from .free_edit_test import RULES, check, explain
+    from .running_gear_task import FEEDBACK, edits_from
+
+    chat = [{"role": "system", "content": RULES},
+            {"role": "user", "content": instruction + "\nParts:\n" +
+             "\n".join(f"{k}: {json.dumps(body[i])}" for k, i in enumerate(local))}]
+    record = {"instruction": instruction, "parts_shown": len(local), "rounds": [], "passed": False}
+    for rnd in range(1, rounds + 1):
+        t, s, entry = time.time(), None, {"round": rnd}
+        try:
+            s = sampler(chat, max_tokens=max_tokens, temperature=0.0 if rnd == 1 else 0.7, timeout=timeout)
+            entry.update(tokens=s.tokens, seconds=round(time.time() - t, 1), text=s.text)
+            a = apply_edits(body, edits_from(s.text), local=local)
+            v = check(body, a.parts, a.sources, FLAP, stand=False)
+            keep = {k: x for k, x in v.items() if k in ("structure", "connected") or k.endswith("_surfaces")}
+            entry["passed"] = all(x[0] for x in keep.values())
+            issues = explain(body, a.parts, a.sources, a.changed, keep, local)
+            if entry["passed"]:
+                record.update(passed=True, parts=a.parts)
+        except Exception as e:  # noqa: BLE001 - unparsable or invalid answers are verdicts too
+            entry["passed"] = False
+            issues = [f"answer: {type(e).__name__}: {e}"[:200]]
+        entry["feedback"] = issues
+        record["rounds"].append(entry)
+        if entry["passed"]:
+            break
+        if s is not None:
+            chat = chat + [{"role": "assistant", "content": s.text},
+                           {"role": "user", "content": FEEDBACK.format(issues="\n".join(f"- {i}" for i in issues))}]
+    return record
+
+
+def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler, work: Path, rounds: int = 3,
+          max_surfaces: int = 2) -> tuple[list[dict], dict]:
+    """Add the hinged surfaces Spark names that Glimmer can build. Returns (parts, report)."""
+    from .regions import split
+
+    labels = split(target)
+    loop = asyncio.new_event_loop()  # one loop for every Spark call of this build (its HTTP client lives in it)
+    try:
+        return _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop)
+    finally:
+        loop.close()
+
+
+def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop):
+    from .flap_data import _view, instruction
+    from .part_layout import ask as ask_layout
+    from .part_layout import handoff
+    from .primitives import frame
+
+    named = loop.run_until_complete(name_regions(photo, labels, obj, work))
+    report = {"regions": named.get("regions"), "error": named.get("error"), "surfaces": [], "unsupported": []}
+    if "regions" not in named:
+        return parts, report
+    jobs = [(r, d["part"], h) for r, d in sorted(named["regions"].items()) for h in d["hinged"]]
+    for region, part, h in jobs:
+        if h.get("axis") != "horizontal":
+            report["unsupported"].append({"region": region, "part": part, **h, "why": "only horizontal hinges"})
+            continue
+        if len([s for s in report["surfaces"] if s.get("passed")]) >= max_surfaces:
+            break
+        entry = {"region": region, "part": part, **h}
+        report["surfaces"].append(entry)
+        ids = [i for i, r in enumerate(region_of_parts(parts, labels)) if r == region]
+        if not ids:
+            entry["error"] = "no parts in the region"
+            continue
+        sp = loop.run_until_complete(ask_layout(photo, parts, ids, work / f"layout_{region}_{h['name']}", obj=obj, part=part,
+                                    mech=h["name"], where=h.get("where", "")))
+        entry["spark_layout"] = sp
+        hand = handoff(parts, ids, sp) if "error" not in sp else None
+        if hand is None:
+            entry["error"] = "no buildable site on that edge"
+            continue
+        swap, mirror, n = hand["frame"]
+        view = _view(frame(parts, swap, mirror, n), hand["site"], "L2", set(ids))
+        text = instruction("L2", obj, hand["site"], (swap, mirror, n))
+        rec = attempt(parts, view, text, sampler, rounds=rounds)
+        entry.update(handoff={"edge": hand["edge"], "rows": hand["rows"]}, passed=rec["passed"],
+                     rounds=rec["rounds"], instruction=text)
+        if rec["passed"]:
+            parts = rec["parts"]
+    (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
+    return parts, report
+
+
+def main() -> None:
+    """Run on a folder with photo.png, body40.json, target40.npz (the sweep's inputs) - e.g. a held-out test."""
+    import argparse
+
+    from dotenv import load_dotenv
+
+    from .assembly import FireworksSampler
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("folder", type=Path)
+    ap.add_argument("--model", required=True)
+    ap.add_argument("--object", default=None, help="what it is (default: the folder's research.json)")
+    ap.add_argument("--out", type=Path, required=True)
+    args = ap.parse_args()
+    body = json.loads((args.folder / "body40.json").read_text())
+    target = np.load(args.folder / "target40.npz")
+    target = target[target.files[0]]
+    obj = args.object or json.loads((args.folder / "research.json").read_text()).get("object", "object")
+    args.out.mkdir(parents=True, exist_ok=True)
+    parts, report = build(args.folder / "photo.png", target, body, obj, FireworksSampler(args.model), args.out)
+    (args.out / "build.json").write_text(json.dumps(parts))
+    for s in report["surfaces"]:
+        print(f"region {s['region']} {s['part']!r}: {s['name']} ({s.get('where')}) -> "
+              f"{s.get('handoff')} passed={s.get('passed')} {s.get('error', '')}")
+    print("unsupported:", [(u["part"], u["name"], u.get("axis")) for u in report["unsupported"]])
+
+
+if __name__ == "__main__":
+    main()
