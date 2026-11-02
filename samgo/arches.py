@@ -183,8 +183,10 @@ def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool
         # each, sized to the body's height.
         d = min(0.55 * Z * PLATE, 4 * STUD)
         f, r = int(round(0.17 * X)), int(round(0.80 * X))
-        if wheel_x:  # Spark read the wheel centres from the photo
-            f, r = sorted(min(max(int(v), 2), X - 3) for v in wheel_x)
+        if wheel_x:  # Spark read the wheel centres from the photo; used when they make a car's wheelbase
+            a, b = sorted(min(max(int(v), 2), X - 3) for v in wheel_x)
+            if 0.45 * X <= b - a <= 0.80 * X:
+                f, r = a, b
         tires = [(max(f - 1, 0), f + 1, d), (r - 1, min(r + 1, X - 1), d)]
     tires = [tires[0], tires[-1]]                     # front and rear
     occ = target > 0
