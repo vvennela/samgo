@@ -355,14 +355,15 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             if not certified['passed'] and summary.get('glass_cuts'):
                 from .colors import paint as repaint
                 from .consolidate import consolidate as merge
-                alt, summary['glass_parts'] = add_glass(before_glass, cut=False)
-                alt, summary['merged_plates'] = merge(repaint(alt, summary['body_color']))
-                alt, recolored = legalize(alt)
+                alt, alt_glass = add_glass(before_glass, cut=False)
+                alt, alt_merged = merge(repaint(alt, summary['body_color']))
+                alt, alt_recolored = legalize(alt)
                 second = certify_manual(alt)
                 summary['glass_mode'] = 'whole parts (manual)' if second['passed'] else 'cut at window edges'
-                if second['passed']:
-                    parts, certified = alt, second
-                    summary['recolored_to_produced'] = len(recolored)
+                if second['passed']:  # the summary always describes the version that is kept
+                    parts, certified, recolored = alt, second, alt_recolored
+                    summary.update(glass_parts=alt_glass, merged_plates=alt_merged,
+                                   recolored_to_produced=len(alt_recolored))
             else:
                 summary['glass_mode'] = 'cut at window edges'
         save(run_dir / 'recolored.json', recolored)
