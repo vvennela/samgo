@@ -275,7 +275,10 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         if car and doors:
             stage('doors')
             from .doors import add_car_doors
-            built = add_car_doors(parts, target)
+            try:
+                built = add_car_doors(parts, target)
+            except ValueError as e:  # no room for doors on this body: the car is built without them
+                built = {'parts': parts, 'checks': {'door_cut': (False, str(e))}}
             failed = {k: v for k, v in built['checks'].items() if not (v if isinstance(v, bool) else v[0])}
             summary['doors_cut'] = not failed
             save(run_dir / 'doors_cut.json', built['parts'])

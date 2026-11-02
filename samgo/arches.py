@@ -178,7 +178,12 @@ def _build(target: np.ndarray, seed: int, attempts: int, beam: int, hollow: bool
     X, Y, Z = target.shape
     tires = find_tires(target)
     if len(tires) < 2:
-        return None
+        # No tyre outlines show (wheels deep in their arches behind low skirts, or a solid mesh to the ground):
+        # put the axles where cars have them, about a sixth of the length in from each end, three studs of tyre
+        # each, sized to the body's height.
+        d = min(0.55 * Z * PLATE, 4 * STUD)
+        f, r = int(round(0.17 * X)), int(round(0.80 * X))
+        tires = [(max(f - 1, 0), f + 1, d), (r - 1, min(r + 1, X - 1), d)]
     tires = [tires[0], tires[-1]]                     # front and rear
     occ = target > 0
     shaped = target.copy()
