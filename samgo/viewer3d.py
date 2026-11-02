@@ -282,8 +282,8 @@ function build(m) {
     orient(spokes, w); holder(w).add(spokes);
   }
   // Ground at the lowest point, so it is visible what touches the floor.
-  const bb = new THREE.Box3().setFromObject(g), size = bb.getSize(new THREE.Vector3());
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(size.x * 3, size.z * 3), new THREE.MeshLambertMaterial({color: 0x9aa3ad, transparent: true, opacity: 0.25}));
+  const bb = bounds(g), size = bb.getSize(new THREE.Vector3());
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(size.x * 1.6, size.z * 1.6), new THREE.MeshLambertMaterial({color: 0x9aa3ad, transparent: true, opacity: 0.25}));
   floor.rotation.x = -Math.PI / 2; floor.position.set(bb.min.x + size.x / 2, bb.min.y - 0.05, bb.min.z + size.z / 2); g.add(floor);
   return g;
 }
@@ -341,9 +341,21 @@ function animate() {
     h.matrixWorldNeedsUpdate = true;
   }
 }
+function bounds(obj) {  // Box3.setFromObject sees one unit box per InstancedMesh (three r128); count every instance
+  const bb = new THREE.Box3(), m = new THREE.Matrix4(), one = new THREE.Box3();
+  obj.updateMatrixWorld(true);
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    if (o.isInstancedMesh) for (let i = 0; i < o.count; i++) {
+      o.getMatrixAt(i, m); bb.union(one.copy(o.geometry.boundingBox).applyMatrix4(m.premultiply(o.matrixWorld)));
+    } else bb.union(one.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld));
+  });
+  return bb;
+}
 function view(kind) {
-  const bb = new THREE.Box3().setFromObject(group), c = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3());
-  const d = Math.max(size.x, size.y, size.z) * 2.1;
+  const bb = bounds(group), c = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3());
+  const d = Math.max(size.x, size.y, size.z) * 1.15;
   const dir = kind === "side" ? [0, 0.08, 1] : kind === "under" ? [0.6, -0.9, 0.8] : [-1.1, 0.75, 1.2];
   camera.position.set(c.x + dir[0] * d, c.y + dir[1] * d, c.z + dir[2] * d);
   controls.target.copy(c); controls.update();
