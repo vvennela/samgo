@@ -68,8 +68,8 @@ async def name_regions(photo: Path, labels: np.ndarray, obj: str, work: Path, cl
     key = hashlib.sha256(Path(photo).read_bytes() + labels.tobytes() + str(labels.shape).encode()
                          + (NAME_PROMPT + obj).encode()).hexdigest()[:16]
     cache = Path("runs/research_cache") / f"regions_{key}.json"
-    if cache.exists():
-        return json.loads(cache.read_text())
+    if cache.exists():  # JSON keys are strings; region numbers are ints
+        return {"regions": {int(k): v for k, v in json.loads(cache.read_text())["regions"].items()}}
     view = work / "regions.png"
     render(labels, view)
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
