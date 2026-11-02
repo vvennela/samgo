@@ -1,19 +1,24 @@
-"""Run 8 training data: flaps on thin structures that look like real voxelized ones.
+"""Run 8 training data: flaps on thin structures that look like real voxelized ones - of any kind.
 
-Run 7's sheets were flat slabs of even thickness lying on a block. Real models out of SAM 3D + voxelize are not:
-a wing is thick at the root and thin at the trailing edge, its edges are ragged, its top steps (dihedral, uneven
-thickness), it can leave the body at mid-height, and things hang under it. Every layer of a voxel model is tiled
-with plates, so these bodies are too: a voxel set, each z layer tiled with real plates, alternate layers crossed.
+Run 7's sheets were flat slabs of even thickness lying on a block. Thin structures out of SAM 3D + voxelize are not:
+their thickness varies (thicker where they join the body, thinner toward an edge, bumpy), their edges are ragged,
+their tops step, they leave the body at any height or lie on top of it and overhang, and things hang under them.
+Every layer of a voxel model is tiled with plates, so these bodies are too: a voxel set, each z layer tiled with
+real plates, alternate layers crossed.
+
+The bodies are deliberately generic (shelves, lids, ledges, panels, fins, overhangs on blocks) and named after no
+particular object type; held-out test objects (the 747, and rockets or satellites later) are never imitated: the
+point is a builder that generalizes, not one that has seen the test.
 
 Every task's answer is a verified site from samgo.flap_sites (a plain answer there passes the generic checks), so
-the data teaches only generic moves: clear a channel on three sides, put the bar and clip plates *on top* of the
-sheet at the hinge line (one plate above the local top), never inside it. Nothing here is fit to a test object.
+the data teaches only generic moves: clear a channel on three sides through the structure's full thickness, put the
+bar and clip plates on top of it at the hinge line (one plate above the local top), never inside it.
 
-Rows: the reference answer; or a wrong answer (the habitual mistakes - hinge plates inside the top layer, a
-missing side channel, a hinge a stud off), the precise feedback for it, then the fix. Glimmer's own wrong answers
-are added by samgo.flap_mistakes.
+Rows: the reference answer; or a wrong answer (the habitual mistakes - hinge plates inside the top layer, a channel
+cut only through the top layers, a missing side channel, a hinge a stud off), the precise feedback for it, then the
+fix. Glimmer's own wrong answers are added by samgo.flap_mistakes.
 
-    python -m samgo.flap_data --out data/flaps_r8 --test runs/audit/r8-wings
+    python -m samgo.flap_data --out data/flaps_r8 --test runs/audit/r8-sheets
 """
 
 import argparse
@@ -30,60 +35,77 @@ from .primitives import COLORS, loose_parts, tile_cells, unframe, unframe_box
 from .running_gear_task import FEEDBACK
 
 KEEP = ("structure", "connected")
-OBJECTS = ("airplane", "glider", "jet", "drone", "spaceship", "seaplane", "bird", "model aircraft")
+OBJECTS = ("object", "machine", "cabinet", "table", "boat", "truck", "robot", "building", "bench", "box", "toy",
+           "tool", "appliance", "vehicle", "sculpture")
 
 
 # ---------------------------------------------------------------- bodies
 
-def wing_body(rng: random.Random) -> tuple[list[dict], set]:
-    """A fuselage-like block with a wing (span along +y, chord along x, trailing edge toward +x), sometimes its
-    mirror on the -y side; plates only. Returns (parts, ids of the wing's parts outside the block)."""
+def sheet_body(rng: random.Random) -> tuple[list[dict], set]:
+    """A block (sometimes with a second block on it) and a thin structure of irregular thickness: out of a side at
+    any height, or lying on top and overhanging. Canonically the flap edge is +x: a side edge of a structure that
+    reaches out along +y, or the far end of one that reaches out along +x. Plates only.
+    Returns (parts, ids of the structure's parts outside the block)."""
     from .verifier import verify
 
     for _ in range(30):
         cells: set = set()
-        bx, by, bz = rng.randint(10, 22), rng.randint(3, 6), rng.randint(5, 12)
+        bx, by, bz = rng.randint(4, 16), rng.randint(4, 14), rng.randint(4, 14)
         ox, oy = 2, 2 + 14
         for x in range(ox, ox + bx):
             for y in range(oy, oy + by):
                 for z in range(0, bz):
                     cells.add((x, y, z))
-        reach = rng.randint(6, 14)
-        c_root, c_tip = rng.randint(6, min(12, bx)), rng.randint(3, 6)
-        t_root, t_tip = rng.randint(3, 6), 2
-        sweep = rng.choice((0, 1, 2, 3, 4))
-        zmid0 = rng.choice((bz - 1, bz, rng.randint(2, max(2, bz - 2))))  # on top, or out of the side mid-height
-        dihedral = rng.choice((0, 0, 4, 6, 8))  # one plate up every this many rows (0: flat)
-        lead0 = ox + rng.randint(0, max(0, bx - c_root))
-        pod = rng.random() < 0.4
-        pod_y = rng.randint(2, max(2, reach - 3))
-        jag = rng.choice((0.0, 0.25, 0.5))
-        wing = set()
-        for v in range(-2, reach):  # two rows over the block, the rest sticking out
-            t = max(v, 0)
+        if rng.random() < 0.3:  # a second, smaller block on top: a less box-like body
+            ux, uy = rng.randint(2, bx), rng.randint(2, by)
+            sx, sy = ox + rng.randint(0, bx - ux), oy + rng.randint(0, by - uy)
+            cells |= {(x, y, z) for x in range(sx, sx + ux) for y in range(sy, sy + uy)
+                      for z in range(bz, bz + rng.randint(2, 6))}
+        along = rng.choice(("y", "x"))  # the direction it reaches out from the block
+        face = by if along == "y" else bx  # the length of the block face it leaves from
+        reach = rng.randint(4, 14)
+        w_root = rng.randint(3, max(3, min(face + 4, 14)))
+        w_far = max(2, w_root + rng.randint(-w_root // 2, 2))
+        on_top = rng.random() < 0.3
+        zmid0 = (bz + 1) if on_top else rng.randint(2, bz)  # on top, or out of the side at any height
+        t_root = rng.randint(2, 6)
+        t_far = rng.randint(2, max(2, t_root))
+        toward_edge = rng.choice((0.0, 0.0, 0.5))  # thinner toward the +x edge as well
+        step = rng.choice((0, 0, 3, 5, 8))  # the top steps one plate every `step` rows out (0: level)
+        drift = rng.choice((0, 0, 1, 2, 3))  # the structure shifts sideways as it reaches out
+        jag = rng.choice((0.0, 0.2, 0.4))
+        start = -(rng.randint(2, max(2, (bx if along == "y" else by) - 1)) if on_top else 2)
+        v0 = rng.randint(-2, max(-2, face - w_root + 2))
+        hang = rng.random() < 0.4
+        hang_u = rng.randint(1, max(1, reach - 2))
+        sheet = set()
+        for u in range(start, reach):  # u: distance out from the block face; v: across
+            t = max(u, 0)
             f = t / max(reach - 1, 1)
-            chord = round(c_root + (c_tip - c_root) * f)
-            x0 = lead0 + round(sweep * f * 2) + (rng.choice((-1, 1)) if rng.random() < jag else 0)
-            x1 = x0 + chord + (rng.choice((-1, 1)) if rng.random() < jag else 0)
-            zmid = zmid0 + (t // dihedral if dihedral else 0)
-            span_t = t_root + (t_tip - t_root) * f
-            for x in range(x0, x1):
-                c = (x - x0) / max(x1 - x0 - 1, 1)  # 0 leading edge .. 1 trailing edge
-                th = max(2, round(span_t * (1.0 - 0.6 * max(0.0, c - 0.3) / 0.7)
-                                  + (rng.choice((-1, 0, 0, 1)) if jag else 0)))
-                z0 = zmid - th // 2
-                for z in range(max(z0, 0), z0 + th):
-                    wing.add((x, oy + by - 1 + v, z))
-            if pod and v == pod_y:  # a pod hanging under the wing (engine, float, tank)
-                px = x0 + rng.randint(0, max(0, chord // 3))
-                for x in range(px - 2, px + rng.randint(3, 6)):
-                    for y in (oy + by - 1 + v, oy + by + v):
-                        for z in range(max(zmid - th // 2 - rng.randint(2, 4), 1), zmid - th // 2):
-                            wing.add((x, y, z))
-        both = rng.random() < 0.5
-        mirrored = {(x, 2 * oy + by - 1 - y, z) for (x, y, z) in wing} if both else set()
-        cells |= wing | mirrored
-        if min(c[0] for c in cells) < 0:
+            width = round(w_root + (w_far - w_root) * f)
+            a = v0 + round(drift * f * 2) + (rng.choice((-1, 1)) if rng.random() < jag else 0)
+            b = a + width + (rng.choice((-1, 1)) if rng.random() < jag else 0)
+            zmid = zmid0 + (t // step if step else 0)
+            t_here = t_root + (t_far - t_root) * f
+            for v in range(a, b):
+                c = (v - a) / max(b - a - 1, 1)  # 0 .. 1 toward the +x side edge (for along == "y")
+                thin = toward_edge * max(0.0, c - 0.5) * 2 if along == "y" else 0.0
+                th = max(2, round(t_here * (1.0 - thin) + (rng.choice((-1, 0, 0, 1)) if jag else 0)))
+                z0 = zmid - th // 2 if not on_top else zmid - 1
+                for z in range(max(z0, 1 if u >= 0 else 0), z0 + th):
+                    sheet.add((ox + v, oy + by - 1 + u, z) if along == "y" else (ox + bx - 1 + u, oy + v, z))
+                if hang and u == hang_u and v in (a + 1, a + 2):  # something hanging under it
+                    for x2 in range(-1, rng.randint(2, 4)):
+                        for z in range(max(z0 - rng.randint(2, 4), 1), max(z0, 1)):
+                            sheet.add((ox + v, oy + by - 1 + u + x2, z) if along == "y"
+                                      else (ox + bx - 1 + u + x2, oy + v, z))
+        cells |= sheet
+        if rng.random() < 0.4:  # a second structure on the opposite face
+            if along == "y":
+                cells |= {(x, 2 * oy + by - 1 - y, z) for (x, y, z) in sheet}
+            else:
+                cells |= {(2 * ox + bx - 1 - x, y, z) for (x, y, z) in sheet}
+        if min(c[0] for c in cells) < 0 or min(c[1] for c in cells) < 0:
             continue
         color = rng.choice(COLORS)
         parts = []
@@ -96,9 +118,11 @@ def wing_body(rng: random.Random) -> tuple[list[dict], set]:
         parts = [p for i, p in enumerate(parts) if i not in drop]
         if not verify(parts, None).passed:
             continue
-        out = {i for i, p in enumerate(parts) if p["y"] + p["l"] > oy + by}  # the +y wing, past the block
-        return parts, out
-    raise ValueError("no connected wing body")
+        out = ({i for i, p in enumerate(parts) if p["y"] + p["l"] > oy + by} if along == "y" else
+               {i for i, p in enumerate(parts) if p["x"] + p["w"] > ox + bx})
+        if out:
+            return parts, out
+    raise ValueError("no connected sheet body")
 
 
 # ---------------------------------------------------------------- tasks
@@ -112,18 +136,17 @@ def instruction(level: str, obj: str, site: dict, frame: tuple) -> str:
     lo, hi = site["y0"], site["y1"]
     an = "an" if obj[0] in "aeiou" else "a"
     if level == "L1":
-        return (f"These are the parts of one wing of {an} {obj}; its trailing edge faces {outward}. Add one flap on "
-                "its trailing edge: free a strip of the trailing edge and hinge it so it swings about a horizontal "
-                "axis.")
+        return (f"These are the parts of one flat structure of {an} {obj}. Add one flap on its edge toward "
+                f"{outward}: free a strip of that edge and hinge it so it swings about a horizontal axis.")
     if level == "L2":
-        return (f"These are the parts along the trailing edge of a wing (it faces {outward}; rows {other} = "
-                f"{lo}..{hi}). Turn the rear of them into a flap: free it and hinge it about a horizontal axis "
+        return (f"These are the parts along one edge of a flat structure (the edge toward {outward}, rows {other} = "
+                f"{lo}..{hi}). Turn the outer part of it into a flap: free it and hinge it about a horizontal axis "
                 "along the edge.")
     xh = site["xh"]
     bar, clip = (m(xh - 2), m(xh + 1)) if not mirror else (m(xh - 1), m(xh + 2))
     face_bar, face_clip = ("+" + axis, "-" + axis) if not mirror else ("-" + axis, "+" + axis)
     dims = "w=1, l=2" if swap else "w=2, l=1"
-    return (f"These are the parts along the trailing edge of a wing. Make a flap beyond the line {axis} = {m(xh)} "
+    return (f"These are the parts along one edge of a flat structure. Make a flap beyond the line {axis} = {m(xh)} "
             f"(rows {other} = {lo}..{hi}): clear the column {axis} = {m(xh)} in those rows and the rows {other} = "
             f"{lo - 1} and {other} = {hi + 1} beyond it, out to the edge, so the strip is free on three sides; keep "
             f"the parts beyond the line as the flap, and hinge it with bar plates ({dims}, facing {face_bar}, at "
@@ -131,11 +154,15 @@ def instruction(level: str, obj: str, site: dict, frame: tuple) -> str:
             f"at z = {site['z']}, in rows {other} = {', '.join(map(str, site['hinge_rows']))}.")
 
 
-def _view(parts: list[dict], site: dict, level: str, wing_ids: set) -> list[int]:
-    """L1: the whole wing plus the block parts at its root; L2/L3: a box around the work plus a ring."""
+def _view(parts: list[dict], site: dict, level: str, ids: set) -> list[int]:
+    """L1: the whole structure plus the body parts it touches; L2/L3: a box around the work plus a ring."""
     if level == "L1":
-        y_root = min(parts[i]["y"] for i in wing_ids)
-        return sorted(set(wing_ids) | {i for i, p in enumerate(parts) if p["y"] + p["l"] > y_root - 2})
+        x0 = min(parts[i]["x"] for i in ids) - 2
+        x1 = max(parts[i]["x"] + parts[i]["w"] for i in ids) + 2
+        y0 = min(parts[i]["y"] for i in ids) - 2
+        y1 = max(parts[i]["y"] + parts[i]["l"] for i in ids) + 2
+        return [i for i, p in enumerate(parts) if p["x"] < x1 and p["x"] + p["w"] > x0 and p["y"] < y1
+                and p["y"] + p["l"] > y0]
     x_lo = site["xh"] - 6
     return [i for i, p in enumerate(parts) if p["x"] + p["w"] > x_lo and p["y"] < site["y1"] + 4
             and p["y"] + p["l"] > site["y0"] - 3]
@@ -143,13 +170,13 @@ def _view(parts: list[dict], site: dict, level: str, wing_ids: set) -> list[int]
 
 def case(seed: int, split: str = "train") -> dict | None:
     rng = random.Random(f"r8-flap-{split}-{seed}")
-    parts, wing_ids = wing_body(rng)
-    found = sites(parts, sorted(wing_ids), rng=rng, limit=1)
+    parts, ids = sheet_body(rng)
+    found = sites(parts, sorted(ids), rng=rng, limit=1)
     if not found:
         return None
     site = rng.choice(found)
     level = rng.choice(("L1", "L2", "L2", "L3"))
-    view = _view(parts, site, level, wing_ids)
+    view = _view(parts, site, level, ids)
     answer = site_answer(parts, site, color=rng.choice(("dark_gray", "light_gray", "black")))
     # a random orientation: the model is turned and mirrored, and so are the answer and the instruction
     swap, mirror = rng.random() < 0.5, rng.random() < 0.5
@@ -171,7 +198,7 @@ def case(seed: int, split: str = "train") -> dict | None:
 
 def mistakes(c: dict, rng: random.Random) -> list[list[dict]]:
     """Habitual wrong answers, each different from the reference: hinge plates inside the top layer (one plate
-    down), a channel cut only through the top layers (twice as likely: run 7's own habit on thick wings), a side
+    down), a channel cut only through the top layers (twice as likely: run 7's habit on thick structures), a side
     channel missing, the hinge plates a stud off."""
     ans = c["answer"]
     clears = [e for e in ans if e["op"] == "clear"]
@@ -233,7 +260,7 @@ def _job(args):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--test", type=Path, required=True)
+    ap.add_argument("--test", type=Path, required=True, help="frozen held-out generated structures")
     ap.add_argument("--n", type=int, default=2000, help="training seeds tried")
     ap.add_argument("--test-n", type=int, default=30)
     ap.add_argument("--workers", type=int, default=8)

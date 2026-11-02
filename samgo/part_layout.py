@@ -23,9 +23,9 @@ import numpy as np
 PROMPT = """The first image is a photo of {obj}. The second is a top view of a LEGO-scale model of it: x runs across
 (numbered ticks, one per stud), y runs up (numbered ticks), lighter is higher; the {part} is tinted orange.
 
-We are adding a hinged {mech} to the {part} ({where}). Read on the top view which edge of the orange part is the
-{mech}'s hinge-side edge - the edge it hangs from on the real {obj_word} (for a flap or aileron that is the trailing
-edge, the edge facing the tail) - and where along that edge the {mech} sits. Answer with one JSON object, nothing else:
+We are adding a hinged {mech} to the {part} ({where}). From what you know about the real object, read on the top view
+which edge of the orange part the {mech} hangs from, and where along that edge it sits. Answer with one JSON object,
+nothing else:
 {{"edge": "+x" | "-x" | "+y" | "-y", "from": <first tick along the edge>, "to": <last tick along the edge>}}
 "+x" means the edge facing increasing x. "from"/"to" are on the axis that runs along that edge (y for an x edge,
 x for a y edge)."""
@@ -92,7 +92,7 @@ async def ask(photo: Path, body: list[dict], part_ids: list[int], work: Path, *,
     from .function_spec import BASE_URL, MODEL, _data_url
 
     work.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha256(Path(photo).read_bytes() + json.dumps([body, sorted(part_ids), obj, part, mech, where])
+    key = hashlib.sha256(Path(photo).read_bytes() + json.dumps([PROMPT, body, sorted(part_ids), obj, part, mech, where])
                          .encode()).hexdigest()[:16]
     cache = Path("runs/research_cache") / f"part_layout_{key}.json"
     if cache.exists():
@@ -103,8 +103,7 @@ async def ask(photo: Path, body: list[dict], part_ids: list[int], work: Path, *,
     import os
 
     client = client or AsyncOpenAI(api_key=os.environ["BASETEN_API_KEY"], base_url=BASE_URL, max_retries=6)
-    text = PROMPT.format(obj=f"a{'n' if obj[0] in 'aeiou' else ''} {obj}", obj_word=obj, part=part, mech=mech,
-                         where=where)
+    text = PROMPT.format(obj=f"a{'n' if obj[0] in 'aeiou' else ''} {obj}", part=part, mech=mech, where=where)
     out = {"error": "no answer"}
     for _ in range(2):  # an empty answer now and then: ask once more
         r = await client.chat.completions.create(
