@@ -236,6 +236,8 @@ def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attem
     def try_side(side, d0, length, ys, zb, zt):
         """The door in one side wall at this plan, or None if it does not fit / swing clear."""
         pin_y = ys if side == "left" else ys + 1
+        if not occ[max(d0 - 2, 0):d0 + length, ys, zb:zt + 1].all():
+            return None  # the wall is not solid here (the mirror side of a body that is not exactly symmetric)
         color = COLOR_NAME[Counter(col[d0:d0 + length, ys, zb:zt + 1].ravel()).most_common(1)[0][0]]
         plan = _hinge_layers(occ, d0, ys, zb, zt)
         if plan is None:

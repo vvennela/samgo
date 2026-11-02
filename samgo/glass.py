@@ -125,12 +125,10 @@ def add_glass(parts: list[dict], shrink: float = 0.8) -> tuple[list[dict], int]:
         win = {c for c in win if mirror(c) in win}
 
     from .primitives import tile_cells
-    from .mechanism_bases import structural
-    from .technic import structural as technic_structural
-    from .verifier import verify
+    from .primitives import loose_parts
 
-    def issues(ps):
-        return len(verify(technic_structural(structural(ps)), None).issues)
+    def issues(ps):  # parts not attached to the rest (through studs and joints): a cut must not add any
+        return len(loose_parts(ps))
 
     # A part wholly in a window becomes glass; a part across a window's edge (a long plate running from the
     # windshield into a pillar or the roof) is cut at the edge into glass and body pieces, kept only if the build
