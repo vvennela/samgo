@@ -93,9 +93,9 @@ def tasks(body, regions):
         ("flap", "L2", strip, "These are the parts along the trailing edge of a wing. Turn the rear of them into a "
                               "flap: free it and hinge it about a horizontal axis along the edge.", flap),
         ("flap", "L3", strip, f"These are the parts along the trailing edge of a wing. Make a flap behind the line "
-                              f"x = {xh} (rows y = {span[0]}..{span[-1]}): clear the column x = {xh} in those rows to "
-                              f"leave a one-stud gap (shorten or split parts that cross it), keep the parts behind it "
-                              f"as the flap, and hinge it with bar plates (w=2, l=1, facing +x, at x = {xh - 2}, so "
+                              f"x = {xh} (rows y = {span[0]}..{span[-1]}): clear the column x = {xh} in those rows and "
+                              f"the rows y = {span[0] - 1} and y = {span[-1] + 1} beyond it, out to the edge, so the "
+                              f"strip is free on three sides; keep the parts behind the line as the flap, and hinge it with bar plates (w=2, l=1, facing +x, at x = {xh - 2}, so "
                               f"they end at x = {xh - 1}) and clip plates (w=2, l=1, facing -x, at x = {xh + 1}) at "
                               f"z = {zs}.", flap),
         ("gear", "L0", allp, "This is a Boeing 747. Add one landing-gear leg with an axle and two wheels that spin; "

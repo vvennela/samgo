@@ -27,7 +27,10 @@ FORMATS = PLACE_FORMATS + (
 
 RULES = ("Coordinates: x/y are studs, z is plates; a brick is 3 plates tall. Parts connect by vertically shared "
          "studs or matching connectors. Edits refer to the numbered input parts: "
-         '{"op":"remove","index":I}, {"op":"set","index":I,"part":{...}}, {"op":"add","part":{...}}. '
+         '{"op":"remove","index":I}, {"op":"set","index":I,"part":{...}}, {"op":"add","part":{...}}, '
+         '{"op":"clear","box":[x0,x1,y0,y1,z0,z1]} (empties that inclusive box in the whole model, shown or not: '
+         "parts inside go, parts crossing its edge are cut there and the rest re-laid as real plates, crumbs left "
+         "hanging fall away; to free a panel, clear a channel on every side but its hinge side). "
          "Only real catalog dimensions. Answer with only the JSON list of edits. " + FORMATS)
 
 
@@ -156,7 +159,8 @@ def explain(original: list[dict], parts: list[dict], sources: list[int | None], 
                 where = f"the hinge at (x={point[0] / STUD:.1f}, y={point[1] / STUD:.1f}) studs"
                 if sides is None:
                     msgs.append(f"{key}: {where} cannot turn: the surface is still attached to the body by studs "
-                                "elsewhere; remove the input parts that join them so the hinge is its only link")
+                                "elsewhere; free it with a channel on every side but the hinge side (clear boxes) so the hinge is "
+                                "its only link")
                     continue
                 small = min(sides, key=lambda g: sum(len(bodies[x]) for x in g))
                 moving = [i for x in small for i in bodies[x]]

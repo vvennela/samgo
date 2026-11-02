@@ -296,7 +296,8 @@ def hinge_problem(body: list[dict], rng: random.Random, margin: int = 0) -> dict
     if not all(i in view for i in sets):
         return None
     return dict(kind="hinge", frame=(swap, mirror, X), parts=parts, view=view, sets=sets, adds=adds,
-                where=dict(xg=xg, y0=y0, y1=y1, top=top, hinge_rows=hy))
+                where=dict(xg=xg, y0=y0, y1=y1, top=top, hinge_rows=hy, z0=zs[0], z1=zs[-1],
+                           edge=max(te[y] for y in span)))
 
 
 def hinge_text(prob: dict, level: str, obj: str) -> str:
@@ -320,8 +321,9 @@ def hinge_text(prob: dict, level: str, obj: str) -> str:
     bar = (gx - 2, "+" + axis, gx + 1, "-" + axis) if not mirror else (gx + 1, "-" + axis, gx - 2, "+" + axis)
     dims = "w=1, l=2" if swap else "w=2, l=1"
     return (f"These are the parts along one edge of a flat structure. Make a flap beyond the line {axis} = {gx} "
-            f"(rows {other} = {lo}..{hi}): clear the column {axis} = {gx} in those rows to leave a one-stud gap "
-            f"(shorten or split parts that cross it), keep the parts beyond it as the flap, and hinge it with bar "
+            f"(rows {other} = {lo}..{hi}): clear the column {axis} = {gx} in those rows and the rows {other} = "
+            f"{lo - 1} and {other} = {hi + 1} beyond it, out to the edge, so the strip is free on three sides; keep "
+            f"the parts beyond the line as the flap, and hinge it with bar "
             f"plates ({dims}, facing {bar[1]}, at {axis} = {bar[0]}) and clip plates ({dims}, facing {bar[3]}, at "
             f"{axis} = {bar[2]}) on top of the sheet at z = {w['top']}, in rows {other} = "
             f"{', '.join(map(str, w['hinge_rows']))}.")
@@ -382,14 +384,24 @@ def leg_text(prob: dict, level: str, obj: str) -> str:
 
 def case(seed: int, kind: str, split: str = "train") -> dict | None:
     """The smallest verified answer: for a hinge, the bare cut first, then re-laying a margin around it."""
-    for margin in ((0, 2) if kind == "hinge" else (0,)):
+    for margin in ((0,) if kind == "hinge" else (0,)):  # with clear, the code re-lays the cut: no margin
         c = _case(seed, kind, split, margin)
         if c is not None:
             return c
     return None
 
 
-def _case(seed: int, kind: str, split: str, margin: int) -> dict | None:
+def unframe_box(b, swap: bool, mirror: bool, X: int) -> list[int]:
+    """An inclusive box [x0, x1, y0, y1, z0, z1] from the canonical frame back to the model's."""
+    x0, x1, y0, y1, z0, z1 = b
+    if mirror:
+        x0, x1 = X - 1 - x1, X - 1 - x0
+    if swap:
+        x0, x1, y0, y1 = y0, y1, x0, x1
+    return [x0, x1, y0, y1, z0, z1]
+
+
+def _case(seed: int, kind: str, split: str, margin: int, use_clear: bool = True) -> dict | None:
     rng = random.Random(f"r6-{kind}-{split}-{seed}")
     body, obj = body_for(rng, split, 0.9 if kind == "hinge" else 0.5)
     prob = hinge_problem(body, rng, margin) if kind == "hinge" else leg_problem(body, rng)
@@ -398,9 +410,24 @@ def _case(seed: int, kind: str, split: str, margin: int) -> dict | None:
     swap, mirror, X = prob["frame"]
     full = unframe(prob["parts"], swap, mirror, X)
     pos = {i: k for k, i in enumerate(prob["view"])}
-    edits = [{"op": "remove", "index": pos[i]} if q is None else
-             {"op": "set", "index": pos[i], "part": unframe([q], swap, mirror, X)[0]} for i, q in prob["sets"].items()]
-    edits += [{"op": "add", "part": q} for q in unframe(prob["adds"], swap, mirror, X)]
+    if kind == "hinge" and use_clear:
+        # one cut through the sheet (code re-lays what crosses it), then the hinge plates
+        # free the panel with a channel on every side but the hinge: the gap behind the hinge line, and one row
+        # along each side out to the edge (the strip's own rows stay); then hang it on the hinge plates
+        w = prob["where"]
+        edge = w["edge"] + 1
+        channel = [(w["xg"], w["xg"], w["y0"], w["y1"] - 1), (w["xg"], edge, w["y0"] - 1, w["y0"] - 1),
+                   (w["xg"], edge, w["y1"], w["y1"])]
+        edits = [{"op": "clear", "box": unframe_box((a, b, c, d, w["z0"], w["z1"]), swap, mirror, X)}
+                 for a, b, c, d in channel]
+        edits += [{"op": "add", "part": q} for q in unframe([a for a in prob["adds"]
+                                                             if a["type"] in ("bar_plate", "clip_plate")],
+                                                            swap, mirror, X)]
+    else:
+        edits = [{"op": "remove", "index": pos[i]} if q is None else
+                 {"op": "set", "index": pos[i], "part": unframe([q], swap, mirror, X)[0]}
+                 for i, q in prob["sets"].items()]
+        edits += [{"op": "add", "part": q} for q in unframe(prob["adds"], swap, mirror, X)]
     reqs = FLAP if kind == "hinge" else LEG
     a = apply_edits(full, edits, local=prob["view"])
     v = check(full, a.parts, a.sources, reqs, stand=False)
@@ -450,9 +477,20 @@ def loose_parts(parts: list[dict]) -> list[int]:
     return [n for g in groups[:-1] for n in g]
 
 
-def habitual_mistake(c: dict) -> list[dict]:
-    """What run 5 does on these tasks: add the new parts without removing or shortening anything."""
-    return [e for e in c["answer"] if e["op"] == "add"]
+def habitual_mistake(c: dict, rng: random.Random | None = None) -> list[dict]:
+    """A realistic wrong answer: with clear, only the gap behind the hinge cut (the panel still held at its sides)
+    or a hinge plate one stud off; without clear, adding without removing or shortening anything."""
+    clears = [e for e in c["answer"] if e["op"] == "clear"]
+    if not clears:
+        return [e for e in c["answer"] if e["op"] == "add"]
+    rng = rng or random.Random(0)
+    if rng.random() < 0.5:
+        return clears[:1] + [e for e in c["answer"] if e["op"] == "add"]
+    bad = copy.deepcopy(c["answer"])
+    adds = [e for e in bad if e["op"] == "add"]
+    e = rng.choice(adds)
+    e["part"][rng.choice(("x", "y"))] += rng.choice((-1, 1))
+    return bad
 
 
 def row(c: dict, rng: random.Random) -> dict:
@@ -461,7 +499,7 @@ def row(c: dict, rng: random.Random) -> dict:
              "\n".join(f"{k}: {json.dumps(c['full'][i])}" for k, i in enumerate(c["view"]))}]
     turns = 1
     if c["kind"] == "hinge" and rng.random() < 0.4:
-        bad = habitual_mistake(c)
+        bad = habitual_mistake(c, rng)
         a = apply_edits(c["full"], bad, local=c["view"])
         v = check(c["full"], a.parts, a.sources, c["requirements"], stand=False)
         keep = {k: x for k, x in v.items() if k in KEEP or k.endswith("_surfaces")}
