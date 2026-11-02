@@ -186,6 +186,23 @@ def _studs_rigid(a: dict, b: dict) -> bool:
     return touching and overlap
 
 
+def _near_pairs(parts: list[dict], margin: float = 2 * STUD) -> list[tuple[int, int]]:
+    """Pairs (i < j) whose bounding boxes, grown by `margin` (connectors reach at most about a stud past a part's
+    box: a bar or clip end, a pin, a stud), overlap. Same answers as testing all pairs, without the n^2 Python loop."""
+    n = len(parts)
+    if n < 2:
+        return []
+    boxes = [box(p) if p.get("type") in HEIGHT or p.get("type") == "wheel" or p.get("type") in BEAMS else None
+             for p in parts]
+    lo = np.array([b[0] if b is not None else (-1e9, -1e9, -1e9) for b in boxes], dtype=float) - margin
+    hi = np.array([b[1] if b is not None else (1e9, 1e9, 1e9) for b in boxes], dtype=float) + margin
+    out = []
+    for i in range(n - 1):
+        ok = np.all((lo[i + 1:] <= hi[i]) & (hi[i + 1:] >= lo[i]), axis=1)
+        out.extend((i, i + 1 + int(k)) for k in np.flatnonzero(ok))
+    return out
+
+
 def analyse(parts: list[dict]):
     """(bodies as lists of part indices, joints as (body a, body b, type, point, axis))."""
     n = len(parts)
@@ -199,15 +216,15 @@ def analyse(parts: list[dict]):
 
     cons = [connectors(p) for p in parts]
     links = []
+    near = _near_pairs(parts)  # every pair that can touch or share a connector; the rest are far apart
     turning = set()  # pairs joined by a rotating connector: their touching faces turn, they are not stud-locked
-    for i in range(n):
-        for j in range(i + 1, n):
-            for a in cons[i]:
-                for b in cons[j]:
-                    if JOINT.get(frozenset([a.kind, b.kind])) == "revolute" and _on_axis(a, b):
-                        turning.add((i, j))
-    for i in range(n):
-        for j in range(i + 1, n):
+    for i, j in near:
+        for a in cons[i]:
+            for b in cons[j]:
+                if JOINT.get(frozenset([a.kind, b.kind])) == "revolute" and _on_axis(a, b):
+                    turning.add((i, j))
+    for i, j in near:
+        if True:
             pi, pj = parts[i], parts[j]
             if (i, j) not in turning and pi["type"] in HEIGHT and pj["type"] in HEIGHT and _studs_rigid(pi, pj):
                 pivot = pi if pi["type"] in PIVOTS else pj if pj["type"] in PIVOTS else None
@@ -466,10 +483,11 @@ JOINT_HALVES = {"bar_plate", "clip_plate", "hinge_base", "hinge_top", "click_a",
                 "turntable_top"}
 
 
-def dangling(parts: list[dict]) -> list[int]:
+def dangling(parts: list[dict], bodies: dict | None = None) -> list[int]:
     """Joint halves that hold nothing: a hinge, clip or turntable half whose studs grip no other part, so in real
     LEGO it only hangs on its partner (a clip on a bar over empty space). Each half must be built into a side."""
-    bodies, _ = analyse(parts)
+    if bodies is None:
+        bodies, _ = analyse(parts)
     return sorted(m[0] for m in bodies.values() if len(m) == 1 and parts[m[0]].get("type") in JOINT_HALVES)
 
 
@@ -493,7 +511,7 @@ def connected(parts: list[dict]) -> bool:
         parent[find(a)] = find(b)
     roots = {find(i) for i in range(n)}
     grounded = any(parts[i].get("z", 0) == 0 or parts[i].get("type") == "wheel" for i in range(n))
-    return len(roots) == 1 and grounded and not dangling(parts)
+    return len(roots) == 1 and grounded and not dangling(parts, bodies)
 
 
 def locked(parts: list[dict], as_type: dict) -> list[dict]:

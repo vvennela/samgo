@@ -135,6 +135,18 @@ def to_frame(edge: str, X: int, Y: int) -> tuple[bool, bool, int]:
     return swap, mirror, (Y if swap else X) + 1
 
 
+def local_parts(body: list[dict], part_ids: list[int], margin: int = 3) -> list[int]:
+    """The part's own parts and every part within `margin` studs of its box (coordinates unchanged), so site
+    checks on a big model run on the neighbourhood: what a flap there touches, not the far side of the model."""
+    x0 = min(body[i]["x"] for i in part_ids) - margin
+    x1 = max(body[i]["x"] + body[i]["w"] for i in part_ids) + margin
+    y0 = min(body[i]["y"] for i in part_ids) - margin
+    y1 = max(body[i]["y"] + body[i]["l"] for i in part_ids) + margin
+    near = {i for i, p in enumerate(body) if p["x"] < x1 and p["x"] + p.get("w", 1) > x0 and p["y"] < y1
+            and p["y"] + p.get("l", 1) > y0}
+    return sorted(near | set(part_ids))
+
+
 def handoff(body: list[dict], part_ids: list[int], spark: dict, **sizes) -> dict | None:
     """The verified flap site on Spark's edge nearest Spark's stretch, in the model's own coordinates:
     {"edge", "axis", "rows": (lo, hi), "site" (in the turned frame), "frame"} or None if none is buildable."""
@@ -145,8 +157,14 @@ def handoff(body: list[dict], part_ids: list[int], spark: dict, **sizes) -> dict
     Y = max(p["y"] + p["l"] for p in body)
     swap, mirror, n = to_frame(spark["edge"], X, Y)
     turned = frame(body, swap, mirror, n)
-    found = sites(turned, part_ids, **sizes)
     lo, hi = spark["from"], spark["to"]
+    if len(body) > 600:  # a big model: search on the part and its neighbours only, and near Spark's stretch first
+        keep = local_parts(turned, part_ids)
+        sub = [turned[i] for i in keep]
+        ids = [keep.index(i) for i in part_ids]
+        found = sites(sub, ids, ys=(lo, hi), **sizes) or sites(sub, ids, **sizes)
+    else:
+        found = sites(turned, part_ids, **sizes)
     if not found:
         return None
     # the most overlap with Spark's stretch, then the biggest flap, then the nearest

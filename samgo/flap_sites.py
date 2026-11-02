@@ -28,7 +28,7 @@ def site_answer(body: list[dict], site: dict, color: str = "dark_gray") -> list[
 
 
 def sites(body: list[dict], part_ids: list[int], lengths=(3, 4, 5), chords=(2, 3, 4), rng=None,
-          limit: int | None = None) -> list[dict]:
+          limit: int | None = None, ys: tuple[int, int] | None = None) -> list[dict]:
     """Verified flap sites on the +x edge of the parts `part_ids` of `body`: all of them, or (with `rng` and
     `limit`) the first `limit` found in a random order."""
     edge_x: dict = {}
@@ -38,7 +38,8 @@ def sites(body: list[dict], part_ids: list[int], lengths=(3, 4, 5), chords=(2, 3
             edge_x[y] = max(edge_x.get(y, -1), p["x"] + p["w"])
     occ = occupancy(body)
     found = []
-    tries = [(L, y0, chord) for L in lengths for y0 in sorted(edge_x) for chord in chords]
+    tries = [(L, y0, chord) for L in lengths for y0 in sorted(edge_x) for chord in chords
+             if ys is None or (y0 + L - 1 >= ys[0] and y0 <= ys[1])]  # `ys`: only spans meeting these rows
     if rng is not None:
         rng.shuffle(tries)
     for L, y0, chord in tries:
