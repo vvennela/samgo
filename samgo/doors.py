@@ -216,8 +216,40 @@ def _outline_plan(occ: np.ndarray, side: str, deck: int, outline: dict):
     return []
 
 
+def _flip_x(parts: list[dict], X: int) -> list[dict]:
+    """The parts mirrored front to back (x -> X - x): blocks by their extent, axles/wheels/pins by their edge."""
+    out = []
+    for p in parts:
+        q = dict(p)
+        if p["type"] in ("axle", "wheel", "bush", "half_bush") or "w" not in p:
+            q["x"] = X - p["x"]
+        else:
+            q["x"] = X - (p["x"] + p["w"])
+        if "pin_x" in p:
+            q["pin_x"] = X - p["pin_x"]
+        if p.get("facing") in ("+x", "-x"):
+            q["facing"] = {"+x": "-x", "-x": "+x"}[p["facing"]]
+        out.append(q)
+    return out
+
+
 def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attempts: int = 4,
-                  outline: dict | None = None) -> dict:
+                  outline: dict | None = None, front_high: bool = False) -> dict:
+    """Doors hinged at their front edge. The planner hinges at the low-x end, so a car whose front is at high x
+    (Spark says which end is the front) is planned front to back mirrored and mirrored back."""
+    if not front_high:
+        return _add_car_doors(car_parts, target, attempts, outline)
+    X = max(p["x"] + p.get("w", 0) for p in car_parts if "w" in p)
+    flipped = None if outline is None else dict(outline, x0=X - 1 - outline["x1"], x1=X - 1 - outline["x0"])
+    r = _add_car_doors(_flip_x(car_parts, X), None if target is None else target[::-1].copy(), attempts, flipped)
+    r["parts"] = _flip_x(r["parts"], X)
+    for d in r.get("doors", []):
+        d["x"] = [X - d["x"][1], X - d["x"][0]]
+    return r
+
+
+def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attempts: int = 4,
+                   outline: dict | None = None) -> dict:
     """The car with a hinged door in each side wall (see the module docstring); `target` is unused beyond its
     shape check (the wall is read from the parts themselves, which is what was built)."""
     grid = [p for p in car_parts if p["type"] in HEIGHT]

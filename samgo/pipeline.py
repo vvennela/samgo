@@ -290,8 +290,12 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             stage('doors')
             from .doors import add_car_doors
             try:
-                built = add_car_doors(parts, target, **({'outline': layout['door']}
-                                                         if car and layout.get('door') else {}))
+                spark = {}
+                if car and layout.get('door'):
+                    spark['outline'] = layout['door']
+                if car and 'front_wheel_x' in layout:  # which end is the front: doors hinge on their front edge
+                    spark['front_high'] = layout['front_wheel_x'] > layout['rear_wheel_x']
+                built = add_car_doors(parts, target, **spark)
             except ValueError as e:  # no room for doors on this body: the car is built without them
                 built = {'parts': parts, 'checks': {'door_cut': (False, str(e))}}
             failed = {k: v for k, v in built['checks'].items() if not (v if isinstance(v, bool) else v[0])}
