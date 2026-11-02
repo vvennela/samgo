@@ -38,6 +38,7 @@ COLORS = {
     "reddish_brown": (70, (95, 49, 9)),
     "light_gray": (71, (150, 150, 150)),
     "dark_gray": (72, (100, 100, 100)),
+    "dark_blue": (272, (10, 52, 99)),  # appended: earlier colours keep their COLOR_INDEX
 }
 
 # Transparent colors for glass (LDraw codes). Valid on parts, but never chosen when voxelizing a photo's colors.
