@@ -60,7 +60,24 @@ def consolidate(parts: list[dict]) -> tuple[list[dict], int]:
                     if best is None or gain < best[0]:  # smallest piece first, into the biggest plate
                         best = (gain, i, j, r)
         if best is None:
-            return parts, merges
+            # three identical plates stacked in one rigid body are one brick (same studs on top, same grip below)
+            at = {}
+            for i in plates:
+                p = parts[i]
+                at[(p["x"], p["y"], p["w"], p["l"], p.get("color"), p["z"])] = i
+            for (x, y, w, l, color, z), i in sorted(at.items(), key=lambda kv: kv[0][5]):
+                j, k = at.get((x, y, w, l, color, z + 1)), at.get((x, y, w, l, color, z + 2))
+                if j is None or k is None or color == GLASS:
+                    continue
+                if not (body_of.get(i) == body_of.get(j) == body_of.get(k)):
+                    continue
+                brick = dict(parts[i], type="brick")
+                parts = [p for n, p in enumerate(parts) if n not in (i, j, k)] + [brick]
+                merges += 2
+                break
+            else:
+                return parts, merges
+            continue
         _, i, j, r = best
         parts = [p for k, p in enumerate(parts) if k not in (i, j)] + [r]
         merges += 1
