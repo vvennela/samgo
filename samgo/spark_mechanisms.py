@@ -241,11 +241,17 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
 
     sizes = dict(lengths=tuple(sorted({round(n * scale) for n in (3, 4, 5)})),
                  chords=tuple(sorted({round(n * scale) for n in (2, 3, 4)})))
+    sps = loop.run_until_complete(layouts())
+    # The spot searches are CPU-bound (a whole-model check per candidate): one process per mechanism.
+    from concurrent.futures import ProcessPoolExecutor
+
+    with ProcessPoolExecutor(max_workers=max(1, min(workers, len(jobs)))) as procs:
+        found = list(procs.map(_spot, [(k, parts, ids, sp, sizes) for (k, _, ids, _), sp in zip(jobs, sps)]))
     tasks = []  # (entry, view, text, reqs)
-    for (kind, entry, ids, _), sp in zip(jobs, loop.run_until_complete(layouts())):
+    for (kind, entry, ids, _), sp, spot in zip(jobs, sps, found):
         entry["spark_layout"] = sp
         if kind == "surface":
-            hand = handoff(parts, ids, sp, **sizes) if "error" not in sp else None
+            hand = spot
             if hand is None:
                 entry["error"] = "no buildable site on that edge"
                 continue
@@ -254,7 +260,7 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
             tasks.append((entry, _view(frame(parts, swap, mirror, n), hand["site"], "L2", set(ids)),
                           instruction("L2", obj, hand["site"], (swap, mirror, n)), FLAP))
         else:
-            site = rotor_site(parts, ids, sp["edge"], sp["from"], sp["to"]) if "error" not in sp else None
+            site = spot
             if site is None:
                 entry["error"] = "no buildable spot on that face"
                 continue
@@ -271,6 +277,19 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
     parts = _merge(parts, passing, report)
     (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
     return parts, report
+
+
+def _spot(job):
+    """The verified spot for one mechanism (a flap handoff or a rotor site), or None; runs in a worker process."""
+    from .part_layout import handoff
+    from .rotor_data import rotor_site
+
+    kind, parts, ids, sp, sizes = job
+    if "error" in sp:
+        return None
+    if kind == "surface":
+        return handoff(parts, ids, sp, **sizes)
+    return rotor_site(parts, ids, sp["edge"], sp["from"], sp["to"])
 
 
 def _merge(body, passing, report):
