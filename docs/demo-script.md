@@ -1,29 +1,32 @@
-# SAMgo demo video (target 2:30)
+# 3-minute demo video (draft)
 
-Show only checked artifacts: every shot uses a saved, verified model (viewer pages, LDraw files, certified manuals).
-Cached runs are labeled "recorded run"; live runs are labeled "live".
+Show only work from Oct 27 - Nov 4. Civil machines only (no military objects).
 
-| Time | Shot | Voice-over |
-|---|---|---|
-| 0:00–0:12 | Photo of a VW Beetle, then the finished LEGO model rotating in the viewer | "One photo in. A LEGO model of that exact car out: one that rolls, has glass, and could actually be built." |
-| 0:12–0:30 | Pipeline diagram (README mermaid): SAM 3.1 → SAM 3D → builder → Glimmer → verifiers | "Meta's SAM 3.1 cuts the car out, SAM 3D makes the mesh, and our builder turns it into real LEGO parts: symmetric, smoothed, a frame and a hollow shell like a real car." |
-| 0:30–0:55 | Terminal: Glimmer's first proposal for the Camry rear axle, the checker's message ("use a longer Technic brick"), the corrected proposal passing | "Then Muse Glimmer makes it work. It edits the model to add Technic running gear. Code checks every edit: structure, stability, motion. When it's wrong, it gets the exact error and fixes it." |
-| 0:55–1:20 | Viewer: Beetle with running gear and glass, motion preview turning each axle; underside view | "The axles run through real Technic bricks, the wheels clear the arches, the windows are glass parts LEGO actually makes." |
-| 1:20–1:45 | Viewer gallery: chair (casters swivel, seat turns), microwave (door, turntable), car doors, laptop, TV | "The same model places hinges, turntables, casters and crank arms across object types it was trained on: 67 of 72 held-out cases." |
-| 1:45–2:05 | Certified manual: step images with "certified" badge; a line from the certificate | "And the instructions are formally certified: every step is checked exactly, no step needs you to hold anything, and an independent checker re-verifies it." |
-| 2:05–2:20 | BrickLink Studio opening the LDraw file | "Every part is real: the LDraw export matches the official part library to within half a millimetre." |
-| 2:20–2:30 | Results table (README) incl. the limit | "What doesn't work yet: placing a whole mechanism in an object type it has never seen. Repairs do transfer: 20 of 20. That's next." |
+**0:00-0:20 Hook.** A photo of a desk fan -> a LEGO fan whose blades spin (3D viewer, motion preview). "One photo of
+any machine becomes a LEGO model that works, and that you can actually build."
 
-## Shot list and sources
-- Beetle photo: `photos/beetle.jpg`; mesh: `runs/s6/beetle/object.glb`.
-- Live pipeline run (Glimmer, glass, colors, checks): `runs/demo_final/beetle/` (and `runs/demo_r5/` after run 5).
-- Feedback correction on the Camry: `runs/demo/camry/r3_seq_log.json` (front round 3, rear round 2).
-- Mechanism gallery: `python -m samgo.viewer3d out.html "Chair=runs/demo/chair/chair.json" ...`.
-- Certified manuals: `runs/demo/*/<name>_manual.json` (chair, skateboard, microwave; cars if certified).
-- LDraw files: `runs/ldraw/*.ldr`.
-- Results: README "Results" section; frozen test data under `runs/audit/`.
+**0:20-0:50 How: Spark knows, Glimmer does, code verifies.** The diagram from the README.
+- SAM 3.1 cuts the object out, SAM 3D makes the mesh, code turns it into real LEGO plates and bricks.
+- Muse Spark looks at the photo: "the blades spin, the head tilts, the guard is see-through" and points where.
+- Muse Glimmer (our fine-tune) gets the nearby parts and one sentence, and writes the edits that build it.
+- Code checks every part is real and held by studs, the mechanism moves clear, the model stands, and the build order
+  is certified. Failures go back to Glimmer as exact feedback ("this clip holds nothing").
 
-## Recording notes
-- Record the viewer at 1080p with the motion preview on; it animates one checked joint at a time.
-- Keep a terminal font large enough to read the checker's message in the feedback shot.
-- The voice-over numbers must match the README at recording time (update after run 5).
+**0:50-1:30 It generalizes.** Same models, no per-object code:
+- Camry: wheels roll, doors swing, windows are glass.
+- Wind turbine / airliner: whatever passed (rotor, flaps, landing gear), in the 3D viewer.
+- "None of these objects was in the training data. Glimmer learned generic skills on generic blocks: hinge an edge,
+  add a leg, set a rotor into a face."
+
+**1:30-2:10 Feedback is the trick.** Screen recording of one case: Glimmer's first answer fails, the checker's
+sentence, the fixed answer passes. Then the skills table: rotor 1/30 -> 30/30 after one generic training run; flaps
+15 -> 22 within rounds once Glimmer trained on its own mistakes.
+
+**2:10-2:45 You can build it.** The build kit: BrickLink parts list, certified step pictures (49 steps for the Camry),
+the model in BrickLink Studio. (If built: the real LEGO model next to the photo.)
+
+**2:45-3:00 Close.** "Meta's models, turning a photo into a working, buildable machine, including machines they were
+never trained on." Repo link.
+
+Credits on screen: team members; models: SAM 3.1, SAM 3D, Muse Spark, Muse Glimmer; photo sources from
+`docs/photo-sources.txt`.
