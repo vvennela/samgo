@@ -24,7 +24,7 @@ HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "hinge_base": 1, "hinge_to
 # Real parts behind the pivoting kinds (LDraw): swivel hinge 2429/2430, car door 3821/3822 (1x3x1),
 # click hinge plates 44301/44302, turntable 2x2 3680/3679.
 TOL = 0.5  # mm
-BEAMS = {"liftarm", "cross_block"}  # Technic parts with a body that can collide but no studs to grip by
+BEAMS = {"liftarm", "cross_block", "propeller"}  # Technic parts with a body that can collide but no studs to grip by
 AXES = {"x": np.array([1.0, 0, 0]), "y": np.array([0.0, 1, 0]), "z": np.array([0.0, 0, 1])}
 
 
@@ -111,6 +111,8 @@ def connectors(p: dict) -> list[Connector]:
         centre = _start(p) + ax * STUD / 2 + off
         return [Connector("axle_hole", _start(p), ax, (0.0, STUD)),
                 Connector("round_hole", centre - pin_axis * STUD / 2, pin_axis, (0.0, STUD))]
+    if t == "propeller":  # 4032's axle hole, one plate long, at the start of the assembly
+        return [Connector("axle_hole", _start(p), AXES[p["axis"]], (0.0, PLATE))]
     if t in ("hinge_base", "hinge_top"):  # swivel hinge 2429/2430: pin vertical, on the long edge at the joint
         pin = np.array([p["pin_x"] * STUD, p["pin_y"] * STUD, p["z"] * PLATE])
         return [Connector("hinge_pin_a" if t == "hinge_base" else "hinge_pin_b", pin, z_axis, (0.0, PLATE))]
@@ -323,6 +325,18 @@ def _corners(p: dict) -> np.ndarray:
         th = np.linspace(0, 2 * np.pi, 32, endpoint=False)
         ring = [c + k * r * (np.cos(t) * u + np.sin(t) * v) for k in (1.0, 0.66, 0.33) for t in th] + [c]
         return np.array([q + s * w * along for q in ring for s in np.linspace(0, 1, 4)])
+    if p["type"] == "propeller":  # the two crossed blades (2 studs wide), not the square round them
+        from .technic import PROPELLER_THICK
+        c, along = _start(p), AXES[p["axis"]]
+        u = AXES["x"] if p["axis"] == "y" else AXES["y"]
+        v = AXES["z"]
+        r = p["blade"] * STUD / 2
+        g = lambda a, b, n: np.linspace(a, b, max(2, int(np.ceil((b - a) / 4)) + 1))
+        pts = [c + a * along + s * u + w * v for a in g(0, PROPELLER_THICK, 0) for s in g(-r, r, 0)
+               for w in g(-STUD, STUD, 0)]
+        pts += [c + a * along + s * u + w * v for a in g(0, PROPELLER_THICK, 0) for s in g(-STUD, STUD, 0)
+                for w in g(-r, r, 0)]
+        return np.array(pts)
     # Points about every 4 mm over the box, plus the midpoints between them: corner-only points of a 1-plate part
     # all lie on the faces of a part on the same layer, where _inside's tolerance never counts them, so a plate
     # swinging into a plate of its own layer would never be seen.

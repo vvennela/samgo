@@ -61,6 +61,19 @@ def _technic(p: dict, boxes: list, cyls: list) -> None:
             dx, dy = (0, 0.15) if across == "y" else (0.15, 0)  # a little longer than the beam, so it shows
             cyls.append([x * STUD - dx, h, y * STUD - dy, STUD + 0.3, across, PIN_RADIUS, HOLE])
         return
+    if t == "propeller":  # two crossed 2-wide plates and the round hub plate under them
+        from .technic import PROPELLER_THICK
+        r = p["blade"] * STUD / 2
+        e, s0 = (p["x"], p["y"]) if p["axis"] == "y" else (p["y"], p["x"])
+        a0 = s0 * STUD
+        for wide, tall in ((r, STUD), (STUD, r)):  # (half-span across, half-span up)
+            if p["axis"] == "y":
+                boxes.append([e * STUD - wide, h - tall, a0 + PLATE, 2 * wide, 2 * tall, 2 * PLATE, col, 1, 0, "", 0])
+            else:
+                boxes.append([a0 + PLATE, h - tall, e * STUD - wide, 2 * PLATE, 2 * tall, 2 * wide, col, 1, 0, "", 0])
+        x, y = (e * STUD, a0) if p["axis"] == "y" else (a0, e * STUD)
+        cyls.append([x, h, y, PLATE, p["axis"], STUD, col])
+        return
     if t == "cross_block":
         lo, hi = extent(p)
         boxes.append([lo[0], lo[2], lo[1], hi[0] - lo[0], hi[2] - lo[2], hi[1] - lo[1], col, 1, 0, "", 0])
@@ -91,7 +104,7 @@ def scene(parts: list[dict]) -> dict:
 def _part(p: dict, boxes: list, axles: list, wheels: list, cyls: list) -> None:
     """One part's records (see scene)."""
     t = p.get("type")
-    if t in ("liftarm", "cross_block", "pin", "axle_pin", "axle_joiner", "half_bush"):
+    if t in ("liftarm", "cross_block", "pin", "axle_pin", "axle_joiner", "half_bush", "propeller"):
         _technic(p, boxes, cyls)
     elif t in HEIGHT:
         rgb = COLORS.get(p.get("color", "light_gray"), (None, EXTRA.get(p.get("color"), (150, 150, 150))))[1]
@@ -116,7 +129,7 @@ def _part(p: dict, boxes: list, axles: list, wheels: list, cyls: list) -> None:
 
 
 SPIN_PARTS = {"wheel", "axle", "half_bush", "axle_joiner", "pin", "axle_pin"}  # a wheel with its axle and hub
-ROTOR_ARMS = {"liftarm", "cross_block"}  # locked on a turning axle: a fan's blades, a propeller
+ROTOR_ARMS = {"liftarm", "cross_block", "propeller"}  # locked on a turning axle: a fan's blades, a propeller
 SWINGS = (360, 180, 120, 90, 60, 30, 15)
 
 
