@@ -55,12 +55,11 @@ def sites(body: list[dict], part_ids: list[int], lengths=(3, 4, 5), chords=(2, 3
         if any(y not in edge_x for y in span):
             continue
         xh = min(edge_x[y] for y in span) - chord
-        def level(y, x0, x1):  # the top of a hinge half's two columns, if flat (both the same), else -1
-            tops = {max((z for z in zs.get((x, y), ())), default=-1) for x in range(x0, x1 + 1)}
-            return tops.pop() if len(tops) == 1 else -1
+        def level(y, x0, x1):  # the top under a hinge half: it rests there, gripping at least one stud
+            return max((z for x in range(x0, x1 + 1) for z in zs.get((x, y), ())), default=-1)
 
-        # a hinge row: the bar's columns and the clip's columns flat and at the same height, so both halves sit on
-        # the model (a half over a lower spot would hang on its partner alone)
+        # a hinge row: the bar's top and the clip's top at the same height, so both halves rest on the model at the
+        # hinge's one height (a half over a lower spot would hang on its partner alone)
         top = {y: (lv if lv == level(y, xh + 1, xh + 2) else -1) for y in span for lv in [level(y, xh - 2, xh - 1)]}
         pairs = [(a, b) for a in span for b in span if a < b and top[a] == top[b] >= 0]
         if not pairs:

@@ -59,6 +59,9 @@ def tasks(body, regions):
     # inboard stretch of the span; hinge plates on top of the sheet, as in training
     from .flap_sites import pick, sites
     site = pick(sites(body, wing), near_y=float(np.mean(rows[len(rows) // 4: len(rows) // 2] or rows)))
+    if site is None:  # no buildable flap on this wing: the levels that name a site cannot be posed
+        site = {"y0": rows[len(rows) // 3], "y1": rows[len(rows) // 3] + 3, "xh": 0, "z": 0, "hinge_rows": [],
+                "missing": True}
     span = list(range(site["y0"], site["y1"] + 1))
     xh, zs, hinge_rows = site["xh"], site["z"], site["hinge_rows"]
     strip = [i for i in wing if body[i]["x"] + body[i]["w"] > xh - 2 and
@@ -88,7 +91,7 @@ def tasks(body, regions):
     wing, strip, lower, patch = ring(wing), ring(strip), ring(lower), ring(patch)
     flap = [{"name": "flap", "kind": "swing", "axis": "horizontal", "degrees": 20, "count": 1}]
     gear = [{"name": "gear", "kind": "spin", "count": 2, "stands": False}]  # one leg of several
-    return [
+    out = [
         ("flap", "L0", allp, "This is a Boeing 747. Add one flap on a wing's trailing edge: free a strip of the "
                              "trailing edge and hinge it so it swings about a horizontal axis.", flap),
         ("flap", "L1", wing, "These are the parts of one wing of a Boeing 747. Add one flap on its trailing edge: "
@@ -116,6 +119,9 @@ def tasks(body, regions):
                               f"y = {yc + 1}; bushes at y = {yc - 4} and y = {yc + 3}. The column must reach the belly bottom at "
                               f"z = {zb}.", gear),
     ]
+    if site.get("missing"):  # no buildable flap site: L3 would name an impossible one
+        out = [t for t in out if not (t[0] == "flap" and t[1] == "L3")]
+    return out
 
 
 def spark_tasks(folder: Path, body, regions):
