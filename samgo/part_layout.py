@@ -158,11 +158,8 @@ def handoff(body: list[dict], part_ids: list[int], spark: dict, **sizes) -> dict
     swap, mirror, n = to_frame(spark["edge"], X, Y)
     turned = frame(body, swap, mirror, n)
     lo, hi = spark["from"], spark["to"]
-    if len(body) > 600:  # a big model: search on the part and its neighbours only, and near Spark's stretch first
-        keep = local_parts(turned, part_ids)
-        sub = [turned[i] for i in keep]
-        ids = [keep.index(i) for i in part_ids]
-        found = sites(sub, ids, ys=(lo, hi), crop=True, **sizes) or sites(sub, ids, crop=True, **sizes)
+    if len(body) > 600:  # a big model: Spark's stretch first, nearest first, the first site that passes
+        found = sites(turned, part_ids, ys=(lo, hi), limit=1, **sizes) or sites(turned, part_ids, limit=1, **sizes)
     else:
         found = sites(turned, part_ids, **sizes)
     if not found:

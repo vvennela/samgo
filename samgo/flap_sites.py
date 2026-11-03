@@ -37,9 +37,15 @@ def sites(body: list[dict], part_ids: list[int], lengths=(3, 4, 5), chords=(2, 3
         for y in range(p["y"], p["y"] + p["l"]):
             edge_x[y] = max(edge_x.get(y, -1), p["x"] + p["w"])
     occ = occupancy(body)
+    zs: dict = {}
+    for (x, y, z) in occ:
+        zs.setdefault((x, y), []).append(z)
     found = []
     tries = [(L, y0, chord) for L in lengths for y0 in sorted(edge_x) for chord in chords
              if ys is None or (y0 + L - 1 >= ys[0] and y0 <= ys[1])]  # `ys`: only spans meeting these rows
+    if ys is not None:  # nearest Spark's stretch first, the biggest flap first among equals
+        mid = (ys[0] + ys[1]) / 2
+        tries.sort(key=lambda t: (abs(t[1] + (t[0] - 1) / 2 - mid), -t[0] * t[2]))
     if rng is not None:
         rng.shuffle(tries)
     for L, y0, chord in tries:
@@ -49,8 +55,13 @@ def sites(body: list[dict], part_ids: list[int], lengths=(3, 4, 5), chords=(2, 3
         if any(y not in edge_x for y in span):
             continue
         xh = min(edge_x[y] for y in span) - chord
-        top = {y: max((z for (x, yy, z) in occ if yy == y and xh - 2 <= x <= xh + 2), default=-1)
-               for y in span}
+        def level(y, x0, x1):  # the top of a hinge half's two columns, if flat (both the same), else -1
+            tops = {max((z for z in zs.get((x, y), ())), default=-1) for x in range(x0, x1 + 1)}
+            return tops.pop() if len(tops) == 1 else -1
+
+        # a hinge row: the bar's columns and the clip's columns flat and at the same height, so both halves sit on
+        # the model (a half over a lower spot would hang on its partner alone)
+        top = {y: (lv if lv == level(y, xh + 1, xh + 2) else -1) for y in span for lv in [level(y, xh - 2, xh - 1)]}
         pairs = [(a, b) for a in span for b in span if a < b and top[a] == top[b] >= 0]
         if not pairs:
             continue

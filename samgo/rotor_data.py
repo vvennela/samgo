@@ -104,7 +104,7 @@ def rotor_site(parts: list[dict], ids: list[int], face: str, lo: int, hi: int, l
     passes every check, judged on the neighbourhood of the part (big models stay fast)."""
     from .part_layout import local_parts
 
-    big = len(parts) > 600
+    big = False  # whole-model checks are fast enough; a cut-out neighbourhood misjudges what holds on from outside
     keep = local_parts(parts, ids) if big else list(range(len(parts)))
     sub = [parts[i] for i in keep]
     occ = occupancy(sub)
