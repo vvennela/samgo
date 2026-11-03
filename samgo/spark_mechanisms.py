@@ -349,18 +349,20 @@ def _review(photo, body, parts, obj, sampler, work, rounds, max_surfaces, labels
         render_regions(labels, regions_png)
     log = report.setdefault("review", [])
     passing = [p for p in passing if not p[0].get("merge_error")]  # only what is in the model
+    tried = {_key(e) for e in report.get("surfaces", []) + report.get("rotors", []) if not e.get("passed")}
     for rnd in range(1, review_rounds + 1):
         built = [{"id": e["id"], "name": e["name"], "kind": "hinged" if q is FLAP else "spinning",
                   "region": e["region"], "box": spark_review.mech_box(rec["edits"])} for e, rec, q in passing]
-        ans = spark_review.ask_mechanisms(photo, regions_png, parts, obj, built, regions, work / f"review_{rnd}", loop)
+        ans = spark_review.ask_mechanisms(photo, regions_png, parts, obj, built, regions, work / f"review_{rnd}", loop,
+                                          tried=sorted(tried))
         log.append({"round": rnd, "built": built, "answer": ans})
-        if "error" in ans or (not ans["add"] and not ans["remove"]):
+        if "error" in ans:
+            break
+        ans["add"] = [a for a in ans["add"] if _key(a) not in tried]  # never the same failed request twice
+        if not ans["add"] and not ans["remove"]:
             break
         drop = {r["id"]: r["why"] for r in ans["remove"]}
-        for e, _, _ in passing:
-            if e["id"] in drop:
-                e.update(passed=False, removed_by_review=drop[e["id"]])
-        passing = [p for p in passing if p[0]["id"] not in drop]
+        new = []
         if ans["add"]:
             named = {"regions": {}, "symmetric": False, "pairs": []}
             for a in ans["add"]:
@@ -372,13 +374,29 @@ def _review(photo, body, parts, obj, sampler, work, rounds, max_surfaces, labels
                               scale, named=named, merge=False)
             for k in ("surfaces", "rotors", "unsupported"):
                 report[k] += sub.get(k, [])
-            passing = passing + new
+            built_now = {_key({"region": e["region"], "name": e["name"]}) for e, _, _ in new}
+            tried |= {_key(a) for a in ans["add"] if _key(a) not in built_now}
+        # A part Spark calls wrong goes only when a replacement of the same kind was built this round: a model never
+        # loses a working part to the review without getting one back.
+        replaced = {("hinged" if q is FLAP else "spinning") for _, _, q in new}
+        for e, _, q in passing:
+            if e["id"] in drop:
+                if ("hinged" if q is FLAP else "spinning") in replaced:
+                    e.update(passed=False, removed_by_review=drop[e["id"]])
+                else:
+                    e["review_note"] = f"Spark: {drop[e['id']]} (kept: no replacement could be built)"
+        passing = [p for p in passing if not p[0].get("removed_by_review")] + new
         for e, _, _ in passing:  # merged again from scratch: earlier conflicts are judged anew
             e.pop("merge_error", None)
             e["passed"] = True
         parts = _merge(body, passing, report)
         passing = [p for p in passing if not p[0].get("merge_error")]
     return parts
+
+
+def _key(m: dict) -> str:
+    """One mechanism request, as Spark can name it again: region and name (lower case)."""
+    return f"region {m.get('region')}: {str(m.get('name', '')).strip().lower()}"
 
 
 JOINT_PLATES = ("bar_plate", "clip_plate", "hinge_base", "hinge_top", "click_a", "click_b")

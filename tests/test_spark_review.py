@@ -76,3 +76,33 @@ def test_review_removes_a_wrong_rotor_and_adds_a_missing_one(monkeypatch, tmp_pa
 def test_render_draws_three_views(tmp_path):
     sr.render(block(), tmp_path / "v.png")
     assert (tmp_path / "v.png").stat().st_size > 1000
+
+
+def test_a_part_spark_calls_wrong_stays_when_no_replacement_builds(monkeypatch, tmp_path):
+    body = block()
+    one = answer("+y", 8, 3, 6)
+    wrong = {"id": 301, "region": 1, "name": "rotor", "passed": True}
+    passing = [(wrong, {"edits": one}, ROTOR)]
+    parts = apply_edits(body, one).parts
+    report = {"regions": {1: {"part": "block"}}, "surfaces": [], "rotors": [wrong], "unsupported": []}
+    answers = iter([{"add": [{"region": 1, "kind": "spinning", "name": "fan", "where": "x", "axis": "horizontal"}],
+                     "remove": [{"id": 301, "why": "misplaced"}]},
+                    {"add": [{"region": 1, "kind": "spinning", "name": "fan", "where": "x", "axis": "horizontal"}],
+                     "remove": []}])
+    monkeypatch.setattr(sr, "ask_mechanisms", lambda *a, **k: next(answers))
+    calls = []
+
+    def fake_build(*a, **k):  # the replacement cannot be built
+        calls.append(1)
+        return [], {"rotors": [{"id": 302, "region": 1, "name": "fan", "passed": False}]}
+
+    monkeypatch.setattr(sm, "_build", fake_build)
+    (tmp_path / "regions.png").write_bytes(b"x")
+    loop = asyncio.new_event_loop()
+    try:
+        out = sm._review(tmp_path / "p.jpg", body, parts, "thing", None, tmp_path, 3, 8, np.zeros((8, 8, 15), int),
+                         loop, 1.0, report, passing)
+    finally:
+        loop.close()
+    assert rotors(out)[0] == 1 and "kept" in wrong["review_note"] and not wrong.get("removed_by_review")
+    assert len(calls) == 1  # the failed request is not tried a second time

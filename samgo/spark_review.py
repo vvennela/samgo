@@ -27,6 +27,8 @@ count cells{scale}).
 
 Working parts built so far (boxes in the third image's coordinates):
 {built}
+Tried already and could not be built here (do not ask for these again):
+{tried}
 
 From what you know about the real object, compare it with the model: which working parts does the real object have
 that the model is missing (a hinged panel that swings on an edge, or a part that spins all the way round on an axle,
@@ -222,7 +224,7 @@ def _article(obj: str) -> str:
 
 
 def ask_mechanisms(photo: Path, regions_png: Path, parts: list[dict], obj: str, built: list[dict], regions: dict,
-                   work: Path, loop) -> dict:
+                   work: Path, loop, tried: list[str] = ()) -> dict:
     """Spark's punch list for the working parts. `built`: [{"id", "name", "kind", "region", "box"}]."""
     work.mkdir(parents=True, exist_ok=True)
     f = factor(parts)
@@ -235,7 +237,7 @@ def ask_mechanisms(photo: Path, regions_png: Path, parts: list[dict], obj: str, 
                  f"z {bx['z'][0] // f}-{bx['z'][1] // f}") if bx else "position unknown"
         lines.append(f"#{b['id']} region {b['region']}: {b['name']} ({b['kind']}) at {where}")
     text = MECH_PROMPT.format(obj=_article(obj), scale=f", one tick = {f} cells" if f > 1 else "",
-                              built="\n".join(lines) or "(none)")
+                              built="\n".join(lines) or "(none)", tried="\n".join(tried) or "(none)")
     return loop.run_until_complete(_ask([photo, regions_png, view], text,
                                         lambda t: parse_mech(t, regions, {b["id"] for b in built})))
 
