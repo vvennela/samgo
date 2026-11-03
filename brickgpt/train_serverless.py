@@ -156,7 +156,13 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001
                 if "RATE_LIMIT" not in str(e) and "429" not in str(e) and "Retry the request" not in str(e):
                     raise
-                if attempt % 5 == 0:
+                if "Retry the request" in str(e):  # a session was opened: free the slot before trying again
+                    say(event="warm_start_retry", detail=str(e)[:160])
+                    try:
+                        service.delete_training_session()
+                    except Exception:  # noqa: BLE001
+                        pass
+                elif attempt % 5 == 0:
                     say(event="waiting_for_slot", detail=str(e)[:160])
                 time.sleep(120)
         else:
