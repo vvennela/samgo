@@ -98,6 +98,12 @@ def _part(p: dict, boxes: list, axles: list, wheels: list, cyls: list) -> None:
         boxes.append([p["x"] * STUD, p["z"] * PLATE, p["y"] * STUD, p["w"] * STUD, HEIGHT[t] * PLATE,
                       p["l"] * STUD, _hex(rgb), 1 if t in MECHANISM_PARTS else 0, SHAPE.get(t, 0),
                       p.get("facing") or "", 1 if str(p.get("color", "")).startswith("trans") else 0])
+        if t == "technic_brick":  # its round holes, where axles pass through (the checker's own hole geometry)
+            from .technic import _holes
+
+            for axis, edge, z, s0, _ in _holes(p):
+                x, y = (edge, s0 - 0.15) if axis == "y" else (s0 - 0.15, edge)
+                cyls.append([x, z, y, STUD + 0.3, axis, PIN_RADIUS + 0.6, HOLE])  # a ring round the axle
     elif t in ("axle", "wheel"):
         size = p.get("size", DEFAULT_WHEEL)
         span = (p["length"] if t == "axle" else wheel_studs(size)) * STUD
