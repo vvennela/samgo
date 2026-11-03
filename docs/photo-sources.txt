@@ -2,3 +2,5 @@ photos/prius_black_2015.jpg: 'Toyota Prius (XW30) Washington DC Metro Area, USA'
 desk_fan.jpg - "Small Desk Fan 1", Wikimedia Commons, public domain: https://commons.wikimedia.org/wiki/File:Small_Desk_Fan_1.jpg
 wind_turbine.jpg - "Mod-5B 3200 kW experimental wind turbine, Kahuku Point", US DOE/NASA, public domain: https://commons.wikimedia.org/wiki/File:Mod-58_3200_kW_experimental_wind_turbine,_Kahuku_Point_Island.jpg
 fan2.jpg - "Electric Fan 240x355", Wikimedia Commons, public domain: https://commons.wikimedia.org/wiki/File:Electric_Fan_240x355.jpg
+cessna.jpg - "Cessna 172 C-GDQG", Wikimedia Commons, public domain: https://commons.wikimedia.org/wiki/File:Cessna_172_C-GDQG.jpg
+helicopter.jpg - crop of "Rescue Helicopter Auckland City Hospital", Wikimedia Commons, public domain: https://commons.wikimedia.org/wiki/File:Rescue_Helicopter_Auckland_City_Hospital.jpg

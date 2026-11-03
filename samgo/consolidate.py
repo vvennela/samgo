@@ -1,18 +1,23 @@
-"""Fewer, bigger pieces: merge neighbouring plates of one color on one layer into real larger plates.
+"""Fewer, bigger pieces, same geometry: neighbours that together are exactly one piece of our collection become it.
 
-A merged plate grips every stud its halves did, so nothing comes loose; plates merge only inside one rigid body
-(never a door into the car, never across a hinge), glass only into sizes LEGO made in trans-clear. Repeated until
-no pair merges, largest result first, so 1x1 fillers grow into 1x2 ... 2x8 where the layout allows.
+- Beside: two plates (or two bricks) of one color on one layer whose union is a real rectangle become that plate
+  (brick). Repeated until nothing merges, smallest pieces first, so 1x1 + 1x1 -> 1x2, 1x2 + 1x2 -> 2x2 ... 2x8.
+- Above/below: three plates of one footprint and color stacked directly on each other are one brick.
+
+The cells filled and their colors never change. Pieces merge only inside one rigid body (never a door into the car,
+never across a hinge or onto a turning axle), so every stud grip is kept: a merged piece grips every stud its parts
+did. A merged piece must be a size LEGO made in that color (glass included). Mechanism parts are never touched.
 """
 
 from .parts import FOOTPRINTS
 
 VALID = {tuple(sorted(f)) for f in FOOTPRINTS}
+SOLID = ("plate", "brick")
 
 
 def _merged(p: dict, q: dict) -> dict | None:
-    """The single plate covering exactly p and q, if they form a real rectangle side by side."""
-    if p["z"] != q["z"] or p.get("color") != q.get("color"):
+    """The single piece covering exactly p and q, if they form a real rectangle side by side (same type)."""
+    if p["type"] != q["type"] or p["z"] != q["z"] or p.get("color") != q.get("color"):
         return None
     if p["y"] == q["y"] and p["l"] == q["l"] and (p["x"] + p["w"] == q["x"] or q["x"] + q["w"] == p["x"]):
         r = dict(p, x=min(p["x"], q["x"]), w=p["w"] + q["w"])
@@ -23,61 +28,86 @@ def _merged(p: dict, q: dict) -> dict | None:
     return r if tuple(sorted((r["w"], r["l"]))) in VALID else None
 
 
+def _made(p: dict) -> bool:
+    """LEGO produced this size in this color (unknown colors are left to the later color legalizer)."""
+    from .colors import NAMED, exists
+    from .parts import LDRAW_IDS
+
+    pid = LDRAW_IDS.get((p["type"], *sorted((p["w"], p["l"]))))
+    if pid is None:
+        return False
+    color = NAMED.get(p.get("color"))
+    if color is None:
+        return True
+    try:
+        return exists(pid, color)
+    except Exception:  # noqa: BLE001 - no catalogue entry: keep the original pieces
+        return False
+
+
 def consolidate(parts: list[dict]) -> tuple[list[dict], int]:
-    """(parts with neighbouring same-color plates merged inside each rigid body, how many merges)."""
-    from .glass import GLASS
+    """(parts with neighbours merged into single real pieces inside each rigid body, how many pieces were saved)."""
     from .kinematics import analyse
 
-    def made(p):
-        if p.get("color") != GLASS:
-            return True
-        from .colors import NAMED, exists
-        from .parts import LDRAW_IDS
-
-        pid = LDRAW_IDS.get(("plate", *sorted((p["w"], p["l"]))))
-        return pid is not None and exists(pid, NAMED[GLASS])
-
     parts = [dict(p) for p in parts]
-    merges = 0
-    while True:
-        bodies, _ = analyse(parts)
-        body_of = {i: b for b, members in bodies.items() for i in members}
-        plates = [i for i, p in enumerate(parts) if p["type"] == "plate"]
-        by_layer: dict = {}
-        for i in plates:
-            by_layer.setdefault((parts[i]["z"], parts[i].get("color")), []).append(i)
-        best = None
-        for group in by_layer.values():
-            for a in range(len(group)):
-                for b in range(a + 1, len(group)):
-                    i, j = group[a], group[b]
-                    if body_of.get(i) != body_of.get(j):
+    bodies, _ = analyse(parts)
+    body = [None] * len(parts)
+    for b, members in (bodies.items() if isinstance(bodies, dict) else enumerate(bodies)):
+        for i in members:
+            body[i] = b
+    keep = [p for i, p in enumerate(parts) if p["type"] not in SOLID]
+    solid = [(p, body[i]) for i, p in enumerate(parts) if p["type"] in SOLID]
+    saved = 0
+    changed = True
+    while changed:
+        changed = False
+        # beside: index every piece by the edge a partner would share with it
+        alive = {k: s for k, s in enumerate(solid)}
+        by_edge: dict = {}
+        for k, (p, b) in alive.items():
+            by_edge.setdefault(("x", p["type"], p["z"], p.get("color"), b, p["y"], p["l"], p["x"] + p["w"]), []).append(k)
+            by_edge.setdefault(("y", p["type"], p["z"], p.get("color"), b, p["x"], p["w"], p["y"] + p["l"]), []).append(k)
+        order = sorted(alive, key=lambda k: alive[k][0]["w"] * alive[k][0]["l"])
+        used = set()
+        out = []
+        for k in order:
+            if k in used:
+                continue
+            p, b = alive[k]
+            best = None
+            for key in (("x", p["type"], p["z"], p.get("color"), b, p["y"], p["l"], p["x"]),
+                        ("y", p["type"], p["z"], p.get("color"), b, p["x"], p["w"], p["y"])):
+                for j in by_edge.get(key, []):  # pieces ending where p starts
+                    if j in used or j == k:
                         continue
-                    r = _merged(parts[i], parts[j])
-                    if r is None or not made(r):
-                        continue
-                    gain = (min(parts[i]["w"] * parts[i]["l"], parts[j]["w"] * parts[j]["l"]), -(r["w"] * r["l"]))
-                    if best is None or gain < best[0]:  # smallest piece first, into the biggest plate
-                        best = (gain, i, j, r)
-        if best is None:
-            # three identical plates stacked in one rigid body are one brick (same studs on top, same grip below)
-            at = {}
-            for i in plates:
-                p = parts[i]
-                at[(p["x"], p["y"], p["w"], p["l"], p.get("color"), p["z"])] = i
-            for (x, y, w, l, color, z), i in sorted(at.items(), key=lambda kv: kv[0][5]):
-                j, k = at.get((x, y, w, l, color, z + 1)), at.get((x, y, w, l, color, z + 2))
-                if j is None or k is None or color == GLASS:
-                    continue
-                if not (body_of.get(i) == body_of.get(j) == body_of.get(k)):
-                    continue
-                brick = dict(parts[i], type="brick")
-                parts = [p for n, p in enumerate(parts) if n not in (i, j, k)] + [brick]
-                merges += 2
-                break
-            else:
-                return parts, merges
+                    r = _merged(alive[j][0], p)
+                    if r is not None and _made(r) and (best is None or r["w"] * r["l"] > best[1]["w"] * best[1]["l"]):
+                        best = (j, r)
+            if best is None:
+                continue
+            j, r = best
+            used |= {j, k}
+            out.append((r, b))
+            saved += 1
+            changed = True
+        solid = [s for k, s in alive.items() if k not in used] + out
+        if changed:
             continue
-        _, i, j, r = best
-        parts = [p for k, p in enumerate(parts) if k not in (i, j)] + [r]
-        merges += 1
+        # above/below: three identical plates stacked in one rigid body are one brick
+        at = {(p["x"], p["y"], p["w"], p["l"], p.get("color"), b, p["z"]): k
+              for k, (p, b) in enumerate(solid) if p["type"] == "plate"}
+        used = set()
+        out = []
+        for (x, y, w, l, color, b, z), k in sorted(at.items(), key=lambda kv: kv[0][6]):
+            j, m = at.get((x, y, w, l, color, b, z + 1)), at.get((x, y, w, l, color, b, z + 2))
+            if j is None or m is None or {k, j, m} & used:
+                continue
+            brick = dict(solid[k][0], type="brick")
+            if not _made(brick):
+                continue
+            used |= {k, j, m}
+            out.append((brick, b))
+            saved += 2
+            changed = True
+        solid = [s for k, s in enumerate(solid) if k not in used] + out
+    return keep + [p for p, _ in solid], saved

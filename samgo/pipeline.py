@@ -393,6 +393,9 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             # fewer, bigger pieces: neighbouring same-color plates in one rigid body become one real plate
             from .consolidate import consolidate
             parts, summary['merged_plates'] = consolidate(parts)
+        if not car:  # any object: neighbours that are exactly one real piece become it (same cells and colors)
+            from .consolidate import consolidate
+            parts, summary['merged_plates'] = consolidate(parts)
         from .colors import legalize
         parts, recolored = legalize(parts)
         summary['recolored_to_produced'] = len(recolored)
