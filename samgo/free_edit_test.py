@@ -78,25 +78,36 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
         from types import SimpleNamespace
         st = SimpleNamespace(passed=True, issues=[])
     out["stands"] = (st.passed, "; ".join(i.message for i in st.issues) or "stands")
-    bodies, joints = analyse(parts)
     swings = {"horizontal": 0, "vertical": 0}
     detail = {"horizontal": [], "vertical": []}
-    for k, (a, b, kind, point, axis, partners) in enumerate(joints):
-        sides = _sides(bodies, joints, k)
-        if sides is None:
-            continue
-        small = min(sides, key=lambda g: sum(len(bodies[x]) for x in g))
-        moving = [i for x in small for i in bodies[x]]
-        if any(parts[i]["type"] in ("wheel", "axle", "bush") for i in moving):
-            continue  # wheels are counted by the spin requirement
-        if not any(sources[i] is not None for i in moving):
-            continue  # an invented panel, not a surface freed from the model
-        which = "vertical" if abs(axis[2]) > 0.9 else "horizontal"
-        wanted = [q["degrees"] for q in reqs if q["kind"] == "swing" and q["axis"] == which]
-        degrees = min(wanted) if wanted else 20
-        if any(sweep(parts, moving, point, axis, s * degrees, ignore=partners) is None for s in (1, -1)):
-            swings[which] += 1
-            detail[which].append(len(moving))
+    need = {"horizontal": sum(q["count"] for q in reqs if q["kind"] == "swing" and q["axis"] == "horizontal"),
+            "vertical": sum(q["count"] for q in reqs if q["kind"] == "swing" and q["axis"] == "vertical")}
+    if any(need.values()):  # only asked-for swings are swept: smallest moving sets first, stop once enough swing
+        bodies, joints = analyse(parts)
+        candidates = []
+        for k, (a, b, kind, point, axis, partners) in enumerate(joints):
+            sides = _sides(bodies, joints, k)
+            if sides is None:
+                continue
+            small = min(sides, key=lambda g: sum(len(bodies[x]) for x in g))
+            moving = [i for x in small for i in bodies[x]]
+            if any(parts[i]["type"] in ("wheel", "axle", "bush") for i in moving):
+                continue  # wheels are counted by the spin requirement
+            if not any(sources[i] is not None for i in moving):
+                continue  # an invented panel, not a surface freed from the model
+            which = "vertical" if abs(axis[2]) > 0.9 else "horizontal"
+            if need[which]:
+                candidates.append((len(moving), k, moving, point, axis, partners, which))
+        for _, _, moving, point, axis, partners, which in sorted(candidates, key=lambda c: c[:2]):
+            if all(swings[w] >= need[w] for w in need):
+                break
+            if swings[which] >= need[which]:
+                continue
+            wanted = [q["degrees"] for q in reqs if q["kind"] == "swing" and q["axis"] == which]
+            degrees = min(wanted) if wanted else 20
+            if any(sweep(parts, moving, point, axis, s * degrees, ignore=partners) is None for s in (1, -1)):
+                swings[which] += 1
+                detail[which].append(len(moving))
     for q in reqs:
         if q["kind"] == "rotor":  # something on an axle turns all the way round, clear of everything
             from .kinematics import rotors
@@ -109,8 +120,6 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
             lowest = not any(i.code == "body_drags" for i in fn.issues)
             stands = st.passed or not q.get("stands", True)  # one leg of several is not asked to stand alone
             out[q["name"]] = (ok and lowest and stands, f"{why}; wheels lowest: {lowest}")
-    need = {"horizontal": sum(q["count"] for q in reqs if q["kind"] == "swing" and q["axis"] == "horizontal"),
-            "vertical": sum(q["count"] for q in reqs if q["kind"] == "swing" and q["axis"] == "vertical")}
     for which in ("horizontal", "vertical"):
         if need[which]:
             out[f"{which}_surfaces"] = (swings[which] >= need[which],
