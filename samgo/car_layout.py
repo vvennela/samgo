@@ -98,7 +98,7 @@ async def ask(photo: Path, target: np.ndarray, work: Path, client=None) -> dict:
 
     work.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(Path(photo).read_bytes() + target.tobytes() + str(target.shape).encode() + PROMPT.encode()).hexdigest()[:16]
-    cache = Path("runs/research_cache") / f"layout_{key}.json"
+    cache = Path("runs/research_cache") / f"layout5_{key}.json"
     if cache.exists():
         return json.loads(cache.read_text())
     side = work / "side_view.png"
@@ -107,20 +107,48 @@ async def ask(photo: Path, target: np.ndarray, work: Path, client=None) -> dict:
     import os
 
     client = client or AsyncOpenAI(api_key=os.environ["BASETEN_API_KEY"], base_url=BASE_URL, max_retries=6)
-    for _ in range(2):  # an empty answer now and then: ask once more
+
+    async def one():
         r = await client.chat.completions.create(
             model=MODEL, max_tokens=3000, extra_body={"reasoning_effort": "low"},
             messages=[{"role": "user", "content": [{"type": "text", "text": PROMPT},
                                                    {"type": "image_url", "image_url": {"url": _data_url(photo)}},
                                                    {"type": "image_url",
                                                     "image_url": {"url": _data_url(side, 1400)}}]}])
-        text = r.choices[0].message.content or ""
-        out = parse(text, target.shape) or {"error": f"unparseable answer: {text[:200]}"}
-        if "error" not in out:
-            break
+        return parse(r.choices[0].message.content or "", target.shape)
+
+    # Self-consistency: several answers at once, then the consensus (Spark's single answers vary run to run).
+    answers = [a for a in await asyncio.gather(*[one() for _ in range(SAMPLES)], return_exceptions=True)
+               if isinstance(a, dict)]
+    out = consensus(answers) if answers else {"error": "no parseable answer"}
     if "error" not in out:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(out))
+    return out
+
+
+SAMPLES = 5
+
+
+def consensus(answers: list[dict]) -> dict:
+    """Majority on which end is the front, then the median of each number among the answers that agree; the
+    doors of the most common door count, field by field."""
+    import statistics
+
+    forward = [a for a in answers if a["front_wheel_x"] > a["rear_wheel_x"]]
+    backward = [a for a in answers if a["front_wheel_x"] <= a["rear_wheel_x"]]
+    agree = forward if len(forward) >= len(backward) else backward
+    med = lambda k: int(round(statistics.median(a[k] for a in agree)))  # noqa: E731
+    out = {"front_wheel_x": med("front_wheel_x"), "rear_wheel_x": med("rear_wheel_x"), "wheel_top_z": med("wheel_top_z")}
+    counts = [len(a["doors"]) for a in agree]
+    n = max(set(counts), key=counts.count)
+    same = [a["doors"] for a in agree if len(a["doors"]) == n]
+    out["doors"] = [{k: int(round(statistics.median(d[i][k] for d in same))) for k in ("x0", "x1", "z0", "z1")}
+                    for i in range(n)]
+    if out["doors"]:
+        out["door"] = out["doors"][0]
+    out["samples"] = len(answers)
+    out["agreeing"] = len(agree)
     return out
 
 
