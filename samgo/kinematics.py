@@ -204,21 +204,32 @@ def _rigid_pairs(parts: list[dict], pairs: list[tuple[int, int]]) -> list[bool]:
     return (solid[a] & solid[b] & touching & overlap).tolist()
 
 
-def _near_pairs(parts: list[dict], margin: float = 2 * STUD) -> list[tuple[int, int]]:
-    """Pairs (i < j) whose bounding boxes, grown by `margin` (connectors reach at most about a stud past a part's
-    box: a bar or clip end, a pin, a stud), overlap. Same answers as testing all pairs, without the n^2 Python loop."""
-    n = len(parts)
-    if n < 2:
+def _near_pairs(parts: list[dict], margin: float = 2 * STUD, only: list[int] | None = None) -> list[tuple[int, int]]:
+    """Pairs (i < j) among `only` (default: all parts) whose bounding boxes, grown by `margin`, overlap. Sort and
+    sweep on x: each part is tested only against the parts whose x-range can reach it."""
+    idx = list(range(len(parts))) if only is None else list(only)
+    if len(idx) < 2:
         return []
-    boxes = [box(p) if p.get("type") in HEIGHT or p.get("type") == "wheel" or p.get("type") in BEAMS else None
-             for p in parts]
+    boxes = [box(parts[k]) if parts[k].get("type") in HEIGHT or parts[k].get("type") == "wheel"
+             or parts[k].get("type") in BEAMS else None for k in idx]
     lo = np.array([b[0] if b is not None else (-1e9, -1e9, -1e9) for b in boxes], dtype=float) - margin
     hi = np.array([b[1] if b is not None else (1e9, 1e9, 1e9) for b in boxes], dtype=float) + margin
-    out = []
-    for i in range(n - 1):
-        ok = np.all((lo[i + 1:] <= hi[i]) & (hi[i + 1:] >= lo[i]), axis=1)
-        out.extend((i, i + 1 + int(k)) for k in np.flatnonzero(ok))
-    return out
+    order = np.argsort(lo[:, 0], kind="stable")
+    lo, hi, ids = lo[order], hi[order], np.asarray(idx)[order]
+    reach = np.searchsorted(lo[:, 0], hi[:, 0], side="right")  # rows after i whose x starts within i's x range
+    out_a, out_b = [], []
+    for i in range(len(ids) - 1):
+        r = reach[i]
+        if r <= i + 1:
+            continue
+        ok = np.flatnonzero(np.all((lo[i + 1:r] <= hi[i]) & (hi[i + 1:r] >= lo[i]), axis=1)) + i + 1
+        if ok.size:
+            out_a.append(np.full(ok.size, ids[i]))
+            out_b.append(ids[ok])
+    if not out_a:
+        return []
+    a, b = np.concatenate(out_a), np.concatenate(out_b)
+    return list(zip(np.minimum(a, b).tolist(), np.maximum(a, b).tolist()))
 
 
 def analyse(parts: list[dict]):
@@ -234,7 +245,11 @@ def analyse(parts: list[dict]):
 
     cons = [connectors(p) for p in parts]
     links = []
-    near = _near_pairs(parts)  # every pair that can touch or share a connector; the rest are far apart
+    # Stud locks need parts that touch; connector joints need two parts that both have connectors, within about a
+    # stud (a bar or clip end, a pin). Plain plates and bricks (most of a big model) have no connectors.
+    with_cons = [k for k, c in enumerate(cons) if c]
+    touch = _near_pairs(parts, margin=TOL)
+    near = sorted(set(touch) | set(_near_pairs(parts, only=with_cons)))
     turning = set()  # pairs joined by a rotating connector: their touching faces turn, they are not stud-locked
     for i, j in near:
         for a in cons[i]:
