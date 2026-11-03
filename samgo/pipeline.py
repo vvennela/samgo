@@ -456,7 +456,9 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         stage('complete')
     except Exception as e:
         # Leave a failed run manifest even for setup/API/export failures. No success artifacts are reused.
-        summary.update(passed=False, status='failed', error_kind=type(e).__name__)
+        import traceback
+        summary.update(passed=False, status='failed', error_kind=type(e).__name__,
+                       traceback=traceback.format_exc()[-3000:])
         summary['error'] = str(e) if isinstance(e, (ValueError, FileNotFoundError, ImportError)) else 'stage failed; inspect local runtime'
     return finish()
 

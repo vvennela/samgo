@@ -40,11 +40,12 @@ def render_top(body: list[dict], tint: set[int], path: Path) -> None:
 
     from .primitives import cells
 
-    X = max(p["x"] + p["w"] for p in body)
-    Y = max(p["y"] + p["l"] for p in body)
+    flat = [(i, p) for i, p in enumerate(body) if "w" in p and "l" in p]  # axles, arms, wheels have no footprint
+    X = max(p["x"] + p["w"] for _, p in flat)
+    Y = max(p["y"] + p["l"] for _, p in flat)
     top = np.full((X, Y), -1)
     who = np.full((X, Y), -1)
-    for i, p in enumerate(body):
+    for i, p in flat:
         for (x, y, z) in cells(p):
             if z >= top[x, y]:
                 top[x, y], who[x, y] = z, i
@@ -153,8 +154,8 @@ def handoff(body: list[dict], part_ids: list[int], spark: dict, **sizes) -> dict
     from .flap_sites import pick, sites
     from .primitives import frame
 
-    X = max(p["x"] + p["w"] for p in body)
-    Y = max(p["y"] + p["l"] for p in body)
+    X = max(p["x"] + p["w"] for p in body if "w" in p and "l" in p)
+    Y = max(p["y"] + p["l"] for p in body if "w" in p and "l" in p)
     swap, mirror, n = to_frame(spark["edge"], X, Y)
     turned = frame(body, swap, mirror, n)
     lo, hi = spark["from"], spark["to"]

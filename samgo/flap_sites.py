@@ -16,7 +16,7 @@ FLAP = [{"name": "flap", "kind": "swing", "axis": "horizontal", "degrees": 20, "
 def site_answer(body: list[dict], site: dict, color: str = "dark_gray") -> list[dict]:
     """The plain edit list for a site (global indices): the three channel clears, then the hinge plates."""
     xh, y0, y1, z = site["xh"], site["y0"], site["y1"], site["z"]
-    edge = max(p["x"] + p["w"] for p in body)
+    edge = max(p["x"] + p["w"] for p in body if "w" in p)
     edits = [{"op": "clear", "box": [xh, xh, y0, y1, 0, 60]},
              {"op": "clear", "box": [xh, edge, y0 - 1, y0 - 1, 0, 60]},
              {"op": "clear", "box": [xh, edge, y1 + 1, y1 + 1, 0, 60]}]

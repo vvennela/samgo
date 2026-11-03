@@ -60,3 +60,11 @@ def test_crop_mode_judges_new_loose_pieces_not_the_table():
     a = apply_edits(body, edits)
     assert not check(body, a.parts, a.sources, ROTOR, stand=False)["connected"][0]
     assert check(body, a.parts, a.sources, ROTOR, stand=False, crop=True)["connected"][0]
+
+
+def test_views_accept_a_model_with_a_rotor_in_it(tmp_path):
+    from samgo.part_layout import render_top
+
+    parts = apply_edits(block(), answer("+y", 8, 3, 6)).parts  # axle, bushes, liftarms: no w/l footprint
+    render_top(parts, set(), tmp_path / "top.png")
+    assert (tmp_path / "top.png").exists()
