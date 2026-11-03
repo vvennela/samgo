@@ -17,14 +17,16 @@ SRC = "runs/demo_r10/camry_samglass/artifacts/20261103-025644-d86cb91e/build.jso
 
 def main():
     X0, X1, Z0, Z1, ZG = [int(v) for v in sys.argv[2:7]]  # door span, bottom/top plate, first glass plate
-    p = json.load(open(SRC))
+    src = sys.argv[7] if len(sys.argv) > 7 else SRC
+    paint = sys.argv[8] if len(sys.argv) > 8 else "red"
+    p = json.load(open(src))
     p = p["parts"] if isinstance(p, dict) else p
     Y = max(q["y"] + q["l"] for q in p if "l" in q) - 1          # the far side row
     for row, inner in ((0, 1), (Y, Y - 1)):
         p = hollow(p, (X0, X1, inner, inner, Z0 + 1, Z1))           # the skin behind the door opens
         occ = occupancy(p)
         p += [{"type": "plate", "w": 1, "l": 1, "x": x, "y": row, "z": z,
-               "color": "trans_clear" if z >= ZG else "red"}
+               "color": "trans_clear" if z >= ZG else paint}
               for x in range(X0, X1 + 1) for z in range(Z0, Z1 + 1) if (x, row, z) not in occ]
     p, _ = consolidate(p)
     p = [dict(q, color="tan") if q.get("color") == "trans_clear" else q for q in p]

@@ -1,7 +1,7 @@
 """Record video clips of builds from the 3D viewer (headless Chromium): every joint moving at once and the camera
 orbiting, or the build animation; frames rendered at exact times, then encoded with ffmpeg.
 
-    PYTHONPATH=. python scripts/record_video.py out_dir "Name=path/build.json:seconds[:build]" ...
+    PYTHONPATH=. python scripts/record_video.py out_dir "Name=path/build.json:seconds[:build][:camera distance]" ...
 """
 import json
 import subprocess
@@ -25,9 +25,11 @@ def main():
     for arg in sys.argv[2:]:
         name, rest = arg.split("=", 1)
         bits = rest.split(":")
-        specs.append((name, bits[0], float(bits[1]), len(bits) > 2 and bits[2] == "build"))
+        building = "build" in bits[2:]
+        dist = next((float(b) for b in bits[2:] if b != "build"), None)
+        specs.append((name, bits[0], float(bits[1]), building, dist))
     models = []
-    for name, path, _, _ in specs:
+    for name, path, _, _, _ in specs:
         parts = json.loads(Path(path).read_text())
         parts = parts["parts"] if isinstance(parts, dict) else parts
         manual = Path(path).with_name("manual.json")
@@ -41,12 +43,12 @@ def main():
         pg.wait_for_function("typeof window.renderAt === 'function'", timeout=60000)
         pg.add_style_tag(content=HIDE)
         pg.wait_for_timeout(500)
-        for i, (name, _, secs, building) in enumerate(specs):
+        for i, (name, _, secs, building, dist) in enumerate(specs):
             frames = Path(tempfile.mkdtemp())
             n = int(secs * FPS)
             for k in range(n):
                 t = k / FPS
-                opts = {"build": t, "move": False, "orbit": 40, "dist": 1.25} if building else {"dist": 1.15}
+                opts = {"build": t, "move": False, "orbit": 40, "dist": dist or 1.25} if building else {"dist": dist or 1.15}
                 pg.evaluate("([i, t, o]) => window.renderAt(i, t, o)", [i, t, opts])
                 pg.locator("#stage canvas").screenshot(path=str(frames / f"{k:05d}.png"))
             clip = out / f"{i + 1:02d}_{name.replace(' ', '_').replace('(', '').replace(')', '')}.mp4"
