@@ -36,8 +36,15 @@ def main():
     # the door's own rows from ZG up are its window
     from samgo.learned_mechanisms import car_door_context
     moving = {i for g, _ in car_door_context(q)["moving"].values() for i in g}
-    q = [dict(x, color="trans_clear") if (i in moving and x.get("z", 0) >= ZG and x["type"] in ("plate", "brick"))
-         or x.get("color") == "tan" else x for i, x in enumerate(q)]
+    def colour(i, x):
+        if i in moving and x["type"] in ("plate", "brick"):  # the door: its window from ZG up, paint below
+            return dict(x, color="trans_clear" if x["z"] >= ZG else paint)
+        if x.get("color") == "tan":
+            return dict(x, color="trans_clear")
+        if x.get("color") == "dark_gray" and x["type"] in ("plate", "brick"):  # hinge holders show: body paint
+            return dict(x, color=paint)
+        return x
+    q = [colour(i, x) for i, x in enumerate(q)]
     ok, rep = _door_reports(q)
     print("doors", [(d["side"], d["x"], d["z"]) for d in doors], "passed", ok,
           {k: v.get("passed") for k, v in rep.items() if isinstance(v, dict) and "passed" in v}, flush=True)
