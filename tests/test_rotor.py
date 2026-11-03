@@ -91,3 +91,16 @@ def test_mechanisms_built_in_parallel_merge_and_conflicts_keep_the_first():
     clash = [({}, {"edits": one}, ROTOR), (e := {}, {"edits": answer("+y", 8, 3, 6)}, ROTOR)]
     parts = _merge(body, clash, {})
     assert rotors(parts)[0] == 1 and e.get("merge_error")
+
+
+def test_mirrored_twin_of_a_verified_rotor_also_passes():
+    from samgo.kinematics import rotors
+    from samgo.mirror import mirror_edits
+
+    body = block()
+    one = answer("+y", 8, 3, 6)
+    twin = mirror_edits(one, body, 8)
+    a = apply_edits(body, one + twin)
+    assert rotors(a.parts)[0] == 2
+    v = check(body, a.parts, a.sources, [dict(ROTOR[0], count=2)], stand=False)
+    assert all(x[0] for x in v.values())

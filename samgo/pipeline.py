@@ -150,7 +150,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         timeout: float = 120, sequential: bool = True, mesh: Path | None = None,
         replay: Path | None = None, sampler=None, require_certificate: bool = False,
         certificate_timeout: float = 20, doors: bool = False, glass: bool = True, mechanisms: bool = True,
-        layout_from_spark: bool = False,
+        layout_from_spark: bool = False, symmetry_from_spark: bool = False,
         buildable: bool = False, manual: bool = False) -> dict:
     if assembly not in ('procedural', 'learned') or (size not in SIZES and not str(size).isdigit()):
         raise ValueError('unknown assembly mode or size')
@@ -232,7 +232,15 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
 
         tick = time.monotonic()
         stage('body_construction')
-        original = voxelize(load_mesh(dest), SIZES[size] if size in SIZES else int(size))  # a name or studs
+        studs = SIZES[size] if size in SIZES else int(size)  # a name or studs
+        # Spark says whether the real object is mirror-symmetric; if so the body is mirrored exactly.
+        if symmetry_from_spark:
+            from .spark_symmetry import symmetric as spark_symmetric
+            summary['symmetric_by_spark'] = spark_symmetric(photo, prompt)
+        if summary.get('symmetric_by_spark'):
+            original = voxelize(load_mesh(dest), studs, exact_mirror=True)
+        else:
+            original = voxelize(load_mesh(dest), studs)
         np.savez_compressed(run_dir / 'target.npz', target=original)
         render(original, run_dir / 'target.png')
         summary.update(target_shape=list(original.shape), cells=int((original > 0).sum()))
@@ -546,7 +554,7 @@ def main() -> None:
                  assembly=args.assembly, model=args.model, replay=args.replay, mesh=args.mesh,
                  rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint,
                  require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout,
-                 doors=args.doors, glass=not args.no_glass, layout_from_spark=not args.no_spark_layout, mechanisms=not args.no_mechanisms,
+                 doors=args.doors, glass=not args.no_glass, layout_from_spark=not args.no_spark_layout, symmetry_from_spark=not args.no_spark_layout, mechanisms=not args.no_mechanisms,
                  buildable=args.buildable, manual=args.manual)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['passed'] else 1)

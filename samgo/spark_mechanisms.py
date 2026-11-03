@@ -41,8 +41,12 @@ one JSON object and nothing else:
                            "hinged": [{{"name": "<name>", "where": "<which edge, where along it, in words>",
                                        "axis": "horizontal" | "vertical"}}],
                            "spinning": [{{"name": "<name>", "where": "<which face of the part, in words>",
-                                         "axis": "horizontal" | "vertical"}}]}}}}}}
-"axis" is the hinge line's or spin axle's direction when the object stands as in the photo."""
+                                         "axis": "horizontal" | "vertical"}}]}}}},
+ "symmetric": true | false,
+ "pairs": [[{{"region": <number>, "name": "<name>"}}, {{"region": <number>, "name": "<name>"}}]]}}
+"axis" is the hinge line's or spin axle's direction when the object stands as in the photo. "symmetric": the real
+object is mirror-symmetric left to right (small one-sided details aside). "pairs": hinged or spinning parts you
+listed that are mirror twins of each other on the real object (a left and a right one), each named as listed."""
 
 
 def region_of_parts(parts: list[dict], labels: np.ndarray) -> list[int]:
@@ -73,7 +77,8 @@ async def name_regions(photo: Path, labels: np.ndarray, obj: str, work: Path, cl
                          + (NAME_PROMPT + obj).encode()).hexdigest()[:16]
     cache = Path("runs/research_cache") / f"regions_{key}.json"
     if cache.exists():  # JSON keys are strings; region numbers are ints
-        return {"regions": {int(k): v for k, v in json.loads(cache.read_text())["regions"].items()}}
+        c = json.loads(cache.read_text())
+        return c | {"regions": {int(k): v for k, v in c["regions"].items()}}
     view = work / "regions.png"
     render(labels, view)
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -98,14 +103,20 @@ async def name_regions(photo: Path, labels: np.ndarray, obj: str, work: Path, cl
                                 "spinning": [h for h in v.get("spinning", []) or []
                                              if isinstance(h, dict) and h.get("name")]}
                        for k, v in d["regions"].items()}
-            out = {"regions": regions}
+            pairs = []
+            for pr in d.get("pairs") or []:
+                try:
+                    pairs.append([(int(x["region"]), str(x["name"])) for x in pr[:2]])
+                except (KeyError, TypeError, ValueError):
+                    continue
+            out = {"regions": regions, "symmetric": bool(d.get("symmetric")), "pairs": [p for p in pairs if len(p) == 2]}
             break
         except (AttributeError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             out = {"error": f"unparseable answer: {answer[:200]}"}
     if "error" not in out:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(out))
-    return {"regions": {int(k): v for k, v in out["regions"].items()}} if "regions" in out else out
+    return out | {"regions": {int(k): v for k, v in out["regions"].items()}} if "regions" in out else out
 
 
 def attempt(body: list[dict], local: list[int], instruction: str, sampler, rounds: int = 3,
@@ -184,6 +195,7 @@ def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler,
             from . import spark_glass
 
             parts, report["glass"] = spark_glass.build(photo, parts, obj, work / "glass", loop)
+        parts = blend_joints(parts)
         (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
         return parts, report
     finally:
@@ -229,6 +241,19 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
                 continue
             jobs.append(("rotor", entry, [i for i, x in enumerate(region_of) if x == r],
                          dict(mech=f"{h['name']} (a part that spins on an axle)", folder=f"rotor_{r}_{h['name']}")))
+    # Mirror twins Spark names (a left and a right aileron): Glimmer builds the first, code mirrors its verified
+    # edits to the second, the checker verifies both.
+    twins = {}
+    if named.get("symmetric"):
+        def find(key):
+            return next((j for j in jobs if (j[1]["region"], j[1]["name"]) == tuple(key)), None)
+        for a, b in named.get("pairs", []):
+            ja, jb = find(a), find(b)
+            if ja and jb and ja is not jb and ja[0] == jb[0] and id(jb) not in twins:
+                twins[id(ja)] = jb[1]
+                jb[1]["mirror_of"] = list(a)
+        jobs = [j for j in jobs if "mirror_of" not in j[1]]
+    twin_of = {id(j[1]): twins[id(j)] for j in jobs if id(j) in twins}
     # A spinning part the mesh lost (a thin tail rotor, a propeller) has no parts of its own: Spark then places it on
     # the whole model, on the face it is mounted to.
     everything = [i for i, p in enumerate(parts) if p["type"] in H]
@@ -272,11 +297,44 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
     for (entry, _, text, _), rec in zip(tasks, recs):
         entry.update(passed=rec["passed"], rounds=rec["rounds"], instruction=text)
     passing = [(e, rec, q) for (e, _, _, q), rec in zip(tasks, recs) if rec["passed"]]
+    from .mirror import mirror_edits
+
+    for e, rec, q in list(passing):
+        twin = twin_of.get(id(e))
+        if twin is None:
+            continue
+        mirrored = mirror_edits(rec["edits"], parts, labels.shape[1])
+        if mirrored is None:
+            twin.update(passed=False, error="no exact mirror of the built side")
+            continue
+        twin.update(passed=True, built="mirrored from region %d %s" % (e["region"], e["name"]))
+        passing.append((twin, {"edits": mirrored}, q))
     surfaces = [p for p in passing if p[2] is FLAP][:max_surfaces]
     passing = surfaces + [p for p in passing if p[2] is not FLAP]
     parts = _merge(parts, passing, report)
     (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
     return parts, report
+
+
+JOINT_PLATES = ("bar_plate", "clip_plate", "hinge_base", "hinge_top", "click_a", "click_b")
+
+
+def blend_joints(parts: list[dict]) -> list[dict]:
+    """Paint only: each hinge plate takes the color of the body part it sits on (or under), so hinges disappear into
+    the surface like on a real model. Shapes, positions and every check are unchanged."""
+    out = [dict(p) for p in parts]
+    body = [p for p in parts if p["type"] in H]
+    for p in out:
+        if p["type"] not in JOINT_PLATES or "w" not in p:
+            continue
+        cols = {(x, y) for x in range(p["x"], p["x"] + p["w"]) for y in range(p["y"], p["y"] + p["l"])}
+        touching = [q for q in body if q["z"] + H[q["type"]] == p["z"] or q["z"] == p["z"] + 1]
+        best = max(touching, default=None, key=lambda q: len(cols & {(x, y) for x in range(q["x"], q["x"] + q["w"])
+                                                                for y in range(q["y"], q["y"] + q["l"])}))
+        if best is not None and cols & {(x, y) for x in range(best["x"], best["x"] + best["w"])
+                                        for y in range(best["y"], best["y"] + best["l"])}:
+            p["color"] = best["color"]
+    return out
 
 
 def _spot(job):
