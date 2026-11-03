@@ -17,7 +17,7 @@ import numpy as np
 from .builder import build
 from .parts import COLOR_INDEX
 from .stability import stability
-from .technic import (AXLE_LENGTHS, HOLE_HEIGHT, PLATE, STOP_AXLE_LENGTHS, STUD, WHEELS, structural, verify_function,
+from .technic import (TRAINED_WHEELS, AXLE_LENGTHS, HOLE_HEIGHT, PLATE, STOP_AXLE_LENGTHS, STUD, WHEELS, structural, verify_function,
                       wheel_studs)
 from .verifier import MatchConfig, Report, verify
 
@@ -141,7 +141,7 @@ def find_tires(target: np.ndarray) -> list[tuple[int, int, float]]:
 
 def pick_wheel(diameter: float, body_width: int) -> str:
     """The real wheel closest to the outline's diameter that leaves room for chassis between the two sides."""
-    fits = [s for s in WHEELS if 2 * (wheel_studs(s) + 2) <= body_width] or ["30.4x14"]
+    fits = [s for s in TRAINED_WHEELS if 2 * (wheel_studs(s) + 2) <= body_width] or ["30.4x14"]
     return min(fits, key=lambda s: abs(WHEELS[s][0] - diameter))
 
 

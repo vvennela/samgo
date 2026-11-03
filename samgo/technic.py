@@ -42,8 +42,13 @@ TECHNIC_LENGTHS = (2, 4, 6, 8)
 AXLE_LENGTHS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 16, 32)
 STOP_AXLE_LENGTHS = (3, 4, 5, 8)
 # Wheel-with-tyre sizes measured from the LDraw tyres: name -> (outer diameter mm, tyre width mm, LDraw tyre, rim).
+# (diameter mm, width mm, tyre, rim) - rim and tyre paired from LDraw geometry (scripts/wheel_catalog.py: the tyre's
+# bead sits 0.5-3.5 mm under the rim's lip, widths within 2 mm); all rims take a Technic axle.
 WHEELS = {
-    "30.4x14": (30.4, 14, "6578", "6014"),
+    "24x14": (24.0, 14, "30648", "55982"),
+    "24.8x7": (24.8, 7.2, "3483", "3482"),
+    "30.4x14": (30.4, 14, "6578", "2994"),
+    "35.8x14": (35.8, 13.6, "35578", "55982"),
     "43.2x22": (43.2, 22, "44309", "56145"),
     "56x28": (56.0, 28, "41897", "41896"),
     "62.4x20": (62.4, 20, "32019", "86652"),
@@ -51,6 +56,9 @@ WHEELS = {
     "81.6x38": (81.6, 38, "56907", "56908"),
 }
 DEFAULT_WHEEL = "30.4x14"
+# The sizes Glimmer's running-gear and leg skills were trained with; code picks among these automatically. The smaller
+# ones above are verified parts for Spark-sized wheels once a training run covers them.
+TRAINED_WHEELS = ("30.4x14", "43.2x22", "56x28", "62.4x20", "68.8x36", "81.6x38")
 WHEEL_DIAMETER = WHEELS[DEFAULT_WHEEL][0]
 
 

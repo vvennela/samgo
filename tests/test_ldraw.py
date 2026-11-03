@@ -28,7 +28,7 @@ def test_every_builder_part_type_has_an_ldraw_part_and_colour():
     for p in TYPES:
         assert part_ids(p), p
         assert isinstance(color_code(p), int)
-    assert part_ids(TYPES[0]) == ["3001"] and part_ids(TYPES[5]) == ["6578", "6014"]
+    assert part_ids(TYPES[0]) == ["3001"] and part_ids(TYPES[5]) == ["6578", "2994"]
 
 
 have_lib = pytest.mark.skipif(not (LIB / "parts" / "3001.dat").exists(), reason="LDraw library cache not downloaded")

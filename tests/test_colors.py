@@ -15,8 +15,9 @@ def test_common_bricks_exist_and_odd_ones_do_not():
 def test_wheels_get_a_black_tyre_and_a_produced_rim():
     wheel = {"type": "wheel", "axis": "y", "x": 2, "y": 0, "z": 0, "size": "30.4x14", "color": "black"}
     parts, changes = legalize([wheel])
-    assert parts[0]["color"] in ("white", "yellow")   # 6014 rims were made in white and yellow
-    assert changes and changes[0]["part"] == "6014"
+    assert parts[0]["color"] == "black" and not changes   # the 2994 rim was made in black
+    parts, changes = legalize([wheel | {"color": "dark_blue"}])
+    assert parts[0]["color"] != "dark_blue" and changes and changes[0]["part"] == "2994"   # never in dark blue
 
 
 def test_glass_is_split_into_produced_pieces_not_recolored():
