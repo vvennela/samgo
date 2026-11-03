@@ -152,7 +152,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         certificate_timeout: float = 20, doors: bool = False, glass: bool = True, mechanisms: bool = True,
         layout_from_spark: bool = False,
         buildable: bool = False, manual: bool = False) -> dict:
-    if assembly not in ('procedural', 'learned') or size not in SIZES:
+    if assembly not in ('procedural', 'learned') or (size not in SIZES and not str(size).isdigit()):
         raise ValueError('unknown assembly mode or size')
     if assembly == 'procedural' and (model or replay or sampler is not None):
         raise ValueError('model, replay and sampler require learned assembly mode')
@@ -232,7 +232,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
 
         tick = time.monotonic()
         stage('body_construction')
-        original = voxelize(load_mesh(dest), SIZES[size])
+        original = voxelize(load_mesh(dest), SIZES[size] if size in SIZES else int(size))  # a name or studs
         np.savez_compressed(run_dir / 'target.npz', target=original)
         render(original, run_dir / 'target.png')
         summary.update(target_shape=list(original.shape), cells=int((original > 0).sum()))
@@ -521,7 +521,7 @@ def main() -> None:
     kind = ap.add_mutually_exclusive_group()
     kind.add_argument('--car', dest='car', action='store_const', const=True)
     kind.add_argument('--static', dest='car', action='store_const', const=False)
-    ap.add_argument('--size', choices=SIZES, default='medium')
+    ap.add_argument('--size', default='medium', help=f"{', '.join(SIZES)} or the longest side in studs (e.g. 100)")
     ap.add_argument('-o', '--out', type=Path, required=True)
     ap.add_argument('--fresh', action='store_true', help='bypass perception and function-spec caches')
     ap.add_argument('--assembly', choices=('procedural', 'learned'), default='procedural')
