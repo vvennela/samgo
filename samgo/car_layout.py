@@ -142,9 +142,13 @@ def consensus(answers: list[dict]) -> dict:
     out = {"front_wheel_x": med("front_wheel_x"), "rear_wheel_x": med("rear_wheel_x"), "wheel_top_z": med("wheel_top_z")}
     counts = [len(a["doors"]) for a in agree]
     n = max(set(counts), key=counts.count)
-    same = [a["doors"] for a in agree if len(a["doors"]) == n]
+    same = [sorted(a["doors"], key=lambda d: d["x0"]) for a in agree if len(a["doors"]) == n]  # same order in each
     out["doors"] = [{k: int(round(statistics.median(d[i][k] for d in same))) for k in ("x0", "x1", "z0", "z1")}
                     for i in range(n)]
+    for a, b in zip(out["doors"], out["doors"][1:]):  # neighbours meet at a shut line, never overlap
+        b["x0"] = max(b["x0"], a["x1"])
+    if out["front_wheel_x"] > out["rear_wheel_x"]:  # front door first, as single answers list them
+        out["doors"] = out["doors"][::-1]
     if out["doors"]:
         out["door"] = out["doors"][0]
     out["samples"] = len(answers)
