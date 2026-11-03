@@ -371,8 +371,24 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 parts = built['parts']
         before_glass = parts
         if car and glass:
-            from .glass import add_glass
-            parts, summary['glass_parts'] = add_glass(parts)
+            # Glass where the real car is transparent: Spark marks the windows on top and side views, code glazes
+            # the visible cells inside them (the same step as every other object). The geometry-only window
+            # finder is the fallback when Spark gives no answer.
+            from . import spark_glass
+            loop = asyncio.new_event_loop()
+            try:
+                glazed, glass_report = spark_glass.build(photo, parts, 'car', run_dir / 'glass', loop)
+            except Exception as e:  # noqa: BLE001
+                glazed, glass_report = parts, {'error': f'{type(e).__name__}'}
+            finally:
+                loop.close()
+            if glass_report.get('glass_parts'):
+                parts, summary['glass_parts'] = glazed, glass_report['glass_parts']
+                summary['glass_source'] = 'spark'
+            else:
+                from .glass import add_glass
+                parts, summary['glass_parts'] = add_glass(parts)
+                summary['glass_source'] = 'geometry'
             summary['glass_cuts'] = len(parts) - len(before_glass)
         if car:  # paint: one body color (Spark's, else the photo's most common), black frame and underbody
             from .colors import body_color, paint
