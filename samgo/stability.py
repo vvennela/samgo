@@ -91,8 +91,16 @@ def stability(parts: list[dict], vehicle: bool = False, clutch: float = CLUTCH) 
     bounds = [(0, None) if c[4] else (None, None) for c in contacts] + [(0, None)]
     cost = np.zeros(n + 1)
     cost[tau] = 1.0
-    res = linprog(cost, A_ub=a_ub.tocsr(), b_ub=np.zeros(n), A_eq=a_eq.tocsr(), b_eq=b_eq, bounds=bounds,
-                  method="highs")
+    # Interior point decides big builds (thousands of pieces) in seconds where dual simplex can stall for hours;
+    # simplex is the fallback for the rare case IPM cannot settle, both under a time limit.
+    for method in ("highs-ipm", "highs"):
+        res = linprog(cost, A_ub=a_ub.tocsr(), b_ub=np.zeros(n), A_eq=a_eq.tocsr(), b_eq=b_eq, bounds=bounds,
+                      method=method, options={"time_limit": 600})
+        if res.status in (0, 2):
+            break
+    if res.status not in (0, 2):
+        return Report(False, [Issue("undecided", "the force balance could not be settled in time")],
+                      {"peak_tension": None})
     if res.status != 0:
         return Report(False, [Issue("unbalanced", "no set of stud forces holds every piece up (it would tip or fall)")],
                       {"peak_tension": None})
