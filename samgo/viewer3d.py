@@ -421,7 +421,7 @@ function bounds(obj) {  // Box3.setFromObject sees one unit box per InstancedMes
   const bb = new THREE.Box3(), m = new THREE.Matrix4(), one = new THREE.Box3();
   obj.updateMatrixWorld(true);
   obj.traverse(o => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || !o.visible) return;
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     if (o.isInstancedMesh) for (let i = 0; i < o.count; i++) {
       o.getMatrixAt(i, m); bb.union(one.copy(o.geometry.boundingBox).applyMatrix4(m.premultiply(o.matrixWorld)));
@@ -455,6 +455,20 @@ bg(); show(0); resize();
 // Recording (scripts/record_video.py): one exact frame at time t, every joint moving at once (spins turn on, swings
 // open and close), the camera orbiting; o.build = seconds into the build animation. The live loop stands down.
 window.RECORDING = false;
+function showUpTo(k) {
+  for (const o of buildables) {
+    if (o.isInstancedMesh) {
+      const st = o.userData.steps, base = o.userData.base;
+      let n = 0; while (n < st.length && st[n] <= k) n++;
+      o.count = n;
+      for (let i = 0; i < n; i++) o.setMatrixAt(i, base[i]);
+      o.instanceMatrix.needsUpdate = true;
+    } else {
+      if (o.userData.p0 === undefined) o.userData.p0 = o.position.clone();
+      o.visible = o.userData.step <= k; o.position.copy(o.userData.p0);
+    }
+  }
+}
 window.renderAt = (i, t, o = {}) => {
   window.RECORDING = true;
   if (current !== i || !group) { show(i, true); MODELS[i]._bb = null; }
@@ -474,9 +488,21 @@ window.renderAt = (i, t, o = {}) => {
   }
   if (o.build != null) { buildOn = true; buildStart = performance.now() - o.build * 1000; buildFrame(); }
   else if (buildOn) { buildOn = false; }
-  const bb = m._bb, c = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3());
+  if (o.step != null) showUpTo(o.step);  // instructions: everything placed up to step o.step, at rest
+  let bb = m._bb;
+  if (o.step != null && o.fit) {  // frame what is built so far (not less than o.fit of the whole model)
+    if (o.fitTo != null) showUpTo(o.fitTo);  // frame for another step (so before/after pictures share a camera)
+    const part = bounds(group);
+    if (o.fitTo != null) showUpTo(o.step);
+    const full = m._bb.getSize(new THREE.Vector3()), ctr = part.getCenter(new THREE.Vector3());
+    const half = part.getSize(new THREE.Vector3()).max(full.clone().multiplyScalar(o.fit)).multiplyScalar(0.5);
+    bb = new THREE.Box3(ctr.clone().sub(half), ctr.clone().add(half));
+  }
+  const c = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3());
   const R = Math.max(size.x, size.y, size.z) * (o.dist || 1.55), ang = (o.az || 0.8) + 2 * Math.PI * t / (o.orbit || 14);
-  camera.position.set(c.x + Math.cos(ang) * R, c.y + R * (o.elev || 0.45), c.z + Math.sin(ang) * R);
+  const flip = o.flip ? -1 : 1;  // a step built upside down: seen from below, the model turned over
+  camera.up.set(0, flip, 0);
+  camera.position.set(c.x + Math.cos(ang) * R, c.y + flip * R * (o.elev || 0.45), c.z + Math.sin(ang) * R);
   camera.lookAt(c); renderer.render(scene, camera);
   return true;
 };
