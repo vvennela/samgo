@@ -146,7 +146,7 @@ def attempt(body: list[dict], local: list[int], instruction: str, sampler, round
 
 
 def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler, work: Path, rounds: int = 3,
-          max_surfaces: int = 2, gear: bool = True) -> tuple[list[dict], dict]:
+          max_surfaces: int = 2, gear: bool = True, glass: bool = True) -> tuple[list[dict], dict]:
     """Add the hinged surfaces Spark names that Glimmer can build, then the legs it stands on (samgo.spark_gear).
     Returns (parts, report)."""
     from .regions import split
@@ -160,7 +160,11 @@ def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler,
             from . import spark_gear
 
             parts, report["gear"] = spark_gear.build(photo, parts, obj, sampler, work / "gear", loop, rounds=rounds)
-            (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
+        if glass:  # last: only colours and cuts, after every mechanism is in
+            from . import spark_glass
+
+            parts, report["glass"] = spark_glass.build(photo, parts, obj, work / "glass", loop)
+        (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
         return parts, report
     finally:
         loop.close()
@@ -269,6 +273,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--size", type=int, default=40, help="which body<size>.json / target<size>.npz")
     ap.add_argument("--no-gear", action="store_true")
+    ap.add_argument("--no-glass", action="store_true")
     args = ap.parse_args()
     body = json.loads((args.folder / f"body{args.size}.json").read_text())
     target = np.load(args.folder / f"target{args.size}.npz")
@@ -276,7 +281,7 @@ def main() -> None:
     obj = args.object or json.loads((args.folder / "research.json").read_text()).get("object", "object")
     args.out.mkdir(parents=True, exist_ok=True)
     parts, report = build(args.folder / "photo.png", target, body, obj, FireworksSampler(args.model), args.out,
-                          gear=not args.no_gear)
+                          gear=not args.no_gear, glass=not args.no_glass)
     (args.out / "build.json").write_text(json.dumps(parts))
     for s in report["surfaces"]:
         print(f"region {s['region']} {s['part']!r}: {s['name']} ({s.get('where')}) -> "
@@ -290,6 +295,8 @@ def main() -> None:
               f"{g.get('error', '')}")
     if "gear" in report:
         print("stands on its wheels:", report["gear"].get("stands"))
+    if "glass" in report:
+        print("glass:", {k: v for k, v in report["glass"].items() if k != "spark"})
 
 
 if __name__ == "__main__":

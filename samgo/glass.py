@@ -118,6 +118,49 @@ def add_glass(parts: list[dict], shrink: float = 0.8, cut: bool = True) -> tuple
     # Windows are cells, decided before any part is recolored: the visible cells of the cabin's outline and of its
     # stepped windshield / rear window. A mirror-symmetric body gets mirror-symmetric windows.
     win = {c for c in occupied if visible(c) and window(c)}
+    return glaze(parts, win, cut=cut)
+
+
+def visible_cells(parts: list[dict]) -> set:
+    """Cells of the body seen from outside: from the sides, the ends or above (flood-filled air from outside the
+    model's box, so faces into a hollow do not count)."""
+    body = [p for p in parts if p.get("type") in BODY_TYPES]
+    occupied = {c for p in body for c in _cells(p)}
+    if not occupied:
+        return set()
+    xs_, ys_, zs_ = zip(*occupied)
+    box = (min(xs_) - 1, max(xs_) + 1, min(ys_) - 1, max(ys_) + 1, min(zs_) - 1, max(zs_) + 1)
+    outside, todo = set(), [(box[0], box[2], box[4])]
+    while todo:
+        c = todo.pop()
+        if c in outside or c in occupied:
+            continue
+        x, y, z = c
+        if not (box[0] <= x <= box[1] and box[2] <= y <= box[3] and box[4] <= z <= box[5]):
+            continue
+        outside.add(c)
+        todo += [(x + 1, y, z), (x - 1, y, z), (x, y + 1, z), (x, y - 1, z), (x, y, z + 1), (x, y, z - 1)]
+    return {(x, y, z) for (x, y, z) in occupied
+            if any(n in outside for n in ((x + 1, y, z), (x - 1, y, z), (x, y + 1, z), (x, y - 1, z), (x, y, z + 1)))}
+
+
+def glaze(parts: list[dict], win: set, cut: bool = True) -> tuple[list[dict], int]:
+    """Make the cells `win` glass, for any object: a part wholly in them becomes glass; a plate across their edge is
+    cut into glass and body pieces, kept only if the build holds together as well as before; glass only in sizes
+    LEGO made in trans-clear. A mirror-symmetric body keeps symmetric glass. (parts, how many parts are glass)."""
+    from .colors import NAMED, exists
+    from .parts import LDRAW_IDS
+
+    body = [p for p in parts if p.get("type") in BODY_TYPES]
+    if not body or not win:
+        return parts, 0
+
+    def made_in_glass(p: dict) -> bool:
+        pid = LDRAW_IDS.get((p["type"], *sorted((p["w"], p["l"]))))
+        return pid is not None and exists(pid, NAMED[GLASS])
+
+    occupied = {c for p in body for c in _cells(p)}
+    window_z = {z for _, _, z in win}
     y_lo, y_hi = min(y for _, y, _ in occupied), max(y for _, y, _ in occupied)
     mirror = lambda c: (c[0], y_lo + y_hi - c[1], c[2])
     symmetric = sum(mirror(c) in occupied for c in occupied) >= 0.95 * len(occupied)
