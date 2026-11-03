@@ -352,11 +352,23 @@ def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndar
     a = axis / np.linalg.norm(axis)
     K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
     steps = max(steps, int(abs(degrees) / 5))  # at most 5 degrees a step
+    if not fixed:
+        return None
+    boxes = [box(f) for f in fixed]
+    LO = np.array([b[0] for b in boxes]) + TOL
+    HI = np.array([b[1] for b in boxes]) - TOL
+    # Only fixed parts the turning points can reach: within the ball they sweep around the pivot.
+    reach = float(np.linalg.norm(pts - point, axis=1).max())
+    near = np.all((LO <= point + reach) & (HI >= point - reach), axis=1)
+    LO, HI = LO[near], HI[near]
+    if not len(LO):
+        return None
     for s in range(steps + 1):
         th = np.radians(degrees * s / steps)
         R = np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
         moved = (pts - point) @ R.T + point
-        if any(_inside(moved, f) for f in fixed):
+        # _inside for every fixed part at once: a point strictly inside a box (tolerance off each face)
+        if ((moved[:, None, :] > LO[None]) & (moved[:, None, :] < HI[None])).all(axis=2).any():
             return degrees * s / steps
     return None
 
