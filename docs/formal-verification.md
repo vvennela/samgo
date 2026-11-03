@@ -101,3 +101,13 @@ The search does not optimize part count, repair overlaps/disconnected inputs, mo
 The next implementation adds `samgo.certificate_repair`: the existing r3 checkpoint supplies add-only proposals, receives certificate/task failures, and retries within fixed limits. It preserves every original part and checks allowed support bounds before certification. The separate `samgo.eval_certificate_repair` runner freezes feasible development cases and compares feedback with generic retries starting from the same failed answer. No weights change, and a failed learned proposal never receives a procedural fallback. See [certificate-repair.md](certificate-repair.md) for the protocol, commands and measured results. Mechanism certificate coverage remains unchanged.
 
 To extend the guarantee to cars and trains, the next work is explicit axle/wheel/retainer solids and mating geometry, axial insertion/subassembly plans, wheel-to-ground load transfer, then continuous swept-volume guarantees for required motions. Real part dimensions, tolerances, insertion/contact strengths and declared external loads must accompany that extension. Adding the words “formal” to the existing sampled mechanism checks would not supply those guarantees.
+
+## Merge rule (Lean 4)
+
+`formal/MergeRule.lean` proves the part-merging rule of `samgo/consolidate.py` for every position and size
+(`lean formal/MergeRule.lean`, Lean 4 core, `omega`): side-by-side merges along x and y and three stacked plates
+into a brick fill exactly the cells of the pieces they replace, which never overlapped; every top stud and bottom
+tube an outside part could grip is still there; the only faces lost are internal ones the replaced pieces gripped
+each other with. Checked at run time instead: the merged size exists in that color, one color, one rigid body.
+`tests/test_consolidate.py` checks that the Python builds exactly the proved pieces (20,000 random pairs) and keeps
+every cell and color.
