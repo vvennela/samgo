@@ -64,7 +64,14 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
     out = {}
     r = verify(technic_structural(structural(parts)), None)
     rule = [i for i in r.issues if i.code not in ("floating", "disconnected")]
-    out["structure"] = (not rule, "; ".join(i.message for i in rule[:4]) or "valid parts, no overlaps")
+    from .animation import through_solid
+
+    pierced = through_solid(parts)
+    msgs = [i.message for i in rule[:4]] + [
+        f"the {parts[a]['type']} at ({parts[a]['x']}, {parts[a]['y']}, {parts[a]['z']}) passes through the solid "
+        f"{parts[b]['type']} at ({parts[b]['x']}, {parts[b]['y']}, {parts[b]['z']}) (not through a hole)"
+        for a, b in pierced[:4]]
+    out["structure"] = (not rule and not pierced, "; ".join(msgs) or "valid parts, no overlaps")
     if crop:
         from .kinematics import dangling, groups
 

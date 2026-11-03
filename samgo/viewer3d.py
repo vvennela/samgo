@@ -228,6 +228,14 @@ let movers = [], simOn = MODELS.map(() => false), simStart = 0;
 // dropping in from above. Instanced groups are sorted by step, so showing a step is raising the instance count.
 let buildables = [], buildOn = false, buildStart = 0;
 const stepOf = (m, rec) => (m.order && m.order[rec[rec.length - 1]] != null) ? m.order[rec[rec.length - 1]] : 0;
+const dirOf = (m, rec) => (m.dirs && m.dirs[rec[rec.length - 1]]) || [0, 1, 0];
+// Accelerating schedule: each step a little shorter than the one before, until the last pieces snap together.
+function schedule(steps) {
+  const start = [0], dur = [];
+  let d = 0.7;
+  for (let k = 0; k < steps; k++) { dur.push(d); start.push(start[k] + d); d = Math.max(0.03, d * 0.93); }
+  return {start, dur};
+}
 
 function build(m) {
   const g = new THREE.Group();
@@ -269,6 +277,7 @@ function build(m) {
       inst.setMatrixAt(i, mtx);
     });
     inst.userData.steps = list.map(b => stepOf(m, b));
+    inst.userData.dirs = list.map(b => dirOf(m, b));
     inst.userData.base = list.map((b, i) => { const q = new THREE.Matrix4(); inst.getMatrixAt(i, q); return q; });
     buildables.push(inst);
     holder(list[0]).add(inst);
@@ -276,13 +285,13 @@ function build(m) {
   const axleMat = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0x7a7f86});
   for (const a of m.scene.axles) {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, a[3], 16), axleMat);
-    orient(c, a); holder(a).add(c); c.userData.step = stepOf(m, a); buildables.push(c);
+    orient(c, a); holder(a).add(c); c.userData.step = stepOf(m, a); c.userData.dir = dirOf(m, a); buildables.push(c);
   }
   for (const c of m.scene.cyls || []) {
     const hole = c[6] === "#16191c";
     const mat = new THREE.MeshLambertMaterial({color: (hl && !hole) ? 0xffb000 : c[6]});
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(c[5], c[5], c[3], 20), mat);
-    orient(mesh, c); holder(c).add(mesh); mesh.userData.step = stepOf(m, c); buildables.push(mesh);
+    orient(mesh, c); holder(c).add(mesh); mesh.userData.step = stepOf(m, c); mesh.userData.dir = dirOf(m, c); buildables.push(mesh);
   }
   const spokeMat = new THREE.MeshLambertMaterial({color: 0x4a4f57});
   const tyre = new THREE.MeshLambertMaterial({color: 0x1b1b1b}), rim = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0xc9ccd1});
@@ -298,7 +307,7 @@ function build(m) {
       bar.rotation.y = turn; spokes.add(bar);
     }
     orient(spokes, w); holder(w).add(spokes);
-    for (const o of [t, h, spokes]) { o.userData.step = stepOf(m, w); buildables.push(o); }
+    for (const o of [t, h, spokes]) { o.userData.step = stepOf(m, w); o.userData.dir = dirOf(m, w); buildables.push(o); }
   }
   // Ground at the lowest point, so it is visible what touches the floor.
   const bb = bounds(g), size = bb.getSize(new THREE.Vector3());
@@ -351,25 +360,30 @@ function jointMatrix(j, t, out) {  // turn about the pivot line: T(p) R(axis, an
 function buildFrame() {
   if (!buildOn) return;
   const m = MODELS[current], steps = (m.order || [0]).reduce((a, b) => Math.max(a, b), 0) + 1;
-  const per = Math.min(0.6, 16 / steps), drop = 60;
-  const t = (performance.now() - buildStart) / 1000 / per, cur = Math.floor(t), f = t - cur;
-  const ease = 1 - Math.pow(1 - Math.min(1, f / 0.8), 3);  // falls fast, settles
+  const sch = m._sch || (m._sch = schedule(steps)), drop = 60;
+  const t = (performance.now() - buildStart) / 1000;
+  let cur = 0; while (cur < steps && sch.start[cur + 1] <= t) cur++;
+  const f = cur < steps ? (t - sch.start[cur]) / sch.dur[cur] : 1;
+  const ease = 1 - Math.pow(1 - Math.min(1, f / 0.8), 3);  // arrives fast, settles
   const done = cur >= steps;
-  const q = new THREE.Matrix4(), up = new THREE.Matrix4();
+  const q = new THREE.Matrix4(), mv = new THREE.Matrix4();
   for (const o of buildables) {
     if (o.isInstancedMesh) {
-      const st = o.userData.steps, base = o.userData.base;
+      const st = o.userData.steps, base = o.userData.base, ds = o.userData.dirs;
       let n = 0; while (n < st.length && (done || st[n] <= cur)) n++;
       o.count = n;
       for (let i = 0; i < n; i++) {
-        if (!done && st[i] === cur) { up.makeTranslation(0, drop * (1 - ease), 0); q.multiplyMatrices(up, base[i]); o.setMatrixAt(i, q); }
-        else o.setMatrixAt(i, base[i]);
+        if (!done && st[i] === cur) {  // along its proved-clear direction (formal/AnimationPath.lean)
+          const d = ds[i], k = drop * (1 - ease);
+          mv.makeTranslation(d[0] * k, d[1] * k, d[2] * k); q.multiplyMatrices(mv, base[i]); o.setMatrixAt(i, q);
+        } else o.setMatrixAt(i, base[i]);
       }
       o.instanceMatrix.needsUpdate = true;
     } else {
-      if (o.userData.y0 === undefined) o.userData.y0 = o.position.y;
+      if (o.userData.p0 === undefined) o.userData.p0 = o.position.clone();
       o.visible = done || o.userData.step <= cur;
-      o.position.y = o.userData.y0 + (!done && o.userData.step === cur ? drop * (1 - ease) : 0);
+      const d = o.userData.dir || [0, 1, 0], k = (!done && o.userData.step === cur) ? drop * (1 - ease) : 0;
+      o.position.set(o.userData.p0.x + d[0] * k, o.userData.p0.y + d[1] * k, o.userData.p0.z + d[2] * k);
     }
   }
   if (done) buildOn = false;
@@ -450,8 +464,15 @@ def build_order(parts: list[dict], manual: dict | None = None) -> list[int]:
 
 def page(models: list[tuple], simulate: bool = True) -> str:
     """models: (name, parts, facts) or (name, parts, facts, manual)."""
-    data = [{"name": m[0], "scene": scene(m[1]), "facts": m[2], "joints": motions(m[1]) if simulate else [],
-             "order": build_order(m[1], m[3] if len(m) > 3 else None)} for m in models]
+    from .animation import order as anim_order
+    from .animation import paths as anim_paths
+
+    data = []
+    for m in models:
+        steps = anim_order(m[1], m[3] if len(m) > 3 else None)
+        dirs, _ = anim_paths(m[1], steps)
+        data.append({"name": m[0], "scene": scene(m[1]), "facts": m[2], "joints": motions(m[1]) if simulate else [],
+                     "order": steps, "dirs": [[d[0], d[2], d[1]] for d in dirs]})  # LEGO (x, y, z) -> page (x, z, y)
     return PAGE.replace("__MODELS__", json.dumps(data, separators=(",", ":")))
 
 
