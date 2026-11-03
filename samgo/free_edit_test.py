@@ -90,6 +90,11 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
             swings[which] += 1
             detail[which].append(len(moving))
     for q in reqs:
+        if q["kind"] == "rotor":  # something on an axle turns all the way round, clear of everything
+            from .kinematics import rotors
+
+            n, why = rotors(parts, q.get("axis", "horizontal"))
+            out[q["name"]] = (n >= q.get("count", 1), why)
         if q["kind"] == "spin":
             ok, why = requirement_met(parts, {"kind": "spin", "count": q["count"], "parallel": True})
             fn = verify_function(parts, min_axle_lines=2)
@@ -104,6 +109,57 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
                                         f"{swings[which]} of {need[which]} freed surfaces swing clear "
                                         f"(sizes {detail[which][:8]})")
     return out
+
+
+def _rotor_feedback(parts: list[dict], name) -> list[str]:
+    """Why nothing turns all the way round: no axle in a round hole yet, the axle is locked, or what the turning
+    parts hit (by name), for any object."""
+    import numpy as np
+
+    from .kinematics import BEAMS, HEIGHT as HGT, STUD, _corners, _inside, _sides, analyse
+
+    bodies, joints = analyse(parts)
+    axles = [k for k, j in enumerate(joints) if j[2] == "revolute" and abs(j[4][2]) < 0.1
+             and any(parts[i].get("type") == "axle" for x in (j[0], j[1]) for i in bodies[x])]
+    if not axles:
+        return ["rotor: nothing turns on a horizontal axle yet: set a Technic brick into the face (clear its slot "
+                "first), run an axle through its round hole out of the face, and lock arms on the axle outside the "
+                "face (a 2-long liftarm with an axle hole), with bushes holding the axle"]
+    msgs = []
+    for k in axles[:2]:
+        a, b, kind, point, axis, partners = joints[k]
+        where = f"the axle at (x={point[0] / STUD:.1f}, y={point[1] / STUD:.1f}) studs"
+        sides = _sides(bodies, joints, k)
+        if sides is None:
+            msgs.append(f"rotor: {where} cannot turn: what is on it is also held by studs or a second axle hole "
+                        "elsewhere; the arms must touch only the axle")
+            continue
+        small = min(sides, key=lambda g: sum(len(bodies[x]) for x in g))
+        moving = [i for x in small for i in bodies[x]]
+        if not any(parts[i].get("type") in HGT.keys() | BEAMS for i in moving):
+            msgs.append(f"rotor: {where} turns, but nothing is locked on it: add arms with an axle hole "
+                        "(liftarm length 2, axle_hole start or end) on the axle outside the face")
+            continue
+        fixed = [n for n in range(len(parts)) if n not in moving and n not in partners
+                 and parts[n].get("type") in HGT]
+        pts = np.vstack([_corners(parts[i]) for i in moving if parts[i].get("type") in HGT.keys() | BEAMS]
+                        or [np.zeros((0, 3))])
+        if not len(pts):
+            msgs.append(f"rotor: the parts on {where} hit something when they turn; move the arms further out "
+                        "along the axle, away from the face")
+            continue
+        ax = np.asarray(axis, float) / np.linalg.norm(axis)
+        K = np.array([[0, -ax[2], ax[1]], [ax[2], 0, -ax[0]], [-ax[1], ax[0], 0]])
+        hits = set()
+        for deg in range(15, 360, 15):
+            th = np.radians(deg)
+            R = np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
+            hits |= {n for n in fixed if _inside((pts - point) @ R.T + point, parts[n])}
+        msgs.append(f"rotor: the parts on {where} hit " + "; ".join(name(n) for n in sorted(hits)[:3])
+                    + " when they turn: move the arms further out along the axle or clear what they hit"
+                    if hits else f"rotor: the parts on {where} hit something (the ground or the face) when they "
+                    "turn: move the arms further out along the axle, or put the axle higher")
+    return msgs
 
 
 def explain(original: list[dict], parts: list[dict], sources: list[int | None], changed, verdict: dict,
@@ -144,6 +200,13 @@ def explain(original: list[dict], parts: list[dict], sources: list[int | None], 
         msgs.append(f"overlap: {len(pairs) - 6} more overlapping pair(s) of the same kind")
     for key, (ok, why) in verdict.items():
         if ok or (key == "structure" and pairs):
+            continue
+        if key == "rotor":
+            if "below the table" in why or "nothing is locked" in why:
+                msgs.append(f"rotor: {why}" + ("" if "below" in why else ": lock arms on it with an axle hole "
+                                                "(liftarm length 2, axle_hole start or end); round holes spin loose"))
+            else:
+                msgs += _rotor_feedback(parts, name)
             continue
         if key.endswith("_surfaces"):
             which = key.split("_")[0]

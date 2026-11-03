@@ -479,6 +479,43 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
     return False, (f"{passed} of {need} joints turn {req['degrees']} degrees clear; " if passed else "") + best
 
 
+def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
+    """Rotors: an axle turning in round holes with something locked on it (an axle hole: a liftarm, a cross block,
+    a hub) that turns all the way round clear of every other part and above the model's lowest point (the table).
+    Parts spinning loose on the axle, or an axle with nothing on it, are not rotors. Returns (count, why)."""
+    bodies, joints = analyse(parts)
+    ground = min((box(p)[0][2] for p in parts if p.get("type") in HEIGHT), default=0.0)
+    count, why = 0, "no axle turns in a round hole"
+    for k, (a, b, kind, point, ax, partners) in enumerate(joints):
+        if kind != "revolute" or (abs(ax[2]) > 0.9) != (axis == "vertical"):
+            continue
+        sides = _sides(bodies, joints, k)
+        if sides is None:
+            why = "the axle is locked by another link"
+            continue
+        small = min(sides, key=lambda g: sum(len(bodies[r]) for r in g))
+        moving = [i for r in small for i in bodies[r]]
+        locked = [bodies[r] for r in small if any(parts[i].get("type") == "axle" for i in bodies[r])]
+        if not locked:
+            continue  # a part turning loose on an axle, a hinge: not a rotor
+        if not {parts[i].get("type") for m in locked for i in m} & (HEIGHT.keys() | BEAMS):
+            why = "nothing is locked on the axle"
+            continue
+        if sweep(parts, moving, point, ax, 360, steps=24, ignore=partners) is not None:
+            why = "what is on the axle hits a part when it turns"
+            continue
+        n = np.asarray(ax, float) / np.linalg.norm(ax)
+        K = np.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
+        pts = np.vstack([_corners(parts[i]) for i in moving if parts[i].get("type") in HEIGHT.keys() | BEAMS])
+        low = min(((pts - point) @ (np.eye(3) + np.sin(t) * K + (1 - np.cos(t)) * K @ K).T + point)[:, 2].min()
+                  for t in np.radians(np.arange(0, 360, 15)))
+        if low < ground - TOL:
+            why = "what is on the axle reaches below the table when it turns: put the axle higher"
+            continue
+        count += 1
+    return count, (f"{count} rotor(s) turn all the way round" if count else why)
+
+
 JOINT_HALVES = {"bar_plate", "clip_plate", "hinge_base", "hinge_top", "click_a", "click_b", "turntable_base",
                 "turntable_top"}
 
