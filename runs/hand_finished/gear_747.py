@@ -7,8 +7,7 @@ from samgo.edits import apply_edits
 from samgo.free_edit_test import check
 from samgo.spark_gear import raised, reference, site, stands
 
-SPOTS = [("nose", 77, 46), ("body L", 37, 48), ("body R", 37, 43), ("wing L", 42, 52), ("wing R", 42, 39),
-         ("pod L", 50, 35), ("pod R", 50, 57)]
+SPOTS = [("nose", 77, 46), ("body", 37, 50), ("wing", 44, 55)]  # nose on the centre line; each main leg mirrored
 
 
 def main():
@@ -20,13 +19,24 @@ def main():
     parts = [p for p in parts if p not in fans]
     parts, lift = raised(parts)
     taken, legs = [], []
+    from samgo.spark_gear import spots
     for name, x, y in SPOTS:
         s = site(parts, x, y, taken)
         print(name, s, flush=True)
         if s is None:
             continue
-        taken.append((s["x0"], s["yc"]))
-        parts = apply_edits(parts, reference(parts, s["x0"], s["yc"], s["bottom"], color="light_gray")).parts
+        pair = [(s["x0"], s["yc"], s["bottom"])]
+        if name != "nose":  # its mirror twin across the centre line (y -> 91 - y: the 2x2 spot yc-1..yc -> 92-yc)
+            twin = (s["x0"], 92 - s["yc"])
+            if spots(parts).get(twin) != s["bottom"]:
+                print(name, "no mirror spot", flush=True)
+                continue
+            pair.append((*twin, s["bottom"]))
+        trial = parts
+        for x0, yc, bottom in pair:
+            trial = apply_edits(trial, reference(trial, x0, yc, bottom, color="light_gray")).parts
+        taken += [(x0, yc) for x0, yc, _ in pair]
+        parts = trial
         legs.append(name)
     parts = parts + [p | {"z": p["z"] + lift} for p in fans]
     st = stands(parts)
