@@ -179,11 +179,9 @@ def build(photo: Path, parts: list[dict], obj: str, sampler, work: Path, loop, r
         report.pop("lift")
         return unraised, report
     report["stands"] = stands(parts)
-    if not report["stands"]["passed"]:
-        before = stands(unraised)
-        if before["passed"]:  # it stood on its own base: legs that make it fall are not kept
-            report.update(kept=False, stands=before, why="the model stood without the legs and does not with them")
-            return unraised, report
+    if not report["stands"]["passed"]:  # legs it falls over on (some not built) are not kept: it rests on its base
+        report.update(kept=False, stands=stands(unraised), why="the model does not stand on the legs that were built")
+        return unraised, report
     return parts, report
 
 

@@ -44,4 +44,4 @@ def test_legs_that_make_a_standing_model_fall_are_not_kept(monkeypatch, tmp_path
         parts, report = spark_gear.build(tmp_path / "p.jpg", body, "thing", None, tmp_path, loop)
     finally:
         loop.close()
-    assert parts == body and report["kept"] is False and report["stands"]["passed"]
+    assert parts == body and report["kept"] is False

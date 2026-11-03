@@ -166,7 +166,7 @@ def attempt(body: list[dict], local: list[int], instruction: str, sampler, round
 
 
 def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler, work: Path, rounds: int = 3,
-          max_surfaces: int = 2, gear: bool = True, glass: bool = True) -> tuple[list[dict], dict]:
+          max_surfaces: int = 8, gear: bool = True, glass: bool = True) -> tuple[list[dict], dict]:
     """Add the hinged surfaces Spark names that Glimmer can build, then the legs it stands on (samgo.spark_gear).
     Returns (parts, report)."""
     from .regions import split
