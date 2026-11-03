@@ -8,8 +8,13 @@ from samgo.free_edit_test import check
 from samgo.spark_gear import LEG, raised, spots
 
 
+WHEEL = "30.4x14"
+
+
 def leg(x0, yc, bottom, color="light_gray"):
-    adds, z = [], 6
+    from samgo.technic import WHEELS, HOLE_HEIGHT, PLATE
+    za = round((WHEELS[WHEEL][0] / 2 - HOLE_HEIGHT) / PLATE)   # the axle's brick, so the tyre touches the table
+    adds, z = [], za + 3
     while z + 3 <= bottom:
         adds.append(dict(type="brick", w=2, l=1, x=x0, y=yc - 1, z=z, color=color))
         z += 3
@@ -17,11 +22,11 @@ def leg(x0, yc, bottom, color="light_gray"):
         adds.append(dict(type="plate", w=2, l=1, x=x0, y=yc - 1, z=z, color=color))
         z += 1
     xg = x0 + 1
-    adds += [dict(type="technic_brick", w=2, l=1, x=x0, y=yc - 1, z=3, color=color, hole="round"),
-             dict(type="axle", axis="y", x=xg, z=3, y=yc - 4, length=8),
-             dict(type="wheel", axis="y", x=xg, z=3, y=yc - 3, size="30.4x14", color="black"),
-             dict(type="wheel", axis="y", x=xg, z=3, y=yc + 1, size="30.4x14", color="black"),
-             dict(type="bush", axis="y", x=xg, z=3, y=yc - 4), dict(type="bush", axis="y", x=xg, z=3, y=yc + 3)]
+    adds += [dict(type="technic_brick", w=2, l=1, x=x0, y=yc - 1, z=za, color=color, hole="round"),
+             dict(type="axle", axis="y", x=xg, z=za, y=yc - 4, length=8),
+             dict(type="wheel", axis="y", x=xg, z=za, y=yc - 3, size=WHEEL, color="black"),
+             dict(type="wheel", axis="y", x=xg, z=za, y=yc + 1, size=WHEEL, color="black"),
+             dict(type="bush", axis="y", x=xg, z=za, y=yc - 4), dict(type="bush", axis="y", x=xg, z=za, y=yc + 3)]
     return [{"op": "add", "part": a} for a in adds]
 
 

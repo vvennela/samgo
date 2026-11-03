@@ -15,6 +15,10 @@ TECH = ("axle", "bush", "wheel", "propeller", "liftarm")  # bearings stay: they 
 
 def main():
     src, dst, fx, cy2, mx = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
+    if len(sys.argv) > 7:  # smaller wheels, lower lift: "24x14 9"
+        import gear_747_thin
+        import samgo.spark_gear as sg
+        gear_747_thin.WHEEL, sg.CLEAR = sys.argv[6], int(sys.argv[7])
     p = json.load(open(src))
     keep = [q for q in p if q["type"] in TECH]          # mechanisms set aside, put back raised
     body, lift = raised([q for q in p if q not in keep])
