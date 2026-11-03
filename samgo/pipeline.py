@@ -316,6 +316,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 summary['spark_legs'] = [{k: g.get(k) for k in ('name', 'passed', 'error')}
                                          for g in gear.get('legs', [])]
                 summary['spark_stands'] = gear.get('stands')
+                summary['spark_legs_kept'] = gear.get('kept', True)
                 glass_report = spark_report.get('glass') or {}
                 summary['spark_glass'] = {k: glass_report.get(k) for k in ('boxes', 'cells', 'glass_parts', 'error')}
             if family is not None:
