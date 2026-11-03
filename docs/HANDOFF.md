@@ -1,8 +1,25 @@
-# SAMgo handoff (as of Nov 2 2026, 00:30 PT)
+# SAMgo handoff (as of Nov 2 2026, 23:00 PT; sections 0 and 11 are the newest)
 
 Read this first in a fresh session. It is the whole state: what SAMgo is, the rules, how to run things, every
 benchmark so far, what was built in the last session, and what is open. Submission: **Wed Nov 4 2026, 6 PM PT**
 (Meta hackathon).
+
+## 0. Newest state (Nov 2 night)
+
+- **Latest Glimmer: run 10** (generic rotor skill on top of run 9). Sampler (24,576-row checkpoint, 1.84 of 2 epochs;
+  Fireworks lost the session at step 386 and the checkpoints would not warm-start):
+  `vvennela/run-261ba12dc52b48fba4252347dae2bd99/objects-r10-s24576-591aac60`.
+  Run 9: `vvennela/run-278c4e5b3c3a47ff9a395babda7f1c8d/objects-r9-tuned-89f8cfcb`.
+- Results r8 / r9 / r10 (first / within rounds): rotors 1 / - / 30/30; flap sheets `r9-sheets` 14/15, 15/22, 15/19;
+  hinge 14/15, 13/13, 14/15; leg 19, 20, 20; cars 48/49, 48/50, 45/47; doors 10, 9, 10; objects 92, 88, 87/111.
+  747 sweep r10: flap L3+S3, gear L0-L2.
+- New since section 8: Spark names spinning parts (`spark_mechanisms._rotors`, data `samgo/rotor_data.py`), legs
+  (`samgo/spark_gear.py`) and glass (`samgo/spark_glass.py`) for any object; `kinematics.dangling` (a joint half that
+  grips nothing fails); `kinematics.rotors`; `_near_pairs` broad phase; stability uses interior point first (a
+  3,400-part model in seconds instead of hours); `samgo/build_kit.py` (parts.csv, BrickLink wanted list, certified
+  steps as pictures); trainer never exports a partial from a failed warm start.
+- Held-out exams: the 92-stud 747 (`runs/s6/boeing747_92`), desk fan and wind turbine photos (`docs/photo-sources.txt`).
+  The F-16 photo is local only (war rule: not in the demo or repo).
 
 ## 1. What SAMgo is
 
