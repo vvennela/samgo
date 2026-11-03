@@ -18,6 +18,10 @@ benchmark so far, what was built in the last session, and what is open. Submissi
   grips nothing fails); `kinematics.rotors`; `_near_pairs` broad phase; stability uses interior point first (a
   3,400-part model in seconds instead of hours); `samgo/build_kit.py` (parts.csv, BrickLink wanted list, certified
   steps as pictures); trainer never exports a partial from a failed warm start.
+- **Fan (held-out, from a photo) passes end to end** with run 10: `runs/demo_r10/fan2_v5` (Spark: blades spin;
+  Glimmer's rotor first try in 5 of 5 runs on two fan photos; structure, connected, stands, rotor turns). Build kits:
+  `runs/build_kit/camry` (certified, 49 steps), `runs/build_kit/fan` (schematic; the head overhangs, not certified).
+  3D showcase: https://claude.ai/artifact/WDqu8phpQUANxebg8BWncL. Wind turbine: model 3-5 studs deep, no rotor spot.
 - Held-out exams: the 92-stud 747 (`runs/s6/boeing747_92`), desk fan and wind turbine photos (`docs/photo-sources.txt`).
   The F-16 photo is local only (war rule: not in the demo or repo).
 
