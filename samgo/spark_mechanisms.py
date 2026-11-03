@@ -211,6 +211,10 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
                 continue
             jobs.append(("rotor", entry, [i for i, x in enumerate(region_of) if x == r],
                          dict(mech=f"{h['name']} (a part that spins on an axle)", folder=f"rotor_{r}_{h['name']}")))
+    # A spinning part the mesh lost (a thin tail rotor, a propeller) has no parts of its own: Spark then places it on
+    # the whole model, on the face it is mounted to.
+    everything = [i for i, p in enumerate(parts) if p["type"] in H]
+    jobs = [(k, e, ids if ids or k != "rotor" else everything, a) for k, e, ids, a in jobs]
     jobs = [j for j in jobs if j[2] or j[1].update(error="no parts in the region")]
 
     async def layouts():
