@@ -303,8 +303,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             from .doors import add_car_doors
             try:
                 spark = {}
-                if car and layout.get('door'):
-                    spark['outline'] = layout['door']
+                if car and (layout.get('doors') or layout.get('door')):  # every side door Spark saw, front to back
+                    spark['outline'] = layout.get('doors') or [layout['door']]
                 if car and 'front_wheel_x' in layout:  # which end is the front: doors hinge on their front edge
                     spark['front_high'] = layout['front_wheel_x'] > layout['rear_wheel_x']
                 built = add_car_doors(parts, target, **spark)
@@ -312,6 +312,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 built = {'parts': parts, 'checks': {'door_cut': (False, str(e))}}
             failed = {k: v for k, v in built['checks'].items() if not (v if isinstance(v, bool) else v[0])}
             summary['doors_cut'] = not failed
+            if 'doors_seen' in built:  # e.g. four seen, two built: no room for the rear pair at this size
+                summary.update(doors_seen=built['doors_seen'], doors_built=built['doors_built'])
             save(run_dir / 'doors_cut.json', built['parts'])
             if failed:
                 summary['doors_passed'] = False

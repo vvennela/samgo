@@ -205,7 +205,9 @@ def _outline_plan(occ: np.ndarray, side: str, deck: int, outline: dict):
     """Doors near the one Spark outlined (x0..x1, z0..z1 on the model), best first. The outline comes from a photo, so
     it is right about where the door is but may be off by a few studs: each edge may move up to four studs (a plate
     or two in height) so that the door's wall and the hinge base's two studs in front of it are solid, on the
-    outermost wall face that is solid over the whole door; cells outboard of that face are shaved with the cut."""
+    outermost wall face that is solid over the whole door; cells outboard of that face are shaved with the cut. The
+    bottom edge may rise as far as the top allows: a door over a tall wheel arch starts above it. The face is the car's
+    outer skin over those studs at any height (or one stud in), never the inner wall of a wheel well."""
     X, Y, Z = occ.shape
     rows = range(Y) if side == "left" else range(Y - 1, -1, -1)
     out = []
@@ -214,7 +216,8 @@ def _outline_plan(occ: np.ndarray, side: str, deck: int, outline: dict):
             d0, d1 = a, b + 1
             if d0 < 2 or d1 > X or d1 - d0 < 3:
                 continue
-            for zb in range(max(outline["z0"], deck + 2), max(outline["z0"], deck + 2) + 3):
+            skin = [y for y in rows if occ[d0:d1, y, :].any()][:2]
+            for zb in range(max(outline["z0"], deck + 2), min(outline["z1"], Z - 2) - 1):
                 for zt in range(min(outline["z1"], Z - 2), min(outline["z1"], Z - 2) - 3, -1):
                     if zt - zb < 2:
                         continue
@@ -222,7 +225,7 @@ def _outline_plan(occ: np.ndarray, side: str, deck: int, outline: dict):
                     filled = [y for y in rows if occ[d0:d1, y, zb:zt + 1].any()]
                     if not filled:
                         continue
-                    for ys in filled[:2]:
+                    for ys in [y for y in filled[:2] if y in skin]:
                         if occ[d0 - 2:d1, ys, zb:zt + 1].all():
                             shift = abs(a - outline["x0"]) + abs(b - outline["x1"])
                             out.append(((d1 - d0) * (zt - zb + 1), -shift, d0, d1 - d0, ys, zb, zt))
@@ -249,13 +252,15 @@ def _flip_x(parts: list[dict], X: int) -> list[dict]:
 
 
 def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attempts: int = 4,
-                  outline: dict | None = None, front_high: bool = False) -> dict:
-    """Doors hinged at their front edge. The planner hinges at the low-x end, so a car whose front is at high x
-    (Spark says which end is the front) is planned front to back mirrored and mirrored back."""
+                  outline: dict | list[dict] | None = None, front_high: bool = False) -> dict:
+    """Doors hinged at their front edge. `outline`: Spark's door outline, or a list of them (a four-door car: front
+    and rear door on one side, each cut with its mirror on the other). The planner hinges at the low-x end, so a car
+    whose front is at high x (Spark says which end is the front) is planned front to back mirrored and mirrored back."""
+    outlines = None if outline is None else [outline] if isinstance(outline, dict) else list(outline)
     if not front_high:
-        return _add_car_doors(car_parts, target, attempts, outline)
+        return _add_car_doors(car_parts, target, attempts, outlines)
     X = max(p["x"] + p.get("w", 0) for p in car_parts if "w" in p)
-    flipped = None if outline is None else dict(outline, x0=X - 1 - outline["x1"], x1=X - 1 - outline["x0"])
+    flipped = None if outlines is None else [dict(o, x0=X - 1 - o["x1"], x1=X - 1 - o["x0"]) for o in outlines]
     r = _add_car_doors(_flip_x(car_parts, X), None if target is None else target[::-1].copy(), attempts, flipped)
     r["parts"] = _flip_x(r["parts"], X)
     for d in r.get("doors", []):
@@ -264,7 +269,7 @@ def add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attem
 
 
 def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, attempts: int = 4,
-                   outline: dict | None = None) -> dict:
+                   outlines: list[dict] | None = None) -> dict:
     """The car with a hinged door in each side wall (see the module docstring); `target` is unused beyond its
     shape check (the wall is read from the parts themselves, which is what was built)."""
     grid = [p for p in car_parts if p["type"] in HEIGHT]
@@ -280,13 +285,14 @@ def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, atte
     edges = sorted({int(round(a["x"])) for a in gear if a["type"] == "axle"})
     front, rear = edges[0], edges[-1]
 
-    def try_side(side, d0, length, ys, zb, zt):
-        """The door in one side wall at this plan, or None if it does not fit / swing clear."""
+    def try_side(side, d0, length, ys, zb, zt, outline, wall):
+        """The door in one side wall at this plan, or None if it does not fit / swing clear. `wall`: the wall still
+        free for this door (doors already placed are masked out of it)."""
         pin_y = ys if side == "left" else ys + 1
-        if not occ[max(d0 - 2, 0):d0 + length, ys, zb:zt + 1].all():
+        if not wall[max(d0 - 2, 0):d0 + length, ys, zb:zt + 1].all():
             return None  # the wall is not solid here (the mirror side of a body that is not exactly symmetric)
         color = COLOR_NAME[Counter(col[d0:d0 + length, ys, zb:zt + 1].ravel()).most_common(1)[0][0]]
-        plan = _hinge_layers(occ, d0, ys, zb, zt)
+        plan = _hinge_layers(wall, d0, ys, zb, zt)
         if plan is None:
             return None
         layers, holders = plan
@@ -327,15 +333,49 @@ def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, atte
     Y = occ.shape[1]
     ys_used = np.nonzero(occ.any(axis=(0, 2)))[0]
     y_lo, y_hi = int(ys_used.min()), int(ys_used.max())  # mirror about the body, not the grid (it may have spare rows)
-    doors = None
-    plans = (_outline_plan(occ, "left", deck, outline) if outline else []) + _plan(occ, "left", deck, front, rear)
-    for d0, length, ys, zb, zt in plans:
-        left = try_side("left", d0, length, ys, zb, zt)
-        right = try_side("right", d0, length, y_lo + y_hi - ys, zb, zt) if left else None
-        if left and right:
-            doors = [left, right]
-            break
-    if doors is None:
+    # Doors front to back: each pair is planned in the wall left free by the pairs before it (their cut, seam and
+    # hinge holders masked out), so a rear door hangs on the pillar behind the front door's seam. A door ahead is
+    # chosen so that the doors behind it still fit: more doors first, then the largest (a few candidates per door).
+    order = sorted(outlines, key=lambda o: o["x0"]) if outlines else [None]
+    seen = len(order)
+
+    def pairs(n, wall, after):
+        outline = order[n]
+        plans = _outline_plan(wall, "left", deck, outline) if outline else []
+        if n == 0:
+            plans += _plan(occ, "left", deck, front, rear)
+        for d0, length, ys, zb, zt in plans:
+            if after is not None and d0 - 3 < after:
+                continue  # a rear door's hinge and its holder sit on the pillar behind the seam of the door ahead
+            if n + 1 < len(order) and d0 + length > order[n + 1]["x0"]:
+                continue  # a door ends where Spark saw the next door's shut line, leaving that door its pillar
+            left = try_side("left", d0, length, ys, zb, zt, outline, wall)
+            right = try_side("right", d0, length, y_lo + y_hi - ys, zb, zt, outline, wall) if left else None
+            if left and right:
+                yield [left, right]
+
+    def masked(wall, pair):
+        wall = wall.copy()
+        for _, d0, length, ys, zb, zt, holders_bases, _, _, _, _ in pair:
+            wall[max(d0 - 2, 0):d0 + length + 1, ys, max(zb - 1, 0):zt + 2] = False
+            for h in holders_bases:
+                wall[_cells(h)] = False
+        return wall
+
+    def place(n, wall, after):
+        if n == len(order):
+            return []
+        best = []
+        for tried, pair in enumerate(pairs(n, wall, after)):
+            here = [[d + (n,) for d in pair]] + place(n + 1, masked(wall, pair), pair[0][1] + pair[0][2] + 1)
+            if len(here) > len(best):
+                best = here
+            if len(best) == len(order) - n or tried >= 5:
+                break
+        return best
+
+    doors = [d for pair in place(0, occ.copy(), None) for d in pair]
+    if not doors:
         raise ValueError("no room for a pair of mirrored doors")
     removed, gaps = set(), []
     for d in doors:
@@ -369,7 +409,7 @@ def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, atte
     # Floor pan: the side walls were the car's spine between front and rear; with a door cut out of each, a plate
     # layer on the deck inside the car ties front and rear together (seams only where the deck is under both sides).
     rows = sorted(d[3] for d in doors)
-    pan = _floor_pan(shaped > 0, deck, rows[0] + 1, rows[1])
+    pan = _floor_pan(shaped > 0, deck, rows[0] + 1, rows[-1])
     for q in pan:
         shaped[_cells(q)] = COLOR_INDEX["dark_gray"]
     pivots += pan
@@ -388,15 +428,16 @@ def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, atte
     kept = [p for p, k in zip(kept, keep[:nk]) if k]
     parts = kept + pivots + fill + gear
     moving, info, n = {}, [], len(kept)
-    for side, d0, length, ys, zb, zt, bases, mv, _, _, layers in doors:
+    for side, d0, length, ys, zb, zt, bases, mv, _, _, layers, k in doors:
         n += len(bases)
-        moving[f"{side}_door_moves"] = (set(range(n, n + len(mv))), 90)
+        name = side if k == 0 else f"{side}_rear" if k == 1 else f"{side}_{k}"
+        moving[f"{name}_door_moves"] = (set(range(n, n + len(mv))), 90)
         n += len(mv)
-        info.append({"side": side, "x": [d0, d0 + length], "row": ys, "z": [zb, zt], "length": length,
-                     "height_plates": zt - zb + 1, "hinge_layers": list(layers)})
+        info.append({"side": side, "position": k, "x": [d0, d0 + length], "row": ys, "z": [zb, zt],
+                     "length": length, "height_plates": zt - zb + 1, "hinge_layers": list(layers)})
     return {"parts": parts, "requirements": CAR_REQUIREMENTS,
             "checks": checks(parts, CAR_REQUIREMENTS, moving, vehicle=True),
-            "unsupported": CAR_UNSUPPORTED, "doors": info,
+            "unsupported": CAR_UNSUPPORTED, "doors": info, "doors_seen": 2 * seen, "doors_built": len(doors),
             "floor_pan": len(pan), "dropped": dropped}
 
 

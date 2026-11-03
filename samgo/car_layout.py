@@ -4,9 +4,9 @@ Spark (the knowing model) sees the photo and a side view of the voxel model with
 length and plate ticks up its height, and answers in the render's own coordinates, so nothing depends on which
 way the photo faces:
 
-    {"front_wheel_x": 4, "rear_wheel_x": 16, "door": {"x0": 7, "x1": 11, "z0": 4, "z1": 9}}
+    {"front_wheel_x": 4, "rear_wheel_x": 16, "doors": [{"x0": 7, "x1": 11, "z0": 4, "z1": 9}, ...]}
 
-Code then uses these facts (axles at the wheel centres, the door cut inside the door's outline); every result is
+Code then uses these facts (axles at the wheel centres, each door cut inside its outline); every result is
 still checked. Answers are cached per photo and model shape.
 """
 
@@ -23,11 +23,12 @@ x runs along the car (numbered ticks, one per stud), z up its height (numbered t
 Read where, on the side view, the real car's parts are. Answer with one JSON object and nothing else:
 {"front_wheel_x": <x of the centre of the front wheel>, "rear_wheel_x": <x of the centre of the rear wheel>,
  "wheel_top_z": <z of the top of the wheels>,
- "door": {"x0": <x where the front door begins>, "x1": <x where it ends>, "z0": <z of its bottom edge>,
-          "z1": <z of its top edge, the bottom of the side window>}}
+ "doors": [{"x0": <x where the door begins>, "x1": <x where it ends>, "z0": <z of its bottom edge>,
+            "z1": <z of its top edge, the bottom of its side window>}, ...]}
 
-Use the photo to know which end is the front and where the door's shut lines are; give positions on the side
-view's ticks. A two-door car has one door per side; for four doors give the front door."""
+"doors" lists every side door on one side of the car, front to back, as many as the real car has on that side
+(count them from the photo's shut lines). Use the photo to know which end is the front and where the shut lines
+are; give positions on the side view's ticks."""
 
 
 def render_side(target: np.ndarray, path: Path) -> None:
@@ -74,17 +75,17 @@ def parse(text: str, shape: tuple[int, int, int]) -> dict | None:
     try:
         out = {"front_wheel_x": int(d["front_wheel_x"]), "rear_wheel_x": int(d["rear_wheel_x"]),
                "wheel_top_z": int(d.get("wheel_top_z", 0))}
-        door = d.get("door") or {}
-        if door:
-            out["door"] = {k: int(door[k]) for k in ("x0", "x1", "z0", "z1")}
+        doors = d.get("doors") or ([d["door"]] if d.get("door") else [])
+        out["doors"] = [{k: int(door[k]) for k in ("x0", "x1", "z0", "z1")} for door in doors if door]
     except (KeyError, TypeError, ValueError):
         return None
     if not (0 <= out["front_wheel_x"] < X and 0 <= out["rear_wheel_x"] < X):
         return None
-    if "door" in out:
-        dd = out["door"]
+    for dd in out["doors"]:
         dd["x0"], dd["x1"] = sorted((max(0, dd["x0"]), min(X - 1, dd["x1"])))
         dd["z0"], dd["z1"] = sorted((max(0, dd["z0"]), min(Z - 1, dd["z1"])))
+    if out["doors"]:
+        out["door"] = out["doors"][0]  # older readers: the front door
     return out
 
 
@@ -96,7 +97,7 @@ async def ask(photo: Path, target: np.ndarray, work: Path, client=None) -> dict:
     from .function_spec import BASE_URL, MODEL, _data_url
 
     work.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha256(Path(photo).read_bytes() + target.tobytes() + str(target.shape).encode()).hexdigest()[:16]
+    key = hashlib.sha256(Path(photo).read_bytes() + target.tobytes() + str(target.shape).encode() + PROMPT.encode()).hexdigest()[:16]
     cache = Path("runs/research_cache") / f"layout_{key}.json"
     if cache.exists():
         return json.loads(cache.read_text())
