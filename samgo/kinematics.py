@@ -186,6 +186,24 @@ def _studs_rigid(a: dict, b: dict) -> bool:
     return touching and overlap
 
 
+def _rigid_pairs(parts: list[dict], pairs: list[tuple[int, int]]) -> list[bool]:
+    """_studs_rigid(parts[i], parts[j]) for each pair, for parts in HEIGHT (False otherwise), vectorized."""
+    if not pairs:
+        return []
+    solid = np.array([p.get("type") in HEIGHT for p in parts])
+    lo = np.zeros((len(parts), 3))
+    hi = np.zeros((len(parts), 3))
+    for k, p in enumerate(parts):
+        if solid[k]:
+            lo[k], hi[k] = box(p)
+    P = np.asarray(pairs)
+    a, b = P[:, 0], P[:, 1]
+    touching = (np.abs(hi[a, 2] - lo[b, 2]) < TOL) | (np.abs(hi[b, 2] - lo[a, 2]) < TOL)
+    overlap = ((np.minimum(hi[a, 0], hi[b, 0]) - np.maximum(lo[a, 0], lo[b, 0]) > TOL)
+               & (np.minimum(hi[a, 1], hi[b, 1]) - np.maximum(lo[a, 1], lo[b, 1]) > TOL))
+    return (solid[a] & solid[b] & touching & overlap).tolist()
+
+
 def _near_pairs(parts: list[dict], margin: float = 2 * STUD) -> list[tuple[int, int]]:
     """Pairs (i < j) whose bounding boxes, grown by `margin` (connectors reach at most about a stud past a part's
     box: a bar or clip end, a pin, a stud), overlap. Same answers as testing all pairs, without the n^2 Python loop."""
@@ -223,10 +241,11 @@ def analyse(parts: list[dict]):
             for b in cons[j]:
                 if JOINT.get(frozenset([a.kind, b.kind])) == "revolute" and _on_axis(a, b):
                     turning.add((i, j))
-    for i, j in near:
+    rigid = _rigid_pairs(parts, near)  # _studs_rigid for every near pair at once
+    for (i, j), stud_locked in zip(near, rigid):
         if True:
             pi, pj = parts[i], parts[j]
-            if (i, j) not in turning and pi["type"] in HEIGHT and pj["type"] in HEIGHT and _studs_rigid(pi, pj):
+            if (i, j) not in turning and stud_locked:
                 pivot = pi if pi["type"] in PIVOTS else pj if pj["type"] in PIVOTS else None
                 if pivot is None:
                     links.append((i, j, "rigid", None, None))
