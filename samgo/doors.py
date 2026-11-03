@@ -375,6 +375,16 @@ def _add_car_doors(car_parts: list[dict], target: np.ndarray | None = None, atte
         return best
 
     doors = [d for pair in place(0, occ.copy(), None) for d in pair]
+    if not doors and outlines:
+        # Every door Spark saw does not fit (often the front door cannot end before the rear one starts): fewer doors
+        # rather than none - the front pair alone, one door over all of Spark's outline, then geometry only.
+        merged = {"x0": min(o["x0"] for o in outlines), "x1": max(o["x1"] for o in outlines),
+                  "z0": min(o["z0"] for o in outlines), "z1": max(o["z1"] for o in outlines)}
+        for fallback in ([sorted(outlines, key=lambda o: o["x0"])[0]], [merged], [None]):
+            order = fallback  # read by pairs()/place()
+            doors = [d for pair in place(0, occ.copy(), None) for d in pair]
+            if doors:
+                break
     if not doors:
         raise ValueError("no room for a pair of mirrored doors")
     removed, gaps = set(), []
