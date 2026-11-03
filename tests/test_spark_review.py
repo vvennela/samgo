@@ -106,3 +106,21 @@ def test_a_part_spark_calls_wrong_stays_when_no_replacement_builds(monkeypatch, 
         loop.close()
     assert rotors(out)[0] == 1 and "kept" in wrong["review_note"] and not wrong.get("removed_by_review")
     assert len(calls) == 1  # the failed request is not tried a second time
+
+
+def test_base_color_then_trim_and_windows_not_on_the_roof():
+    from samgo.spark_glass import apply as glaze_boxes
+
+    body = block()
+    out, _ = sr.paint(body, [{"color": "blue", "x": [-99, 99], "y": [-99, 99], "z": [-99, 99]}])
+    out, _ = sr.paint(out, [{"color": "red", "x": [0, 7], "y": [0, 7], "z": [0, 0]}])
+    assert {p["color"] for p in out if p["z"] == 0} == {"red"} and {p["color"] for p in out if p["z"] > 2} == {"blue"}
+    top = max(p["z"] + (3 if p["type"] == "brick" else 1) for p in body) - 1
+    box = {"x": [0, 7], "y": [0, 7], "z": [top - 1, top]}
+    glazed, _ = glaze_boxes(body, {"glass": [box | {"name": "side windows"}]}, cut=True)
+    roof = [p for p in glazed if p["color"] == "trans_clear" and p["x"] > 0 and p["x"] + p["w"] < 8
+            and p["y"] > 0 and p["y"] + p["l"] < 8]
+    assert not roof  # interior of the top face stays body
+    _, side = glaze_boxes(body, {"glass": [box | {"name": "side windows"}]}, cut=True)
+    _, canopy = glaze_boxes(body, {"glass": [box | {"name": "canopy"}]}, cut=True)
+    assert canopy["cells"] > side["cells"] > 0  # a canopy may take the top face; side windows only the sides

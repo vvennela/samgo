@@ -70,6 +70,10 @@ def render_views(parts: list[dict], path: Path, f: int = 1) -> None:
     plt.close(fig)
 
 
+# Transparent parts that face up (a canopy, a roof window): glazed on top too; every other window only from the side.
+TOP_GLASS = re.compile(r"canopy|roof|sun ?roof|sky ?light|dome|bubble|top", re.I)
+
+
 def parse(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text or "", re.S)
     try:
@@ -129,9 +133,18 @@ def apply(parts: list[dict], spark: dict, cut: bool = True) -> tuple[list[dict],
 
     if "glass" not in spark:
         return parts, {"error": spark.get("error")}
+    from .glass import BODY_TYPES, _cells
+
     seen = visible_cells(parts)
+    filled = {c for p in parts if p.get("type") in BODY_TYPES for c in _cells(p)}
+
+    def sideways(c):  # seen from a side (an open neighbour in x or y): windows, windshields - not a roof
+        x, y, z = c
+        return any((x + dx, y + dy, z) not in filled for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+
     win = {c for c in seen for g in spark["glass"]
-           if g["x"][0] <= c[0] <= g["x"][1] and g["y"][0] <= c[1] <= g["y"][1] and g["z"][0] <= c[2] <= g["z"][1]}
+           if g["x"][0] <= c[0] <= g["x"][1] and g["y"][0] <= c[1] <= g["y"][1] and g["z"][0] <= c[2] <= g["z"][1]
+           and (TOP_GLASS.search(g.get("name", "")) or sideways(c))}
     out, n = glaze(parts, win, cut=cut)
     return out, {"boxes": spark["glass"], "cells": len(win), "glass_parts": n}
 

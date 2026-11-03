@@ -43,14 +43,17 @@ LOOK_PROMPT = """The first image is a photo of {obj}. The second shows the LEGO 
 front views, its real colors; ticks count cells{scale}). Glass is light blue.
 
 From what you know about the real object, compare it with the model:
-- which areas have the wrong color? Give each as a box and one of these colors: {colors}.
+- its base color: the one color most of the real object's outside has (the trim is given separately);
+- which areas have a different color from the base (stripes, a painted tail, a dark belly, trim)? Give each as a box
+  and one of these colors: {colors}.
 - which transparent parts of the real object (windshield, windows, canopy, a clear cover) are not glass yet? Give each
   as a box.
 Boxes in the image's coordinates: x and y read on the top view, z on the side view. Answer with one JSON object,
 nothing else:
-{{"paint": [{{"name": "<what>", "color": "<color>", "x": [<from>, <to>], "y": [<from>, <to>], "z": [<from>, <to>]}}],
+{{"base": "<color>",
+ "paint": [{{"name": "<what>", "color": "<color>", "x": [<from>, <to>], "y": [<from>, <to>], "z": [<from>, <to>]}}],
  "glass": [{{"name": "<what>", "x": [<from>, <to>], "y": [<from>, <to>], "z": [<from>, <to>]}}]}}
-Empty lists if the model already matches."""
+Empty lists if the model already matches; "base" is always given.""" 
 
 GLASS_RGB = (190, 225, 245)
 OTHER_RGB = (240, 150, 40)  # Technic and joint parts: visible as working parts
@@ -180,7 +183,7 @@ def parse_look(text: str, f: int) -> dict | None:
     def box(g):
         return {k: [min(int(v) for v in g[k][:2]) * f, (max(int(v) for v in g[k][:2]) + 1) * f - 1] for k in "xyz"}
 
-    out = {"paint": [], "glass": []}
+    out = {"paint": [], "glass": [], "base": d.get("base") if d.get("base") in COLORS else None}
     for g in d.get("paint") or []:
         try:
             if g.get("color") in COLORS:
@@ -282,8 +285,12 @@ def look(photo: Path, parts: list[dict], obj: str, work: Path, loop, *, cut: boo
         if "error" in ans:
             break
         todo_paint = ans["paint"] if allow_paint else []
-        if not todo_paint and not ans["glass"]:
+        base = ans.get("base") if allow_paint and rnd == 1 else None
+        if not todo_paint and not ans["glass"] and not base:
             break
+        if base:  # the whole outside in the base color first, so nothing keeps the mesh's shading
+            parts, entry["based"] = paint(parts, [{"color": base, "x": [-10**6, 10**6], "y": [-10**6, 10**6],
+                                                  "z": [-10**6, 10**6]}])
         if todo_paint:
             parts, entry["painted"] = paint(parts, todo_paint)
         if ans["glass"]:
