@@ -67,7 +67,7 @@ def _reports(parts, target, original, vehicle):
                'assembly_access': {'status': 'not_evaluated'}}
     passed = structure.passed and (function is None or function.passed) and stands is not None and stands.passed
     if vehicle:
-        canonical, issues = check(parts, target)
+        canonical, issues = check(parts, target, color=False)  # paint is reported, never required
         reports['aggregate'] = {'passed': canonical, 'issues': issues}
         passed = passed and canonical
     return bool(passed), reports

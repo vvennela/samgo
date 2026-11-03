@@ -139,7 +139,7 @@ def _candidate(problem: dict, edits: list[dict]) -> AppliedEdits:
 
 
 def _check_issues(parts: list[dict], target: np.ndarray, *, partial_edge: int | None = None,
-                  changed: frozenset[int] = frozenset()) -> list[tuple[str, Issue]]:
+                  changed: frozenset[int] = frozenset(), color: bool = True) -> list[tuple[str, Issue]]:
     """Shared verdict; issue indices refer to the candidate, including its off-grid gear.
 
     Partial steps require one functional axle line at the requested edge. Existing body parts far
@@ -157,7 +157,7 @@ def _check_issues(parts: list[dict], target: np.ndarray, *, partial_edge: int | 
                 raise ValueError(f"part {i}: {err}")
         solid_idx = [i for i, p in enumerate(parts) if p["type"] in HGT]
         anchors = frozenset(k for k, i in enumerate(solid_idx) if parts[i]["type"] == "technic_brick")
-        s = verify(structural(parts), target, config=MatchConfig(), anchors=anchors)
+        s = verify(structural(parts), target, config=MatchConfig() if color else MatchConfig(min_color_accuracy=0.0), anchors=anchors)
         f = verify_function(parts, min_axle_lines=1 if partial_edge is not None else 2)
     except (KeyError, TypeError, ValueError, OverflowError) as e:
         return [("model", Issue("invalid_part", f"invalid model: {e}"))]
@@ -186,9 +186,10 @@ def _check_issues(parts: list[dict], target: np.ndarray, *, partial_edge: int | 
 
 
 def check(parts: list[dict], target: np.ndarray, *, partial_edge: int | None = None,
-          changed: frozenset[int] = frozenset()) -> tuple[bool, list[str]]:
-    """Structure (the chassis counts as standing on its wheels), function, stability; error text for Glimmer."""
-    issues = _check_issues(parts, target, partial_edge=partial_edge, changed=changed)
+          changed: frozenset[int] = frozenset(), color: bool = True) -> tuple[bool, list[str]]:
+    """Structure (the chassis counts as standing on its wheels), function, stability; error text for Glimmer.
+    `color=False`: color accuracy is reported, not required (a painted model)."""
+    issues = _check_issues(parts, target, partial_edge=partial_edge, changed=changed, color=color)
     return not issues, [f"{stage}: {i.message}" for stage, i in issues]
 
 
