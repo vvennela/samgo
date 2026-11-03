@@ -150,7 +150,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         timeout: float = 120, sequential: bool = True, mesh: Path | None = None,
         replay: Path | None = None, sampler=None, require_certificate: bool = False,
         certificate_timeout: float = 20, doors: bool = False, glass: bool = True, mechanisms: bool = True,
-        layout_from_spark: bool = False, symmetry_from_spark: bool = False,
+        layout_from_spark: bool = False, symmetry_from_spark: bool = False, body_paint: str | None = None,
         buildable: bool = False, manual: bool = False) -> dict:
     if assembly not in ('procedural', 'learned') or (size not in SIZES and not str(size).isdigit()):
         raise ValueError('unknown assembly mode or size')
@@ -412,7 +412,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                     except Exception:  # noqa: BLE001 - no Spark: fall back to the photo's most common color
                         spec = {}
             chosen = (spec or {}).get('body_color')
-            summary['body_color'] = chosen if chosen in COLORS else body_color(original)
+            summary['body_color'] = (body_paint if body_paint in COLORS else
+                                     chosen if chosen in COLORS else body_color(original))
             parts = paint(parts, summary['body_color'])
             # fewer, bigger pieces: neighbouring same-color plates in one rigid body become one real plate
             from .consolidate import consolidate
@@ -543,6 +544,7 @@ def main() -> None:
     ap.add_argument('--joint', action='store_true', help='solve both axle lines in one task')
     ap.add_argument('--doors', action='store_true', help='cut a hinged door in each side; with --assembly learned, Glimmer places the hinges')
     ap.add_argument('--no-glass', action='store_true', help='keep the cabin walls opaque')
+    ap.add_argument('--color', default=None, help='cars: body paint (e.g. red, blue, orange); default: Spark reads it from the photo')
     ap.add_argument('--no-spark-layout', action='store_true', help='cars: geometry only, no wheel/door layout from Spark')
     ap.add_argument('--no-mechanisms', action='store_true', help='static objects: skip the research step')
     ap.add_argument('--buildable', action='store_true', help='cars: lay out for structure first, then color (certifiable)')
@@ -554,7 +556,7 @@ def main() -> None:
                  assembly=args.assembly, model=args.model, replay=args.replay, mesh=args.mesh,
                  rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint,
                  require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout,
-                 doors=args.doors, glass=not args.no_glass, layout_from_spark=not args.no_spark_layout, symmetry_from_spark=not args.no_spark_layout, mechanisms=not args.no_mechanisms,
+                 doors=args.doors, glass=not args.no_glass, layout_from_spark=not args.no_spark_layout, symmetry_from_spark=not args.no_spark_layout, body_paint=args.color, mechanisms=not args.no_mechanisms,
                  buildable=args.buildable, manual=args.manual)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['passed'] else 1)
