@@ -195,6 +195,7 @@ h1 b { color: var(--accent); }
   <label><input type="checkbox" id="hl"> Highlight mechanisms (Technic bricks, axles, wheels, hinges, turntables)</label>
   <label><input type="checkbox" id="xray"> See-through body</label>
   <button type="button" id="sim" aria-pressed="false" hidden>Preview motion (sampled)</button>
+  <button type="button" id="buildit">Build it</button>
   <button type="button" id="side">Side view</button><button type="button" id="three">3/4 view</button><button type="button" id="under">Underside</button>
 </div>
 <div id="stage"></div>
@@ -217,12 +218,16 @@ let group = null, current = 0;
 // Simulate: each part rides in the group of the joints that move it (outermost first); per frame only those
 // groups' matrices change. With Simulate off they stay identity, so the static model is untouched.
 let movers = [], simOn = MODELS.map(() => false), simStart = 0;
+// Build it: every part has its step in the build order (m.order[part index]); parts appear step by step, the newest
+// dropping in from above. Instanced groups are sorted by step, so showing a step is raising the instance count.
+let buildables = [], buildOn = false, buildStart = 0;
+const stepOf = (m, rec) => (m.order && m.order[rec[rec.length - 1]] != null) ? m.order[rec[rec.length - 1]] : 0;
 
 function build(m) {
   const g = new THREE.Group();
   const chainOf = {}, holders = {"": g};
   (m.joints || []).forEach((j, n) => j.moving.forEach(i => { chainOf[i] = i in chainOf ? chainOf[i] + "," + n : String(n); }));
-  movers = [];
+  movers = []; buildables = [];
   const holder = rec => {
     const key = chainOf[rec[rec.length - 1]] || "";
     if (!holders[key]) {
@@ -244,6 +249,7 @@ function build(m) {
     const technic = hl && col === "#ffb000";
     const see = glass === "1" ? 0.45 : (xray && !technic ? 0.18 : 1);
     const mat = new THREE.MeshLambertMaterial({color: col, transparent: see < 1, opacity: see});
+    list.sort((a, b) => stepOf(m, a) - stepOf(m, b));
     const inst = new THREE.InstancedMesh(geo[shape], mat, list.length);
     const mtx = new THREE.Matrix4(), rot = new THREE.Matrix4(), scl = new THREE.Matrix4();
     list.forEach((b, i) => {
@@ -256,18 +262,21 @@ function build(m) {
       mtx.setPosition(b[0] + b[3] / 2, b[1] + b[4] / 2, b[2] + b[5] / 2);
       inst.setMatrixAt(i, mtx);
     });
+    inst.userData.steps = list.map(b => stepOf(m, b));
+    inst.userData.base = list.map((b, i) => { const q = new THREE.Matrix4(); inst.getMatrixAt(i, q); return q; });
+    buildables.push(inst);
     holder(list[0]).add(inst);
   }
   const axleMat = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0x7a7f86});
   for (const a of m.scene.axles) {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, a[3], 16), axleMat);
-    orient(c, a); holder(a).add(c);
+    orient(c, a); holder(a).add(c); c.userData.step = stepOf(m, a); buildables.push(c);
   }
   for (const c of m.scene.cyls || []) {
     const hole = c[6] === "#16191c";
     const mat = new THREE.MeshLambertMaterial({color: (hl && !hole) ? 0xffb000 : c[6]});
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(c[5], c[5], c[3], 20), mat);
-    orient(mesh, c); holder(c).add(mesh);
+    orient(mesh, c); holder(c).add(mesh); mesh.userData.step = stepOf(m, c); buildables.push(mesh);
   }
   const spokeMat = new THREE.MeshLambertMaterial({color: 0x4a4f57});
   const tyre = new THREE.MeshLambertMaterial({color: 0x1b1b1b}), rim = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0xc9ccd1});
@@ -283,6 +292,7 @@ function build(m) {
       bar.rotation.y = turn; spokes.add(bar);
     }
     orient(spokes, w); holder(w).add(spokes);
+    for (const o of [t, h, spokes]) { o.userData.step = stepOf(m, w); buildables.push(o); }
   }
   // Ground at the lowest point, so it is visible what touches the floor.
   const bb = bounds(g), size = bb.getSize(new THREE.Vector3());
@@ -332,6 +342,32 @@ function jointMatrix(j, t, out) {  // turn about the pivot line: T(p) R(axis, an
   out.makeTranslation(j.point[0], j.point[1], j.point[2]).multiply(jr);
   return out.multiply(jt.makeTranslation(-j.point[0], -j.point[1], -j.point[2]));
 }
+function buildFrame() {
+  if (!buildOn) return;
+  const m = MODELS[current], steps = (m.order || [0]).reduce((a, b) => Math.max(a, b), 0) + 1;
+  const per = Math.min(0.6, 16 / steps), drop = 60;
+  const t = (performance.now() - buildStart) / 1000 / per, cur = Math.floor(t), f = t - cur;
+  const ease = 1 - Math.pow(1 - Math.min(1, f / 0.8), 3);  // falls fast, settles
+  const done = cur >= steps;
+  const q = new THREE.Matrix4(), up = new THREE.Matrix4();
+  for (const o of buildables) {
+    if (o.isInstancedMesh) {
+      const st = o.userData.steps, base = o.userData.base;
+      let n = 0; while (n < st.length && (done || st[n] <= cur)) n++;
+      o.count = n;
+      for (let i = 0; i < n; i++) {
+        if (!done && st[i] === cur) { up.makeTranslation(0, drop * (1 - ease), 0); q.multiplyMatrices(up, base[i]); o.setMatrixAt(i, q); }
+        else o.setMatrixAt(i, base[i]);
+      }
+      o.instanceMatrix.needsUpdate = true;
+    } else {
+      if (o.userData.y0 === undefined) o.userData.y0 = o.position.y;
+      o.visible = done || o.userData.step <= cur;
+      o.position.y = o.userData.y0 + (!done && o.userData.step === cur ? drop * (1 - ease) : 0);
+    }
+  }
+  if (done) buildOn = false;
+}
 function animate() {
   const on = simOn[current], joints = MODELS[current].joints || [];
   const t = (performance.now() - simStart) / 1000, cache = {};
@@ -365,6 +401,7 @@ function view(kind) {
 }
 MODELS.forEach((m, i) => { const b = document.createElement("button"); b.type = "button"; b.textContent = m.name; b.onclick = () => show(i); document.getElementById("models").appendChild(b); });
 ["hl", "xray"].forEach(id => document.getElementById(id).onchange = () => show(current, true));
+document.getElementById("buildit").onclick = () => { buildOn = true; buildStart = performance.now(); };
 document.getElementById("sim").onclick = () => {
   simOn[current] = !simOn[current]; simStart = performance.now();
   document.getElementById("sim").setAttribute("aria-pressed", simOn[current]);
@@ -378,14 +415,37 @@ new ResizeObserver(resize).observe(stage);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", bg);
 new MutationObserver(bg).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
 bg(); show(0); resize();
-(function loop() { controls.update(); animate(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+(function loop() { controls.update(); buildFrame(); animate(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
 </script>
 """
 
 
-def page(models: list[tuple[str, list[dict], list[tuple[str, str]]]], simulate: bool = True) -> str:
-    data = [{"name": n, "scene": scene(parts), "facts": facts, "joints": motions(parts) if simulate else []}
-            for n, parts, facts in models]
+def build_order(parts: list[dict], manual: dict | None = None) -> list[int]:
+    """The step of each part: the certified order (samgo.manual) when there is one, else layers bottom-up, then
+    axles and wheels (samgo.instructions.steps)."""
+    order = [0] * len(parts)
+    if manual and manual.get("passed") and manual.get("steps"):
+        for k, s in enumerate(manual["steps"]):
+            for i in s["parts"]:
+                order[i] = k
+        return order
+    from .instructions import steps
+
+    index = {id(p): i for i, p in enumerate(parts)}
+    try:
+        for k, group in enumerate(steps(parts)):
+            for p in group:
+                order[index[id(p)]] = k
+    except Exception:  # noqa: BLE001 - parts the schematic order does not know: by height
+        zs = sorted({p.get("z", 0) for p in parts})
+        order = [zs.index(p.get("z", 0)) for p in parts]
+    return order
+
+
+def page(models: list[tuple], simulate: bool = True) -> str:
+    """models: (name, parts, facts) or (name, parts, facts, manual)."""
+    data = [{"name": m[0], "scene": scene(m[1]), "facts": m[2], "joints": motions(m[1]) if simulate else [],
+             "order": build_order(m[1], m[3] if len(m) > 3 else None)} for m in models]
     return PAGE.replace("__MODELS__", json.dumps(data, separators=(",", ":")))
 
 
@@ -404,6 +464,7 @@ if __name__ == "__main__":
     for arg in sys.argv[2:]:
         name, path = arg.split("=", 1)
         parts = json.loads(Path(path).read_text())
-        models.append((name, parts, facts_for(parts)))
+        manual = Path(path).with_name("manual.json")
+        models.append((name, parts, facts_for(parts), json.loads(manual.read_text()) if manual.exists() else None))
     out.write_text(page(models))
     print(out, f"{out.stat().st_size / 1e6:.2f} MB")
