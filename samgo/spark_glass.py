@@ -123,7 +123,7 @@ async def ask(photo: Path, parts: list[dict], work: Path, *, obj: str, client=No
     return out
 
 
-def apply(parts: list[dict], spark: dict) -> tuple[list[dict], dict]:
+def apply(parts: list[dict], spark: dict, cut: bool = True) -> tuple[list[dict], dict]:
     """Glaze the visible cells inside Spark's boxes. Returns (parts, report)."""
     from .glass import glaze, visible_cells
 
@@ -132,11 +132,12 @@ def apply(parts: list[dict], spark: dict) -> tuple[list[dict], dict]:
     seen = visible_cells(parts)
     win = {c for c in seen for g in spark["glass"]
            if g["x"][0] <= c[0] <= g["x"][1] and g["y"][0] <= c[1] <= g["y"][1] and g["z"][0] <= c[2] <= g["z"][1]}
-    out, n = glaze(parts, win)
+    out, n = glaze(parts, win, cut=cut)
     return out, {"boxes": spark["glass"], "cells": len(win), "glass_parts": n}
 
 
-def build(photo: Path, parts: list[dict], obj: str, work: Path, loop) -> tuple[list[dict], dict]:
+def build(photo: Path, parts: list[dict], obj: str, work: Path, loop, cut: bool = True) -> tuple[list[dict], dict]:
+    """`cut=False`: whole parts only (a model whose hinged parts are already in place keeps every part as is)."""
     sp = loop.run_until_complete(ask(photo, parts, work, obj=obj))
-    out, report = apply(parts, sp)
+    out, report = apply(parts, sp, cut=cut)
     return out, report | {"spark": sp}

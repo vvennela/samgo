@@ -385,7 +385,9 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             from . import spark_glass
             loop = asyncio.new_event_loop()
             try:
-                glazed, glass_report = spark_glass.build(photo, parts, 'car', run_dir / 'glass', loop)
+                # doors already hang on their hinges: glaze whole parts, never cut a door's plates
+                glazed, glass_report = spark_glass.build(photo, parts, 'car', run_dir / 'glass', loop,
+                                                         cut=not summary.get('doors_cut'))
             except Exception as e:  # noqa: BLE001
                 glazed, glass_report = parts, {'error': f'{type(e).__name__}'}
             finally:
@@ -415,6 +417,18 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             summary['body_color'] = (body_paint if body_paint in COLORS else
                                      chosen if chosen in COLORS else body_color(original))
             parts = paint(parts, summary['body_color'])
+            if layout_from_spark and spec is not None:
+                # Spark reviews colors and glass against the real car (whole-body repaint only if no color was chosen)
+                from . import spark_review
+                rloop = asyncio.new_event_loop()
+                try:
+                    parts, summary['look'] = spark_review.look(photo, parts, 'car', run_dir / 'review', rloop,
+                                                               cut=not summary.get('doors_cut'),
+                                                               allow_paint=body_paint is None)
+                except Exception as e:  # noqa: BLE001 - no Spark: the model stays as built
+                    summary['look'] = [{'error': type(e).__name__}]
+                finally:
+                    rloop.close()
             # fewer, bigger pieces: neighbouring same-color plates in one rigid body become one real plate
             from .consolidate import consolidate
             parts, summary['merged_plates'] = consolidate(parts)

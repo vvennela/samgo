@@ -177,16 +177,22 @@ def attempt(body: list[dict], local: list[int], instruction: str, sampler, round
 
 
 def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler, work: Path, rounds: int = 3,
-          max_surfaces: int = 8, gear: bool = True, glass: bool = True) -> tuple[list[dict], dict]:
-    """Add the hinged surfaces Spark names that Glimmer can build, then the legs it stands on (samgo.spark_gear).
-    Returns (parts, report)."""
+          max_surfaces: int = 8, gear: bool = True, glass: bool = True, review: bool = True) -> tuple[list[dict], dict]:
+    """Add the working parts Spark names that Glimmer can build; Spark reviews them against the real object (missing
+    ones added, wrong ones dropped); then the legs it stands on (samgo.spark_gear), glass, and Spark's review of
+    colors and glass (samgo.spark_review). Returns (parts, report)."""
     from .regions import split
 
     labels = split(target)
     scale = max(1.0, max(target.shape[:2]) / 40)  # surfaces sized to the model: a 92-stud model gets longer flaps
     loop = asyncio.new_event_loop()  # one loop for every Spark call of this build (its HTTP client lives in it)
     try:
+        body = parts
         parts, report = _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale)
+        passing = report.pop("_passing", [])
+        if review and report.get("regions"):
+            parts = _review(photo, body, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale,
+                            report, passing)
         if gear:
             from . import spark_gear
 
@@ -195,6 +201,10 @@ def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler,
             from . import spark_glass
 
             parts, report["glass"] = spark_glass.build(photo, parts, obj, work / "glass", loop)
+        if review:  # colors and glass, checked against the real object
+            from . import spark_review
+
+            parts, report["look"] = spark_review.look(photo, parts, obj, work / "review", loop)
         parts = blend_joints(parts)
         (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
         return parts, report
@@ -202,7 +212,11 @@ def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler,
         loop.close()
 
 
-def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale=1.0, workers: int = 8):
+_IDS = __import__("itertools").count(1)  # every mechanism entry gets an id Spark's review can name
+
+
+def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale=1.0, workers: int = 8,
+           named: dict | None = None, merge: bool = True):
     """Every mechanism Spark names, in parallel against the same model: Spark's layouts all at once, the spots,
     then Glimmer's attempts (each with its own feedback rounds) at once; the passing edit lists are merged and the
     merged model is checked again as a whole (one at a time, in Spark's order, if they conflict)."""
@@ -215,7 +229,8 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
     from .rotor_data import ROTOR, rotor_site
     from .rotor_data import instruction as rotor_instruction
 
-    named = loop.run_until_complete(name_regions(photo, labels, obj, work))
+    if named is None:
+        named = loop.run_until_complete(name_regions(photo, labels, obj, work))
     report = {"regions": named.get("regions"), "error": named.get("error"), "surfaces": [], "unsupported": [],
               "rotors": []}
     if "regions" not in named:
@@ -227,12 +242,12 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
             if h.get("axis") != "horizontal":
                 report["unsupported"].append({"region": r, "part": d["part"], **h, "why": "only horizontal hinges"})
                 continue
-            entry = {"region": r, "part": d["part"], **h}
+            entry = {"id": next(_IDS), "region": r, "part": d["part"], **h}
             report["surfaces"].append(entry)
             jobs.append(("surface", entry, [i for i, x in enumerate(region_of) if x == r],
                          dict(mech=h["name"], folder=f"layout_{r}_{h['name']}")))
         for h in d.get("spinning", []):
-            entry = {"region": r, "part": d["part"], **h}
+            entry = {"id": next(_IDS), "region": r, "part": d["part"], **h}
             if len(report["rotors"]) >= 4:
                 break
             report["rotors"].append(entry)
@@ -311,9 +326,59 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
         passing.append((twin, {"edits": mirrored}, q))
     surfaces = [p for p in passing if p[2] is FLAP][:max_surfaces]
     passing = surfaces + [p for p in passing if p[2] is not FLAP]
+    if not merge:
+        return passing, report
     parts = _merge(parts, passing, report)
     (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
+    report["_passing"] = passing  # taken out by build() before the report is written again
     return parts, report
+
+
+def _review(photo, body, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale, report, passing,
+            review_rounds: int = 2):
+    """Phase 1 of Spark's review: it compares the working parts built with the real object; missing ones are built
+    (against the original body, so every verified edit list shares its indices), wrong ones are dropped, and all
+    that remain are merged and checked again as a whole. Up to `review_rounds` rounds; stops when Spark is
+    satisfied."""
+    from . import spark_review
+    from .regions import render as render_regions
+
+    regions = report["regions"]
+    regions_png = work / "regions.png"
+    if not regions_png.exists():
+        render_regions(labels, regions_png)
+    log = report.setdefault("review", [])
+    passing = [p for p in passing if not p[0].get("merge_error")]  # only what is in the model
+    for rnd in range(1, review_rounds + 1):
+        built = [{"id": e["id"], "name": e["name"], "kind": "hinged" if q is FLAP else "spinning",
+                  "region": e["region"], "box": spark_review.mech_box(rec["edits"])} for e, rec, q in passing]
+        ans = spark_review.ask_mechanisms(photo, regions_png, parts, obj, built, regions, work / f"review_{rnd}", loop)
+        log.append({"round": rnd, "built": built, "answer": ans})
+        if "error" in ans or (not ans["add"] and not ans["remove"]):
+            break
+        drop = {r["id"]: r["why"] for r in ans["remove"]}
+        for e, _, _ in passing:
+            if e["id"] in drop:
+                e.update(passed=False, removed_by_review=drop[e["id"]])
+        passing = [p for p in passing if p[0]["id"] not in drop]
+        if ans["add"]:
+            named = {"regions": {}, "symmetric": False, "pairs": []}
+            for a in ans["add"]:
+                reg = named["regions"].setdefault(a["region"], {"part": regions[a["region"]]["part"], "hinged": [],
+                                                                "spinning": []})
+                reg["hinged" if a["kind"] == "hinged" else "spinning"].append(
+                    {"name": a["name"], "where": a["where"], "axis": a["axis"], "added_by_review": rnd})
+            new, sub = _build(photo, body, obj, sampler, work / f"review_{rnd}", rounds, max_surfaces, labels, loop,
+                              scale, named=named, merge=False)
+            for k in ("surfaces", "rotors", "unsupported"):
+                report[k] += sub.get(k, [])
+            passing = passing + new
+        for e, _, _ in passing:  # merged again from scratch: earlier conflicts are judged anew
+            e.pop("merge_error", None)
+            e["passed"] = True
+        parts = _merge(body, passing, report)
+        passing = [p for p in passing if not p[0].get("merge_error")]
+    return parts
 
 
 JOINT_PLATES = ("bar_plate", "clip_plate", "hinge_base", "hinge_top", "click_a", "click_b")
