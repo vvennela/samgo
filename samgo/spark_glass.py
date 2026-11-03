@@ -25,8 +25,18 @@ view, z on the side view. Answer with one JSON object, nothing else:
 An empty list if the real object has no transparent parts."""
 
 
-def render_views(parts: list[dict], path: Path) -> None:
-    """Top view (x, y) and side view (x, z), shaded by depth, a tick every stud / plate."""
+def factor(parts: list[dict], cap: int = 60) -> int:
+    """Big models are shown to Spark reduced to about `cap` cells a side (its boxes are scaled back)."""
+    from .glass import BODY_TYPES, _cells
+
+    cells = [c for p in parts if p.get("type") in BODY_TYPES for c in _cells(p)]
+    span = max(max(c[k] for c in cells) + 1 for k in range(3))
+    return max(1, -(-span // cap))
+
+
+def render_views(parts: list[dict], path: Path, f: int = 1) -> None:
+    """Top view (x, y) and side view (x, z), shaded by depth, a tick every stud / plate (every `f` of them, as one
+    cell, on a reduced view)."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -34,7 +44,7 @@ def render_views(parts: list[dict], path: Path) -> None:
 
     from .glass import BODY_TYPES, _cells
 
-    cells = {c for p in parts if p.get("type") in BODY_TYPES for c in _cells(p)}
+    cells = {(x // f, y // f, z // f) for p in parts if p.get("type") in BODY_TYPES for (x, y, z) in _cells(p)}
     X = max(x for x, _, _ in cells) + 1
     Y = max(y for _, y, _ in cells) + 1
     Z = max(z for _, _, z in cells) + 1
@@ -85,7 +95,8 @@ async def ask(photo: Path, parts: list[dict], work: Path, *, obj: str, client=No
     if cache.exists():
         return json.loads(cache.read_text())
     view = work / "views.png"
-    render_views(parts, view)
+    f = factor(parts)
+    render_views(parts, view, f)
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
     import os
 
@@ -102,6 +113,9 @@ async def ask(photo: Path, parts: list[dict], work: Path, *, obj: str, client=No
         answer = r.choices[0].message.content or ""
         out = parse(answer) or {"error": f"unparseable answer: {answer[:200]}"}
         if "error" not in out:
+            if f > 1:  # back to the model's own cells
+                out = {"glass": [g | {k: [g[k][0] * f, (g[k][1] + 1) * f - 1] for k in ("x", "y", "z")}
+                                 for g in out["glass"]], "view_factor": f}
             break
     if "error" not in out:
         cache.parent.mkdir(parents=True, exist_ok=True)
