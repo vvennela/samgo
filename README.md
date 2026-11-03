@@ -11,7 +11,15 @@ models: **SAM 3.1**, **SAM 3D**, **Muse Spark** and **Muse Glimmer** (fine-tuned
 |---|---|
 | ![Camry](docs/images/camry.png) | ![Beetle](docs/images/beetle.png) |
 
-<!-- SHOWCASE -->
+| Fan (held-out exam, from a public-domain photo) |
+|---|
+| ![Fan](docs/images/fan.png) |
+
+**The fan was never in training.** Spark looked at the photo and said "the blades spin, on a horizontal axis, at
+the front of the head"; Glimmer set a Technic bearing into the head's face, put an axle through it and locked arms
+on it, **first try**; code checked that every part is real and held, the arms turn all the way round without
+touching anything, and the fan still stands. Same models and code as the cars.
+
 
 ## Spark knows, Glimmer does, code verifies
 
