@@ -282,6 +282,14 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 summary['spark_mechanisms'] = [{k: s.get(k) for k in ('part', 'name', 'handoff', 'passed', 'error')}
                                                for s in spark_report['surfaces']]
                 summary['spark_unsupported'] = [(u['part'], u['name']) for u in spark_report['unsupported']]
+                summary['spark_rotors'] = [{k: s.get(k) for k in ('part', 'name', 'site', 'passed', 'error')}
+                                           for s in spark_report.get('rotors', [])]
+                gear = spark_report.get('gear') or {}
+                summary['spark_legs'] = [{k: g.get(k) for k in ('name', 'passed', 'error')}
+                                         for g in gear.get('legs', [])]
+                summary['spark_stands'] = gear.get('stands')
+                glass_report = spark_report.get('glass') or {}
+                summary['spark_glass'] = {k: glass_report.get(k) for k in ('boxes', 'cells', 'glass_parts', 'error')}
             if family is not None:
                 stage('mechanism')
                 reference_model, mechanism_ctx = model_for(family, original)
