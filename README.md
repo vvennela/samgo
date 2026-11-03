@@ -131,11 +131,4 @@ script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/object
   `samgo/ldraw.py`.
 - Skill data: `samgo/rotor_data.py`, `samgo/flap_data.py`, `samgo/primitives.py`, `samgo/flap_mistakes.py`.
 - `formal/`: Lean proofs. `docs/`: handoff, feedback example, photo sources. `demo.md`: the demo plan.
-
-## Limits
-
-- Glimmer does not yet place every working part on large, thin, stepped models (most 747 flaps and ailerons fail),
-  and rotor arms are the trained 2-stud size. Vertical rotors (a helicopter's main rotor) and wheels sized to the
-  object (verified 24-36 mm wheels are in the catalogue) need one more training run.
-- One photo gives limited depth: a flat painting of a wind turbine came out too thin for a rotor bearing.
 - Photos: `docs/photo-sources.txt` (public domain / CC; photos are not in the repo).
