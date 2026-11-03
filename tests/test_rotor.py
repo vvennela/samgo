@@ -68,3 +68,12 @@ def test_views_accept_a_model_with_a_rotor_in_it(tmp_path):
     parts = apply_edits(block(), answer("+y", 8, 3, 6)).parts  # axle, bushes, liftarms: no w/l footprint
     render_top(parts, set(), tmp_path / "top.png")
     assert (tmp_path / "top.png").exists()
+
+
+def test_instructions_and_ldraw_accept_a_rotor(tmp_path):
+    from samgo.instructions import write
+    from samgo.ldraw import export
+
+    parts = apply_edits(block(), answer("+y", 8, 3, 6)).parts
+    assert "liftarm" in write(parts, tmp_path).read_text()
+    assert export(parts)[0]

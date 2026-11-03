@@ -33,7 +33,8 @@ PIVOTS = {"hinge_base": "swivel hinge plate base (2429)", "hinge_top": "swivel h
           "click_a": "click hinge plate (44301)", "click_b": "click hinge plate (44302)"}
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3} | {t: 1 for t in PIVOTS}
 ATTACHMENTS = {"wheel", "bush", "half_bush"}
-SUPPORTED = HEIGHT.keys() | ATTACHMENTS | {"axle"}
+BEAMS = {"liftarm": "Technic liftarm 1x{length} (thick)", "cross_block": "Technic cross block"}
+SUPPORTED = HEIGHT.keys() | ATTACHMENTS | {"axle"} | BEAMS.keys()
 
 
 def _validate_parts(parts: list[dict]) -> None:
@@ -65,6 +66,8 @@ def name(p: dict) -> str:
         return "Technic bush (3713)" if p["type"] == "bush" else "Technic half bush (32123a)"
     if p["type"] in PIVOTS:
         return f"{PIVOTS[p['type']]}, {color}"
+    if p["type"] in BEAMS:
+        return f"{BEAMS[p['type']].format(length=p.get('length', ''))}, {color}"
     if p["type"] not in HEIGHT:
         raise ValueError(f"unsupported instruction part: {p['type']}")
     a, b = sorted((p["w"], p["l"]))
