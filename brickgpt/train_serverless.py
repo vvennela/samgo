@@ -143,14 +143,18 @@ def main() -> None:
             try:
                 if state.get("adapter_path"):  # warm start from the snapshot saved when the last attempt ended
                     tc = service.create_lora_training_client(base_model=BASE_MODEL, rank=args.rank, alpha=32)
-                    tc.load_adapter(state["adapter_path"]).result()
+                    try:
+                        tc.load_adapter(state["adapter_path"]).result()
+                    except Exception:
+                        del tc  # never export a partial from a session whose warm start failed (blank adapter)
+                        raise
                     say(event="resumed", rows=state.get("rows"), session=getattr(service, "training_session_id", None))
                 else:
                     tc = service.create_lora_training_client(base_model=BASE_MODEL, rank=args.rank, alpha=32)
                     say(event="session", session=getattr(service, "training_session_id", None))
                 break
             except Exception as e:  # noqa: BLE001
-                if "RATE_LIMIT" not in str(e) and "429" not in str(e):
+                if "RATE_LIMIT" not in str(e) and "429" not in str(e) and "Retry the request" not in str(e):
                     raise
                 if attempt % 5 == 0:
                     say(event="waiting_for_slot", detail=str(e)[:160])
