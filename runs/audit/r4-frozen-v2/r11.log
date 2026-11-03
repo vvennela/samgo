@@ -1,0 +1,378 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+prefill_queue_duration is unavailable; AdaptiveConcurrencyController is using HTTP 429/503 and transport-error congestion signals instead
+{"model": "r11", "case": "car_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "car_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "car_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "car_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "car_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "car_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "train_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "train_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "train_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "train_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "train_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "train_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "chair_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "chair_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "chair_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "chair_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "chair_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "chair_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_chair_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_chair_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_chair_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_chair_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_chair_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_chair_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "bicycle_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "bicycle_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "bicycle_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "bicycle_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "bicycle_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "bicycle_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_bicycle_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_bicycle_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_bicycle_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_bicycle_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_bicycle_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_bicycle_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "door_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "door_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "door_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "door_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "door_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "door_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "tv_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "tv_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "tv_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "tv_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "tv_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "tv_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_tv_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_tv_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_tv_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_tv_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_tv_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_tv_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "laptop_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "laptop_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "laptop_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "laptop_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "laptop_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "laptop_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_laptop_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_laptop_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_laptop_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_laptop_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_laptop_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_laptop_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200006", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200007", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200008", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "skateboard_200009", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_skateboard_200000", "first": false, "feedback": false, "retry": false, "codes": ["invalid_edit_or_part"]}
+{"model": "r11", "case": "place_skateboard_200001", "first": false, "feedback": false, "retry": false, "codes": ["invalid_edit_or_part"]}
+{"model": "r11", "case": "place_skateboard_200002", "first": false, "feedback": false, "retry": false, "codes": ["connected", "rolls", "stands", "steer", "wheels", "wheels_spin"]}
+{"model": "r11", "case": "place_skateboard_200003", "first": false, "feedback": false, "retry": false, "codes": ["invalid_edit_or_part"]}
+{"model": "r11", "case": "place_skateboard_200004", "first": false, "feedback": false, "retry": false, "codes": ["invalid_edit_or_part"]}
+{"model": "r11", "case": "place_skateboard_200005", "first": false, "feedback": false, "retry": false, "codes": ["invalid_edit_or_part"]}
+{"model": "r11", "case": "place_skateboard_200006", "first": false, "feedback": false, "retry": false, "codes": ["connected", "rolls", "stands", "steer", "wheels", "wheels_spin"]}
+{"model": "r11", "case": "place_skateboard_200007", "first": false, "feedback": false, "retry": false, "codes": ["invalid_edit_or_part"]}
+{"model": "r11", "case": "place_skateboard_200008", "first": false, "feedback": false, "retry": false, "codes": ["invalid_edit_or_part"]}
+{"model": "r11", "case": "place_skateboard_200009", "first": false, "feedback": false, "retry": false, "codes": ["invalid_edit_or_part"]}
+{"model": "r11", "case": "microwave_200000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200006", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200007", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200008", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "microwave_200009", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_microwave_200000", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "stands"]}
+{"model": "r11", "case": "place_microwave_200001", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "stands", "structure"]}
+{"model": "r11", "case": "place_microwave_200002", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "door_swings", "stands", "structure", "turntable_turns"]}
+{"model": "r11", "case": "place_microwave_200003", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "stands", "structure"]}
+{"model": "r11", "case": "place_microwave_200004", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "door_swings", "stands", "structure", "turntable_turns"]}
+{"model": "r11", "case": "place_microwave_200005", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "stands", "structure", "turntable_turns"]}
+{"model": "r11", "case": "place_microwave_200006", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "door_swings", "stands", "structure", "turntable_turns"]}
+{"model": "r11", "case": "place_microwave_200007", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "door_swings", "stands", "structure"]}
+{"model": "r11", "case": "place_microwave_200008", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "stands", "structure"]}
+{"model": "r11", "case": "place_microwave_200009", "first": false, "feedback": false, "retry": false, "codes": ["connected", "dish", "door_0", "stands", "structure"]}
+{
+  "r10": {
+    "cases": 112,
+    "available": 111,
+    "first_pass": 87,
+    "failed_first": 24,
+    "empty_first_answers": 0,
+    "first_service_errors": 1,
+    "token_limit_responses": 0,
+    "feedback_recovered": 1,
+    "retry_recovered": 2,
+    "repeated_after_feedback": 19,
+    "output_tokens": 51892,
+    "first_error_counts": {
+      "connected": 20,
+      "dish": 10,
+      "door_0": 9,
+      "stands": 20,
+      "rolls": 10,
+      "steer": 10,
+      "wheels": 10,
+      "door_swings": 5,
+      "structure": 3,
+      "turntable_turns": 3,
+      "floating": 4,
+      "off_target": 2
+    }
+  },
+  "r11": {
+    "cases": 112,
+    "available": 112,
+    "first_pass": 92,
+    "failed_first": 20,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 12,
+    "output_tokens": 51519,
+    "first_error_counts": {
+      "connected": 12,
+      "dish": 10,
+      "door_0": 10,
+      "stands": 12,
+      "structure": 9,
+      "invalid_edit_or_part": 8,
+      "door_swings": 4,
+      "turntable_turns": 4,
+      "rolls": 2,
+      "steer": 2,
+      "wheels": 2,
+      "wheels_spin": 2
+    }
+  },
+  "r3": {
+    "cases": 112,
+    "available": 111,
+    "first_pass": 5,
+    "failed_first": 106,
+    "empty_first_answers": 0,
+    "first_service_errors": 1,
+    "token_limit_responses": 28,
+    "feedback_recovered": 6,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 54,
+    "output_tokens": 279233,
+    "first_error_counts": {
+      "connected": 68,
+      "screen": 23,
+      "screen_moves": 21,
+      "stands": 51,
+      "structure": 36,
+      "rolls": 13,
+      "steer": 22,
+      "wheels": 17,
+      "dish": 19,
+      "turntable_turns": 18,
+      "door_0": 17,
+      "door_swings": 10,
+      "wheels_spin": 15,
+      "casters_swivel": 7,
+      "floating": 12,
+      "off_target": 10,
+      "too_few_wheels": 12,
+      "missing_required_axles": 12,
+      "parse_error": 10,
+      "casters_spin": 4,
+      "running_gear": 11,
+      "spin": 5,
+      "wheels_in_line": 5,
+      "door_1": 6,
+      "doors_swing": 7,
+      "invalid_edit_or_part": 1,
+      "crank": 2,
+      "seat_is_moving_side": 3,
+      "seat_swivels": 3
+    }
+  },
+  "r4": {
+    "cases": 112,
+    "available": 112,
+    "first_pass": 87,
+    "failed_first": 25,
+    "empty_first_answers": 1,
+    "first_service_errors": 0,
+    "token_limit_responses": 1,
+    "feedback_recovered": 1,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 15,
+    "output_tokens": 59087,
+    "first_error_counts": {
+      "connected": 20,
+      "dish": 10,
+      "door_0": 9,
+      "door_swings": 9,
+      "stands": 20,
+      "structure": 10,
+      "turntable_turns": 10,
+      "rolls": 10,
+      "steer": 10,
+      "wheels": 10,
+      "wheels_spin": 10,
+      "parse_error": 1,
+      "floating": 4
+    }
+  },
+  "r5": {
+    "cases": 112,
+    "available": 101,
+    "first_pass": 80,
+    "failed_first": 21,
+    "empty_first_answers": 0,
+    "first_service_errors": 11,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 12,
+    "output_tokens": 53142,
+    "first_error_counts": {
+      "connected": 19,
+      "dish": 9,
+      "door_0": 8,
+      "door_swings": 8,
+      "stands": 19,
+      "structure": 9,
+      "turntable_turns": 8,
+      "rolls": 10,
+      "wheels": 10,
+      "wheels_spin": 10,
+      "casters_swivel": 1,
+      "steer": 5,
+      "invalid_edit_or_part": 1
+    }
+  },
+  "r6": {
+    "cases": 112,
+    "available": 112,
+    "first_pass": 86,
+    "failed_first": 26,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 2,
+    "retry_recovered": 2,
+    "repeated_after_feedback": 18,
+    "output_tokens": 63441,
+    "first_error_counts": {
+      "connected": 22,
+      "dish": 10,
+      "door_0": 8,
+      "door_swings": 8,
+      "stands": 20,
+      "structure": 10,
+      "turntable_turns": 10,
+      "rolls": 10,
+      "steer": 12,
+      "wheels": 10,
+      "wheels_spin": 10,
+      "overlap": 2,
+      "floating": 2
+    }
+  },
+  "r7": {
+    "cases": 112,
+    "available": 111,
+    "first_pass": 87,
+    "failed_first": 24,
+    "empty_first_answers": 0,
+    "first_service_errors": 1,
+    "token_limit_responses": 0,
+    "feedback_recovered": 2,
+    "retry_recovered": 2,
+    "repeated_after_feedback": 14,
+    "output_tokens": 55307,
+    "first_error_counts": {
+      "connected": 15,
+      "dish": 10,
+      "door_0": 10,
+      "stands": 15,
+      "structure": 10,
+      "invalid_edit_or_part": 5,
+      "door_swings": 4,
+      "turntable_turns": 3,
+      "floating": 4,
+      "rolls": 5,
+      "steer": 5,
+      "wheels": 5,
+      "wheels_spin": 4,
+      "off_target": 2
+    }
+  },
+  "r8": {
+    "cases": 112,
+    "available": 112,
+    "first_pass": 92,
+    "failed_first": 20,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 20,
+    "output_tokens": 57326,
+    "first_error_counts": {
+      "connected": 10,
+      "dish": 10,
+      "door_0": 10,
+      "stands": 10,
+      "structure": 10,
+      "invalid_edit_or_part": 10,
+      "door_swings": 7,
+      "turntable_turns": 6
+    }
+  },
+  "r9": {
+    "cases": 112,
+    "available": 112,
+    "first_pass": 88,
+    "failed_first": 24,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 1,
+    "retry_recovered": 1,
+    "repeated_after_feedback": 17,
+    "output_tokens": 58677,
+    "first_error_counts": {
+      "connected": 20,
+      "dish": 10,
+      "door_0": 10,
+      "stands": 20,
+      "structure": 9,
+      "rolls": 10,
+      "wheels": 10,
+      "wheels_spin": 7,
+      "door_swings": 4,
+      "turntable_turns": 5,
+      "overlap": 2,
+      "floating": 2,
+      "off_target": 1
+    }
+  }
+}

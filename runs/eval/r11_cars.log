@@ -1,0 +1,5 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+prefill_queue_duration is unavailable; AdaptiveConcurrencyController is using HTTP 429/503 and transport-error congestion signals instead
+{"round": 1, "passed_so_far": 48}
+{"round": 2, "passed_so_far": 50}
+{"model": "vvennela/run-736d451107854752b6ba9b0cb0ad5b78/objects-r11-tuned-d5f4be8e", "n": 50, "passed_first_try": 48, "passed_within_rounds": 50, "rounds": 3, "valid_edit_lists": 50, "output_tokens": 21184}

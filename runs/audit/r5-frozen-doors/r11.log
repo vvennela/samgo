@@ -1,0 +1,145 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+prefill_queue_duration is unavailable; AdaptiveConcurrencyController is using HTTP 429/503 and transport-error congestion signals instead
+DeploymentSampler request e0d4e1750668476298867b1079fcdf30: Transient HTTP 503 (attempt 1/7); retrying after 5.0s.
+{"model": "r11", "case": "place_door_var_100000", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100001", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100002", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100003", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100004", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100005", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100006", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100007", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100008", "first": true, "feedback": null, "retry": null, "codes": []}
+{"model": "r11", "case": "place_door_var_100009", "first": true, "feedback": null, "retry": null, "codes": []}
+{
+  "r10": {
+    "cases": 10,
+    "available": 10,
+    "first_pass": 10,
+    "failed_first": 0,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 0,
+    "output_tokens": 6180,
+    "first_error_counts": {}
+  },
+  "r11": {
+    "cases": 10,
+    "available": 10,
+    "first_pass": 10,
+    "failed_first": 0,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 0,
+    "output_tokens": 6180,
+    "first_error_counts": {}
+  },
+  "r4": {
+    "cases": 10,
+    "available": 10,
+    "first_pass": 0,
+    "failed_first": 10,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 8,
+    "output_tokens": 26113,
+    "first_error_counts": {
+      "connected": 9,
+      "door_0": 9,
+      "door_1": 9,
+      "doors_swing": 8,
+      "stands": 9,
+      "structure": 10,
+      "running_gear": 7,
+      "wheels_spin": 2
+    }
+  },
+  "r5": {
+    "cases": 10,
+    "available": 10,
+    "first_pass": 7,
+    "failed_first": 3,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 3,
+    "output_tokens": 10654,
+    "first_error_counts": {
+      "structure": 3
+    }
+  },
+  "r6": {
+    "cases": 10,
+    "available": 10,
+    "first_pass": 8,
+    "failed_first": 2,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 2,
+    "output_tokens": 9542,
+    "first_error_counts": {
+      "structure": 2
+    }
+  },
+  "r7": {
+    "cases": 10,
+    "available": 9,
+    "first_pass": 9,
+    "failed_first": 0,
+    "empty_first_answers": 0,
+    "first_service_errors": 1,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 0,
+    "output_tokens": 5607,
+    "first_error_counts": {}
+  },
+  "r8": {
+    "cases": 10,
+    "available": 10,
+    "first_pass": 10,
+    "failed_first": 0,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 0,
+    "output_tokens": 6180,
+    "first_error_counts": {}
+  },
+  "r9": {
+    "cases": 10,
+    "available": 10,
+    "first_pass": 9,
+    "failed_first": 1,
+    "empty_first_answers": 0,
+    "first_service_errors": 0,
+    "token_limit_responses": 0,
+    "feedback_recovered": 0,
+    "retry_recovered": 0,
+    "repeated_after_feedback": 1,
+    "output_tokens": 7568,
+    "first_error_counts": {
+      "connected": 1,
+      "door_0": 1,
+      "doors_swing": 1,
+      "structure": 1
+    }
+  }
+}

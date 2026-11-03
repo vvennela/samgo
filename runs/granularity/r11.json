@@ -1,0 +1,864 @@
+[
+ {
+  "mechanism": "flap",
+  "level": "L0",
+  "parts_shown": 328,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 329,
+    "seconds": 10.0,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [28, 28, 19, 21, 0, 60]}, {\"op\": \"clear\", \"box\": [28, 36, 18, 18, 0, 60]}, {\"op\": \"clear\", \"box\": [28, 36, 22, 22, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 27, \"y\": 19, \"z\": 14, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 29, \"y\": 19, \"z\": 14, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 27, \"y\": 21, \"z\": 14, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 29, \"y\": 21, \"z\": 14, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      false,
+      "2 cell(s) occupied twice"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 306 (plate 6x2 at (x=29, y=19, z=14)) and your added (clip_plate 1x2 at (x=29, y=19, z=14)) fill the same cells: remove part 306 first (add a remove edit for it)",
+     "connected: these hinge parts hold nothing - their studs grip no other part, so they only hang on their partner: your added (bar_plate 1x2 at (x=27, y=19, z=14)); your added (bar_plate 1x2 at (x=27, y=21, z=14)); your added (clip_plate 1x2 at (x=29, y=21, z=14)) - put each on (or under) a part of the side it carries",
+     "connected: these parts are not attached to the rest of the model: your changed part 213 (plate 2x3 at (x=33, y=23, z=9)); input part 249 (plate 2x3 at (x=33, y=23, z=10)); input part 146 (plate 2x2 at (x=31, y=16, z=8)); your added (plate 1x3 at (x=32, y=15, z=9)) - each must share studs with a part that stays, or sit on a joint",
+     "horizontal_surfaces: the hinge at (x=28.5, y=19.0) studs cannot turn: the surface is still attached to the body by studs elsewhere; free it with a channel on every side but the hinge side (clear boxes) so the hinge is its only link",
+     "horizontal_surfaces: the hinge at (x=28.5, y=19.0) studs cannot turn: the surface is still attached to the body by studs elsewhere; free it with a channel on every side but the hinge side (clear boxes) so the hinge is its only link",
+     "horizontal_surfaces: the hinge at (x=28.5, y=19.0) studs cannot turn: the surface is still attached to the body by studs elsewhere; free it with a channel on every side but the hinge side (clear boxes) so the hinge is its only link"
+    ]
+   },
+   {
+    "round": 2,
+    "tokens": 329,
+    "seconds": 26.1,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [11, 11, 18, 21, 0, 60]}, {\"op\": \"clear\", \"box\": [11, 36, 17, 17, 0, 60]}, {\"op\": \"clear\", \"box\": [11, 36, 22, 22, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 10, \"y\": 18, \"z\": 15, \"facing\": \"+x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 12, \"y\": 18, \"z\": 15, \"facing\": \"-x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 10, \"y\": 19, \"z\": 15, \"facing\": \"+x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 12, \"y\": 19, \"z\": 15, \"facing\": \"-x\", \"color\": \"dark_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      false,
+      "2 cell(s) occupied twice"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      true,
+      "1 of 1 freed surfaces swing clear (sizes [72])"
+     ]
+    },
+    "feedback": [
+     "overlap: your added (bar_plate 1x2 at (x=10, y=18, z=15)) and your added (bar_plate 1x2 at (x=10, y=19, z=15)) fill the same cells: move one of them",
+     "overlap: your added (clip_plate 1x2 at (x=12, y=18, z=15)) and your added (clip_plate 1x2 at (x=12, y=19, z=15)) fill the same cells: move one of them",
+     "connected: these parts are not attached to the rest of the model: your changed part 213 (plate 2x3 at (x=33, y=23, z=9)); input part 249 (plate 2x3 at (x=33, y=23, z=10)); your added (plate 2x3 at (x=33, y=14, z=9)); input part 233 (plate 1x4 at (x=34, y=13, z=10)) - each must share studs with a part that stays, or sit on a joint"
+    ]
+   },
+   {
+    "round": 3,
+    "tokens": 329,
+    "seconds": 5.4,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [11, 11, 18, 21, 0, 60]}, {\"op\": \"clear\", \"box\": [11, 36, 17, 17, 0, 60]}, {\"op\": \"clear\", \"box\": [11, 36, 22, 22, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 10, \"y\": 18, \"z\": 15, \"facing\": \"+x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 12, \"y\": 18, \"z\": 15, \"facing\": \"-x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 10, \"y\": 20, \"z\": 15, \"facing\": \"+x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 12, \"y\": 20, \"z\": 15, \"facing\": \"-x\", \"color\": \"dark_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      true,
+      "1 of 1 freed surfaces swing clear (sizes [72])"
+     ]
+    },
+    "feedback": [
+     "connected: these parts are not attached to the rest of the model: your changed part 213 (plate 2x3 at (x=33, y=23, z=9)); input part 249 (plate 2x3 at (x=33, y=23, z=10)); your added (plate 2x3 at (x=33, y=14, z=9)); input part 233 (plate 1x4 at (x=34, y=13, z=10)) - each must share studs with a part that stays, or sit on a joint"
+    ]
+   }
+  ],
+  "passed": false
+ },
+ {
+  "mechanism": "flap",
+  "level": "L1",
+  "parts_shown": 159,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 329,
+    "seconds": 12.2,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [16, 18, 18, 18, 0, 60]}, {\"op\": \"clear\", \"box\": [15, 15, 18, 22, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 19, 18, 22, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 13, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 13, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 19, \"z\": 13, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 19, \"z\": 13, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      false,
+      "2 cell(s) occupied twice"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "overlap: your added (bar_plate 1x2 at (x=16, y=18, z=13)) and your added (bar_plate 1x2 at (x=16, y=19, z=13)) fill the same cells: move one of them",
+     "overlap: your added (clip_plate 1x2 at (x=17, y=18, z=13)) and your added (clip_plate 1x2 at (x=17, y=19, z=13)) fill the same cells: move one of them",
+     "connected: these parts are not attached to the rest of the model: your changed part 15 (plate 4x2 at (x=20, y=19, z=3)); your added (plate 1x1 at (x=24, y=19, z=3)); your added (plate 1x1 at (x=24, y=20, z=3)); input part 23 (plate 6x2 at (x=20, y=18, z=4)) - each must share studs with a part that stays, or sit on a joint",
+     "horizontal_surfaces: there is no hinge with a horizontal axis yet: put a bar plate on the body and a clip plate on the surface, at one height, facing each other with one empty stud between"
+    ]
+   },
+   {
+    "round": 2,
+    "tokens": 329,
+    "seconds": 23.5,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [16, 18, 18, 18, 0, 60]}, {\"op\": \"clear\", \"box\": [15, 15, 18, 22, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 19, 18, 22, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 13, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 13, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 20, \"z\": 13, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 20, \"z\": 13, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "connected: these parts are not attached to the rest of the model: your changed part 15 (plate 4x2 at (x=20, y=19, z=3)); your added (plate 1x1 at (x=24, y=19, z=3)); your added (plate 1x1 at (x=24, y=20, z=3)); input part 23 (plate 6x2 at (x=20, y=18, z=4)) - each must share studs with a part that stays, or sit on a joint",
+     "horizontal_surfaces: there is no hinge with a horizontal axis yet: put a bar plate on the body and a clip plate on the surface, at one height, facing each other with one empty stud between"
+    ]
+   },
+   {
+    "round": 3,
+    "tokens": 329,
+    "seconds": 6.7,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [17, 19, 18, 18, 0, 60]}, {\"op\": \"clear\", \"box\": [16, 16, 18, 22, 0, 60]}, {\"op\": \"clear\", \"box\": [20, 20, 18, 22, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 12, \"facing\": \"+x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 18, \"y\": 18, \"z\": 12, \"facing\": \"-x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 20, \"z\": 12, \"facing\": \"+x\", \"color\": \"dark_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 18, \"y\": 20, \"z\": 12, \"facing\": \"-x\", \"color\": \"dark_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      false,
+      "4 cell(s) occupied twice"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 151 (plate 2x2 at (x=17, y=19, z=12)) and your added (bar_plate 1x2 at (x=17, y=18, z=12)) fill the same cells: remove part 151 first (add a remove edit for it)",
+     "overlap: input part 151 (plate 2x2 at (x=17, y=19, z=12)) and your added (clip_plate 1x2 at (x=18, y=18, z=12)) fill the same cells: remove part 151 first (add a remove edit for it)",
+     "overlap: input part 151 (plate 2x2 at (x=17, y=19, z=12)) and your added (bar_plate 1x2 at (x=17, y=20, z=12)) fill the same cells: remove part 151 first (add a remove edit for it)",
+     "overlap: input part 151 (plate 2x2 at (x=17, y=19, z=12)) and your added (clip_plate 1x2 at (x=18, y=20, z=12)) fill the same cells: remove part 151 first (add a remove edit for it)",
+     "connected: these parts are not attached to the rest of the model: your changed part 15 (plate 4x2 at (x=21, y=19, z=3)); your changed part 23 (plate 4x2 at (x=21, y=18, z=4)); your added (plate 1x1 at (x=25, y=18, z=4)); your added (plate 1x1 at (x=25, y=19, z=4)) - each must share studs with a part that stays, or sit on a joint",
+     "horizontal_surfaces: there is no hinge with a horizontal axis yet: put a bar plate on the body and a clip plate on the surface, at one height, facing each other with one empty stud between"
+    ]
+   }
+  ],
+  "passed": false
+ },
+ {
+  "mechanism": "flap",
+  "level": "L2",
+  "parts_shown": 59,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 329,
+    "seconds": 16.1,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [19, 19, 8, 11, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 23, 7, 7, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 23, 12, 12, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 18, \"y\": 8, \"z\": 12, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 20, \"y\": 8, \"z\": 12, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 18, \"y\": 9, \"z\": 12, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 20, \"y\": 9, \"z\": 12, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      false,
+      "2 cell(s) occupied twice"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "overlap: your added (bar_plate 1x2 at (x=18, y=8, z=12)) and your added (bar_plate 1x2 at (x=18, y=9, z=12)) fill the same cells: move one of them",
+     "overlap: your added (clip_plate 1x2 at (x=20, y=8, z=12)) and your added (clip_plate 1x2 at (x=20, y=9, z=12)) fill the same cells: move one of them",
+     "connected: these hinge parts hold nothing - their studs grip no other part, so they only hang on their partner: your added (clip_plate 1x2 at (x=20, y=9, z=12)) - put each on (or under) a part of the side it carries",
+     "connected: these parts are not attached to the rest of the model: input part 44 (plate 2x1 at (x=19, y=6, z=10)); your added (plate 1x1 at (x=21, y=6, z=10)); input part 53 (plate 2x2 at (x=20, y=5, z=11)); input part 54 (plate 1x1 at (x=19, y=6, z=11)) - each must share studs with a part that stays, or sit on a joint",
+     "horizontal_surfaces: the 13 part(s) on the hinge at (x=19.5, y=8.0) studs hit your added (clip_plate 1x2 at (x=20, y=9, z=12)) when they swing: remove or shorten those to leave a gap",
+     "horizontal_surfaces: the hinge at (x=19.5, y=9.0) studs turns only parts you added; the surface must be parts of the input model, freed from it and hung on the hinge"
+    ]
+   },
+   {
+    "round": 2,
+    "tokens": 325,
+    "seconds": 19.7,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [16, 16, 9, 11, 0, 60]}, {\"op\": \"clear\", \"box\": [16, 23, 8, 8, 0, 60]}, {\"op\": \"clear\", \"box\": [16, 23, 12, 12, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 15, \"y\": 9, \"z\": 11, \"facing\": \"+x\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 18, \"y\": 9, \"z\": 11, \"facing\": \"-x\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 15, \"y\": 10, \"z\": 11, \"facing\": \"+x\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 18, \"y\": 10, \"z\": 11, \"facing\": \"-x\", \"color\": \"black\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      false,
+      "3 cell(s) occupied twice"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 52 (plate 2x1 at (x=18, y=9, z=11)) and your added (clip_plate 1x2 at (x=18, y=9, z=11)) fill the same cells: remove part 52 first (add a remove edit for it)",
+     "overlap: your added (bar_plate 1x2 at (x=15, y=9, z=11)) and your added (bar_plate 1x2 at (x=15, y=10, z=11)) fill the same cells: move one of them",
+     "overlap: your added (clip_plate 1x2 at (x=18, y=9, z=11)) and your added (clip_plate 1x2 at (x=18, y=10, z=11)) fill the same cells: move one of them",
+     "connected: these hinge parts hold nothing - their studs grip no other part, so they only hang on their partner: your added (bar_plate 1x2 at (x=15, y=9, z=11)); your added (bar_plate 1x2 at (x=15, y=10, z=11)) - put each on (or under) a part of the side it carries",
+     "connected: these parts are not attached to the rest of the model: your added (bar_plate 1x2 at (x=15, y=9, z=11)); your added (bar_plate 1x2 at (x=15, y=10, z=11)); your added (plate 3x1 at (x=17, y=9, z=5)); your added (plate 2x1 at (x=17, y=9, z=6)) - each must share studs with a part that stays, or sit on a joint",
+     "horizontal_surfaces: there is no hinge with a horizontal axis yet: put a bar plate on the body and a clip plate on the surface, at one height, facing each other with one empty stud between"
+    ]
+   },
+   {
+    "round": 3,
+    "tokens": 325,
+    "seconds": 5.5,
+    "repeat": true,
+    "text": "[{\"op\": \"clear\", \"box\": [16, 16, 9, 11, 0, 60]}, {\"op\": \"clear\", \"box\": [16, 23, 8, 8, 0, 60]}, {\"op\": \"clear\", \"box\": [16, 23, 12, 12, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 15, \"y\": 9, \"z\": 11, \"facing\": \"+x\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 18, \"y\": 9, \"z\": 11, \"facing\": \"-x\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 1, \"l\": 2, \"x\": 15, \"y\": 10, \"z\": 11, \"facing\": \"+x\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 1, \"l\": 2, \"x\": 18, \"y\": 10, \"z\": 11, \"facing\": \"-x\", \"color\": \"black\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      false,
+      "3 cell(s) occupied twice"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 52 (plate 2x1 at (x=18, y=9, z=11)) and your added (clip_plate 1x2 at (x=18, y=9, z=11)) fill the same cells: remove part 52 first (add a remove edit for it)",
+     "overlap: your added (bar_plate 1x2 at (x=15, y=9, z=11)) and your added (bar_plate 1x2 at (x=15, y=10, z=11)) fill the same cells: move one of them",
+     "overlap: your added (clip_plate 1x2 at (x=18, y=9, z=11)) and your added (clip_plate 1x2 at (x=18, y=10, z=11)) fill the same cells: move one of them",
+     "connected: these hinge parts hold nothing - their studs grip no other part, so they only hang on their partner: your added (bar_plate 1x2 at (x=15, y=9, z=11)); your added (bar_plate 1x2 at (x=15, y=10, z=11)) - put each on (or under) a part of the side it carries",
+     "connected: these parts are not attached to the rest of the model: your added (bar_plate 1x2 at (x=15, y=9, z=11)); your added (bar_plate 1x2 at (x=15, y=10, z=11)); your added (plate 3x1 at (x=17, y=9, z=5)); your added (plate 2x1 at (x=17, y=9, z=6)) - each must share studs with a part that stays, or sit on a joint",
+     "horizontal_surfaces: there is no hinge with a horizontal axis yet: put a bar plate on the body and a clip plate on the surface, at one height, facing each other with one empty stud between"
+    ]
+   }
+  ],
+  "passed": false
+ },
+ {
+  "mechanism": "flap",
+  "level": "L3",
+  "parts_shown": 59,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 329,
+    "seconds": 17.4,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [20, 20, 5, 9, 0, 60]}, {\"op\": \"clear\", \"box\": [20, 24, 4, 4, 0, 60]}, {\"op\": \"clear\", \"box\": [20, 24, 10, 10, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 18, \"y\": 7, \"z\": 12, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 21, \"y\": 7, \"z\": 12, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 18, \"y\": 8, \"z\": 12, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 21, \"y\": 8, \"z\": 12, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": true,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      true,
+      "1 of 1 freed surfaces swing clear (sizes [12])"
+     ]
+    },
+    "feedback": []
+   }
+  ],
+  "passed": true
+ },
+ {
+  "mechanism": "gear",
+  "level": "L0",
+  "parts_shown": 328,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 467,
+    "seconds": 23.4,
+    "repeat": false,
+    "text": "[{\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 22, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 25, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 19, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 19, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"axle\", \"axis\": \"x\", \"x\": 13, \"z\": 19, \"y\": 19, \"length\": 8}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 14, \"z\": 19, \"y\": 19, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 18, \"z\": 19, \"y\": 19, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 13, \"z\": 19, \"y\": 19}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 20, \"z\": 19, \"y\": 19}}]",
+    "edits": 9,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 9
+    },
+    "checks": {
+     "structure": [
+      false,
+      "22 cell(s) occupied twice; the axle at (13, 19, 19) passes through the solid plate at (15, 12, 20) ("
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "gear": [
+      false,
+      "2 wheels spin; wheels lowest: False"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 107 (plate 2x8 at (x=17, y=18, z=19)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 107 first (add a remove edit for it)",
+     "overlap: input part 108 (plate 1x8 at (x=16, y=18, z=19)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 108 first (add a remove edit for it)",
+     "overlap: input part 139 (plate 2x8 at (x=15, y=12, z=20)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 139 first (add a remove edit for it)",
+     "overlap: input part 151 (plate 8x2 at (x=17, y=18, z=20)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 151 first (add a remove edit for it)",
+     "overlap: input part 200 (plate 8x2 at (x=16, y=18, z=21)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 200 first (add a remove edit for it)",
+     "overlap: input part 200 (plate 8x2 at (x=16, y=18, z=21)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 200 first (add a remove edit for it)",
+     "overlap: 3 more overlapping pair(s) of the same kind",
+     "gear: 2 wheels spin; wheels lowest: False",
+     "  parts as low as the wheels: input part 0 (plate 2x6 at (x=15, y=17, z=12)); input part 1 (plate 1x4 at (x=17, y=18, z=12)); input part 2 (plate 3x2 at (x=15, y=21, z=13)) - the leg must be long enough that the wheels hang below everything"
+    ]
+   },
+   {
+    "round": 2,
+    "tokens": 467,
+    "seconds": 12.6,
+    "repeat": false,
+    "text": "[{\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 22, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 25, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 19, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 19, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"axle\", \"axis\": \"x\", \"x\": 13, \"y\": 19, \"z\": 19, \"length\": 8}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 14, \"y\": 19, \"z\": 19, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 18, \"y\": 19, \"z\": 19, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 13, \"y\": 19, \"z\": 19}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 20, \"y\": 19, \"z\": 19}}]",
+    "edits": 9,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 9
+    },
+    "checks": {
+     "structure": [
+      false,
+      "22 cell(s) occupied twice; the axle at (13, 19, 19) passes through the solid plate at (15, 12, 20) ("
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "gear": [
+      false,
+      "2 wheels spin; wheels lowest: False"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 107 (plate 2x8 at (x=17, y=18, z=19)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 107 first (add a remove edit for it)",
+     "overlap: input part 108 (plate 1x8 at (x=16, y=18, z=19)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 108 first (add a remove edit for it)",
+     "overlap: input part 139 (plate 2x8 at (x=15, y=12, z=20)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 139 first (add a remove edit for it)",
+     "overlap: input part 151 (plate 8x2 at (x=17, y=18, z=20)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 151 first (add a remove edit for it)",
+     "overlap: input part 200 (plate 8x2 at (x=16, y=18, z=21)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 200 first (add a remove edit for it)",
+     "overlap: input part 200 (plate 8x2 at (x=16, y=18, z=21)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 200 first (add a remove edit for it)",
+     "overlap: 3 more overlapping pair(s) of the same kind",
+     "gear: 2 wheels spin; wheels lowest: False",
+     "  parts as low as the wheels: input part 0 (plate 2x6 at (x=15, y=17, z=12)); input part 1 (plate 1x4 at (x=17, y=18, z=12)); input part 2 (plate 3x2 at (x=15, y=21, z=13)) - the leg must be long enough that the wheels hang below everything"
+    ]
+   },
+   {
+    "round": 3,
+    "tokens": 467,
+    "seconds": 8.1,
+    "repeat": true,
+    "text": "[{\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 22, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 25, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 19, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 19, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"axle\", \"axis\": \"x\", \"x\": 13, \"y\": 19, \"z\": 19, \"length\": 8}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 14, \"y\": 19, \"z\": 19, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 18, \"y\": 19, \"z\": 19, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 13, \"y\": 19, \"z\": 19}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 20, \"y\": 19, \"z\": 19}}]",
+    "edits": 9,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 9
+    },
+    "checks": {
+     "structure": [
+      false,
+      "22 cell(s) occupied twice; the axle at (13, 19, 19) passes through the solid plate at (15, 12, 20) ("
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "gear": [
+      false,
+      "2 wheels spin; wheels lowest: False"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 107 (plate 2x8 at (x=17, y=18, z=19)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 107 first (add a remove edit for it)",
+     "overlap: input part 108 (plate 1x8 at (x=16, y=18, z=19)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 108 first (add a remove edit for it)",
+     "overlap: input part 139 (plate 2x8 at (x=15, y=12, z=20)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 139 first (add a remove edit for it)",
+     "overlap: input part 151 (plate 8x2 at (x=17, y=18, z=20)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 151 first (add a remove edit for it)",
+     "overlap: input part 200 (plate 8x2 at (x=16, y=18, z=21)) and your added (technic_brick 1x2 at (x=16, y=18, z=19)) fill the same cells: remove part 200 first (add a remove edit for it)",
+     "overlap: input part 200 (plate 8x2 at (x=16, y=18, z=21)) and your added (technic_brick 1x2 at (x=17, y=18, z=19)) fill the same cells: remove part 200 first (add a remove edit for it)",
+     "overlap: 3 more overlapping pair(s) of the same kind",
+     "gear: 2 wheels spin; wheels lowest: False",
+     "  parts as low as the wheels: input part 0 (plate 2x6 at (x=15, y=17, z=12)); input part 1 (plate 1x4 at (x=17, y=18, z=12)); input part 2 (plate 3x2 at (x=15, y=21, z=13)) - the leg must be long enough that the wheels hang below everything"
+    ]
+   }
+  ],
+  "passed": false
+ },
+ {
+  "mechanism": "gear",
+  "level": "L1",
+  "parts_shown": 224,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 467,
+    "seconds": 23.4,
+    "repeat": false,
+    "text": "[{\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 15, \"y\": 17, \"z\": 6, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 15, \"y\": 17, \"z\": 9, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 15, \"y\": 17, \"z\": 3, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 17, \"z\": 3, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"axle\", \"axis\": \"x\", \"x\": 12, \"z\": 3, \"y\": 18, \"length\": 8}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 13, \"z\": 3, \"y\": 18, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 17, \"z\": 3, \"y\": 18, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 12, \"z\": 3, \"y\": 18}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 19, \"z\": 3, \"y\": 18}}]",
+    "edits": 9,
+    "valid": true,
+    "passed": true,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 9
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "gear": [
+      true,
+      "2 wheels spin; wheels lowest: True"
+     ]
+    },
+    "feedback": []
+   }
+  ],
+  "passed": true
+ },
+ {
+  "mechanism": "gear",
+  "level": "L2",
+  "parts_shown": 165,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 467,
+    "seconds": 27.6,
+    "repeat": false,
+    "text": "[{\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 19, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 22, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 16, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 16, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"axle\", \"axis\": \"x\", \"x\": 13, \"z\": 16, \"y\": 19, \"length\": 8}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 14, \"z\": 16, \"y\": 19, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 18, \"z\": 16, \"y\": 19, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 13, \"z\": 16, \"y\": 19}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 20, \"z\": 16, \"y\": 19}}]",
+    "edits": 9,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 9
+    },
+    "checks": {
+     "structure": [
+      false,
+      "34 cell(s) occupied twice; the axle at (13, 19, 16) passes through the solid plate at (19, 16, 17) ("
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "gear": [
+      false,
+      "2 wheels spin; wheels lowest: False"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 27 (plate 2x6 at (x=17, y=17, z=16)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 27 first (add a remove edit for it)",
+     "overlap: input part 28 (plate 2x6 at (x=15, y=17, z=16)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 28 first (add a remove edit for it)",
+     "overlap: input part 45 (plate 6x2 at (x=12, y=17, z=17)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 45 first (add a remove edit for it)",
+     "overlap: input part 45 (plate 6x2 at (x=12, y=17, z=17)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 45 first (add a remove edit for it)",
+     "overlap: input part 49 (plate 6x2 at (x=12, y=19, z=17)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 49 first (add a remove edit for it)",
+     "overlap: input part 49 (plate 6x2 at (x=12, y=19, z=17)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 49 first (add a remove edit for it)",
+     "overlap: 10 more overlapping pair(s) of the same kind",
+     "gear: 2 wheels spin; wheels lowest: False",
+     "  parts as low as the wheels: input part 0 (plate 2x6 at (x=15, y=17, z=12)); input part 1 (plate 1x4 at (x=17, y=18, z=12)); input part 2 (plate 3x2 at (x=15, y=21, z=13)) - the leg must be long enough that the wheels hang below everything"
+    ]
+   },
+   {
+    "round": 2,
+    "tokens": 467,
+    "seconds": 8.4,
+    "repeat": false,
+    "text": "[{\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 19, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 22, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 16, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 16, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"axle\", \"axis\": \"x\", \"x\": 13, \"y\": 19, \"z\": 16, \"length\": 8}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 14, \"y\": 19, \"z\": 16, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 18, \"y\": 19, \"z\": 16, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 13, \"y\": 19, \"z\": 16}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 20, \"y\": 19, \"z\": 16}}]",
+    "edits": 9,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 9
+    },
+    "checks": {
+     "structure": [
+      false,
+      "34 cell(s) occupied twice; the axle at (13, 19, 16) passes through the solid plate at (19, 16, 17) ("
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "gear": [
+      false,
+      "2 wheels spin; wheels lowest: False"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 27 (plate 2x6 at (x=17, y=17, z=16)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 27 first (add a remove edit for it)",
+     "overlap: input part 28 (plate 2x6 at (x=15, y=17, z=16)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 28 first (add a remove edit for it)",
+     "overlap: input part 45 (plate 6x2 at (x=12, y=17, z=17)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 45 first (add a remove edit for it)",
+     "overlap: input part 45 (plate 6x2 at (x=12, y=17, z=17)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 45 first (add a remove edit for it)",
+     "overlap: input part 49 (plate 6x2 at (x=12, y=19, z=17)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 49 first (add a remove edit for it)",
+     "overlap: input part 49 (plate 6x2 at (x=12, y=19, z=17)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 49 first (add a remove edit for it)",
+     "overlap: 10 more overlapping pair(s) of the same kind",
+     "gear: 2 wheels spin; wheels lowest: False",
+     "  parts as low as the wheels: input part 0 (plate 2x6 at (x=15, y=17, z=12)); input part 1 (plate 1x4 at (x=17, y=18, z=12)); input part 2 (plate 3x2 at (x=15, y=21, z=13)) - the leg must be long enough that the wheels hang below everything"
+    ]
+   },
+   {
+    "round": 3,
+    "tokens": 467,
+    "seconds": 8.0,
+    "repeat": true,
+    "text": "[{\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 19, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 22, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 16, \"y\": 18, \"z\": 16, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 1, \"l\": 2, \"x\": 17, \"y\": 18, \"z\": 16, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"axle\", \"axis\": \"x\", \"x\": 13, \"y\": 19, \"z\": 16, \"length\": 8}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 14, \"y\": 19, \"z\": 16, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"x\", \"x\": 18, \"y\": 19, \"z\": 16, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 13, \"y\": 19, \"z\": 16}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"x\", \"x\": 20, \"y\": 19, \"z\": 16}}]",
+    "edits": 9,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 9
+    },
+    "checks": {
+     "structure": [
+      false,
+      "34 cell(s) occupied twice; the axle at (13, 19, 16) passes through the solid plate at (19, 16, 17) ("
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "gear": [
+      false,
+      "2 wheels spin; wheels lowest: False"
+     ]
+    },
+    "feedback": [
+     "overlap: input part 27 (plate 2x6 at (x=17, y=17, z=16)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 27 first (add a remove edit for it)",
+     "overlap: input part 28 (plate 2x6 at (x=15, y=17, z=16)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 28 first (add a remove edit for it)",
+     "overlap: input part 45 (plate 6x2 at (x=12, y=17, z=17)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 45 first (add a remove edit for it)",
+     "overlap: input part 45 (plate 6x2 at (x=12, y=17, z=17)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 45 first (add a remove edit for it)",
+     "overlap: input part 49 (plate 6x2 at (x=12, y=19, z=17)) and your added (technic_brick 1x2 at (x=16, y=18, z=16)) fill the same cells: remove part 49 first (add a remove edit for it)",
+     "overlap: input part 49 (plate 6x2 at (x=12, y=19, z=17)) and your added (technic_brick 1x2 at (x=17, y=18, z=16)) fill the same cells: remove part 49 first (add a remove edit for it)",
+     "overlap: 10 more overlapping pair(s) of the same kind",
+     "gear: 2 wheels spin; wheels lowest: False",
+     "  parts as low as the wheels: input part 0 (plate 2x6 at (x=15, y=17, z=12)); input part 1 (plate 1x4 at (x=17, y=18, z=12)); input part 2 (plate 3x2 at (x=15, y=21, z=13)) - the leg must be long enough that the wheels hang below everything"
+    ]
+   }
+  ],
+  "passed": false
+ },
+ {
+  "mechanism": "gear",
+  "level": "L3",
+  "parts_shown": 165,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 467,
+    "seconds": 30.6,
+    "repeat": false,
+    "text": "[{\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 14, \"y\": 18, \"z\": 6, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"brick\", \"w\": 2, \"l\": 2, \"x\": 14, \"y\": 18, \"z\": 9, \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 2, \"l\": 1, \"x\": 14, \"y\": 18, \"z\": 3, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"technic_brick\", \"w\": 2, \"l\": 1, \"x\": 14, \"y\": 19, \"z\": 3, \"color\": \"black\", \"hole\": \"round\"}}, {\"op\": \"add\", \"part\": {\"type\": \"axle\", \"axis\": \"y\", \"x\": 15, \"z\": 3, \"y\": 15, \"length\": 8}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"y\", \"x\": 15, \"z\": 3, \"y\": 16, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"wheel\", \"axis\": \"y\", \"x\": 15, \"z\": 3, \"y\": 20, \"size\": \"30.4x14\", \"color\": \"black\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"y\", \"x\": 15, \"z\": 3, \"y\": 15}}, {\"op\": \"add\", \"part\": {\"type\": \"bush\", \"axis\": \"y\", \"x\": 15, \"z\": 3, \"y\": 22}}]",
+    "edits": 9,
+    "valid": true,
+    "passed": true,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 9
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "gear": [
+      true,
+      "2 wheels spin; wheels lowest: True"
+     ]
+    },
+    "feedback": []
+   }
+  ],
+  "passed": true
+ },
+ {
+  "mechanism": "flap",
+  "level": "S2",
+  "parts_shown": 98,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 329,
+    "seconds": 34.3,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [19, 19, 10, 14, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 23, 9, 9, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 23, 15, 15, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 17, \"y\": 10, \"z\": 11, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 20, \"y\": 10, \"z\": 11, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 17, \"y\": 14, \"z\": 11, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 20, \"y\": 14, \"z\": 11, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "connected: these hinge parts hold nothing - their studs grip no other part, so they only hang on their partner: your added (bar_plate 2x1 at (x=17, y=14, z=11)); your added (clip_plate 2x1 at (x=20, y=14, z=11)) - put each on (or under) a part of the side it carries",
+     "connected: these parts are not attached to the rest of the model: your added (bar_plate 2x1 at (x=17, y=14, z=11)); your added (clip_plate 2x1 at (x=20, y=14, z=11)) - each must share studs with a part that stays, or sit on a joint",
+     "horizontal_surfaces: the hinge at (x=19.5, y=10.0) studs turns only parts you added; the surface must be parts of the input model, freed from it and hung on the hinge",
+     "horizontal_surfaces: the hinge at (x=19.5, y=14.0) studs turns only parts you added; the surface must be parts of the input model, freed from it and hung on the hinge"
+    ]
+   },
+   {
+    "round": 2,
+    "tokens": 329,
+    "seconds": 8.2,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [19, 19, 10, 14, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 23, 9, 9, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 23, 15, 15, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 17, \"y\": 10, \"z\": 11, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 20, \"y\": 10, \"z\": 11, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 17, \"y\": 11, \"z\": 11, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 20, \"y\": 11, \"z\": 11, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "connected: these hinge parts hold nothing - their studs grip no other part, so they only hang on their partner: your added (clip_plate 2x1 at (x=20, y=11, z=11)) - put each on (or under) a part of the side it carries",
+     "horizontal_surfaces: the hinge at (x=19.5, y=10.0) studs turns only parts you added; the surface must be parts of the input model, freed from it and hung on the hinge",
+     "horizontal_surfaces: the hinge at (x=19.5, y=11.0) studs turns only parts you added; the surface must be parts of the input model, freed from it and hung on the hinge"
+    ]
+   },
+   {
+    "round": 3,
+    "tokens": 329,
+    "seconds": 4.5,
+    "repeat": true,
+    "text": "[{\"op\": \"clear\", \"box\": [19, 19, 10, 14, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 23, 9, 9, 0, 60]}, {\"op\": \"clear\", \"box\": [19, 23, 15, 15, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 17, \"y\": 10, \"z\": 11, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 20, \"y\": 10, \"z\": 11, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 17, \"y\": 11, \"z\": 11, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 20, \"y\": 11, \"z\": 11, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": false,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      false,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      false,
+      "0 of 1 freed surfaces swing clear (sizes [])"
+     ]
+    },
+    "feedback": [
+     "connected: these hinge parts hold nothing - their studs grip no other part, so they only hang on their partner: your added (clip_plate 2x1 at (x=20, y=11, z=11)) - put each on (or under) a part of the side it carries",
+     "horizontal_surfaces: the hinge at (x=19.5, y=10.0) studs turns only parts you added; the surface must be parts of the input model, freed from it and hung on the hinge",
+     "horizontal_surfaces: the hinge at (x=19.5, y=11.0) studs turns only parts you added; the surface must be parts of the input model, freed from it and hung on the hinge"
+    ]
+   }
+  ],
+  "passed": false
+ },
+ {
+  "mechanism": "flap",
+  "level": "S3",
+  "parts_shown": 98,
+  "rounds": [
+   {
+    "round": 1,
+    "tokens": 329,
+    "seconds": 36.1,
+    "repeat": false,
+    "text": "[{\"op\": \"clear\", \"box\": [17, 17, 10, 14, 0, 60]}, {\"op\": \"clear\", \"box\": [17, 22, 9, 9, 0, 60]}, {\"op\": \"clear\", \"box\": [17, 22, 15, 15, 0, 60]}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 15, \"y\": 11, \"z\": 11, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 18, \"y\": 11, \"z\": 11, \"facing\": \"-x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"bar_plate\", \"w\": 2, \"l\": 1, \"x\": 15, \"y\": 12, \"z\": 11, \"facing\": \"+x\", \"color\": \"light_gray\"}}, {\"op\": \"add\", \"part\": {\"type\": \"clip_plate\", \"w\": 2, \"l\": 1, \"x\": 18, \"y\": 12, \"z\": 11, \"facing\": \"-x\", \"color\": \"light_gray\"}}]",
+    "edits": 7,
+    "valid": true,
+    "passed": true,
+    "ops": {
+     "remove": 0,
+     "set": 0,
+     "add": 4
+    },
+    "checks": {
+     "structure": [
+      true,
+      "valid parts, no overlaps"
+     ],
+     "connected": [
+      true,
+      "one structure through studs and joints"
+     ],
+     "horizontal_surfaces": [
+      true,
+      "1 of 1 freed surfaces swing clear (sizes [13])"
+     ]
+    },
+    "feedback": []
+   }
+  ],
+  "passed": true
+ }
+]
