@@ -158,18 +158,23 @@ def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric
         mesh.apply_translation([0, (studs - width) / 2, 0])
         shape[1] = studs
 
-    count = int(np.clip(mesh.area * SAMPLES_PER_CELL_AREA, 20_000, 2_000_000))
-    points, faces = trimesh.sample.sample_surface(mesh, count, seed=seed)
-    bary = trimesh.triangles.points_to_barycentric(mesh.triangles[faces], points)
+    # Enough samples for every surface cell at any size (a fixed cap left gaps in big models' shells, so their
+    # insides could not be filled); drawn in chunks so memory stays flat.
+    count = int(max(mesh.area * SAMPLES_PER_CELL_AREA, 20_000))
     vertex_rgb = mesh.visual.vertex_colors[:, :3].astype(float)
-    point_rgb = (bary[:, :, None] * vertex_rgb[mesh.faces[faces]]).sum(1)
-
-    # Snap each sample to the palette, then let the samples in a cell vote.
-    # Averaging RGB first would turn a red/blue edge into a muddy third color.
-    cells = np.clip(np.floor(points).astype(int), 0, shape - 1)
-    flat = np.ravel_multi_index(cells.T, shape)
     n = len(COLORS)
-    votes = np.bincount(flat * n + nearest_color(point_rgb) - 1, minlength=np.prod(shape) * n).reshape(-1, n)
+    votes = np.zeros(int(np.prod(shape)) * n, dtype=np.int64)
+    chunk = 2_000_000
+    for k, start in enumerate(range(0, count, chunk)):
+        points, faces = trimesh.sample.sample_surface(mesh, min(chunk, count - start), seed=seed + k)
+        bary = trimesh.triangles.points_to_barycentric(mesh.triangles[faces], points)
+        point_rgb = (bary[:, :, None] * vertex_rgb[mesh.faces[faces]]).sum(1)
+        # Snap each sample to the palette, then let the samples in a cell vote.
+        # Averaging RGB first would turn a red/blue edge into a muddy third color.
+        cells = np.clip(np.floor(points).astype(int), 0, shape - 1)
+        flat = np.ravel_multi_index(cells.T, shape)
+        votes += np.bincount(flat * n + nearest_color(point_rgb) - 1, minlength=votes.size)
+    votes = votes.reshape(-1, n)
     surface = (votes.sum(1) > 0).reshape(shape)
     surface_color = (votes.argmax(1) + 1).reshape(shape)
 
