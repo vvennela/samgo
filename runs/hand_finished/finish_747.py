@@ -122,7 +122,7 @@ def main():
         occ = g > 0
     g[:, Y // 2:, :] = g[:, Y // 2 - 1::-1, :]  # exactly mirror-symmetric (the right half is the mirror of the left)
     print("pods", pods, "symmetric", bool((g == g[:, ::-1, :]).all()), flush=True)
-    body = build(g, attempts=1, pull=lambda p: 0.0).pieces
+    body = build(g, attempts=4).pieces  # layouts ranked by stud pull standing on the table (S3b)
     body = [dict(p, color="trans_clear") if p.get("color") == GLASS else p for p in body]
     print("body", len(body), flush=True)
     json.dump(body, open(sys.argv[1].replace(".json", "_body.json"), "w"))
@@ -130,6 +130,10 @@ def main():
     for (xf, yc, z0, _) in pods:
         for dz in (0, 1, -1):  # the bearing at the hollow's centre, else a plate up or down (the brickwork differs)
             edits = answer("+x", xf - 3, yc - 1, z0 + dz, color="dark_gray", arm_color="light_gray")
+            # the fan: a spoked rim (24 mm) locked on the axle filling the intake, in place of the two arms
+            edits = [e for e in edits if e.get("part", {}).get("type") != "liftarm"] + [
+                {"op": "add", "part": {"type": "wheel", "axis": "x", "x": xf - 2, "y": yc, "z": z0 + dz,
+                                       "size": "24x14", "color": "light_gray"}}]
             a = apply_edits(body, edits)
             v = check(body, a.parts, a.sources, [{"name": "fan", "kind": "rotor", "axis": "horizontal", "count": 1}],
                       stand=False)

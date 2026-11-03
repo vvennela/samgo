@@ -55,7 +55,7 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
     """Generic verdicts. `sources[i]`: the original index of candidate part i (None if added). `crop`: the parts are
     a neighbourhood cut out of a bigger model (it need not reach the table, and may be in pieces that join outside
     it): connected then means the edit made no new separate piece and left no joint half holding nothing."""
-    from .kinematics import _sides, analyse, connected, locked, requirement_met, sweep
+    from .kinematics import _sides, analyse, connected, locked, on_wheels, requirement_met, sweep
     from .mechanism_bases import PIVOT_AS, structural
     from .stability import stability
     from .technic import structural as technic_structural, verify_function
@@ -80,7 +80,7 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
     else:
         out["connected"] = (connected(parts), "one structure through studs and joints")
     if stand:
-        st = stability(locked(parts, PIVOT_AS), vehicle=any(p["type"] == "wheel" for p in parts))
+        st = stability(locked(parts, PIVOT_AS), vehicle=on_wheels(parts))
     else:  # a part-level task: the whole object's balance is checked when every mechanism is in
         from types import SimpleNamespace
         st = SimpleNamespace(passed=True, issues=[])

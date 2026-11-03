@@ -149,6 +149,10 @@ def motions(parts: list[dict], budget: float = 20.0) -> list[dict]:
                 and types <= SPIN_PARTS | ROTOR_ARMS | {"bush"}
                 and all(wheel_axis_matches(parts[i], point, axis)
                         for i in moving if parts[i].get("type") == "wheel"))
+        # blades on a turntable's turning half (an upright rotor) also make full turns
+        spin = spin or bool(types & {"turntable_top", "turntable_base"}
+                            and types <= {"turntable_top", "turntable_base", "plate", "tile"}
+                            and abs(float(np.asarray(axis, float)[2])) > 0.9)
         deg = next((sign * d for d in ((360,) if spin else SWINGS) for sign in (1, -1)
                     if time.monotonic() - t0 < budget
                     and sweep(parts, moving, point, axis, sign * d, ignore=partners, wheels=True) is None), None)

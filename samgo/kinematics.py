@@ -557,7 +557,7 @@ def requirement_met(parts: list[dict], req: dict) -> tuple[bool, str]:
 
 def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
     """Rotors: an axle turning in round holes with something locked on it (an axle hole: a liftarm, a cross block,
-    a hub) that turns all the way round clear of every other part and above the model's lowest point (the table).
+    a hub: a rim is a fan disc) that turns all the way round clear of every other part and above the model's lowest point (the table).
     Parts spinning loose on the axle, or an axle with nothing on it, are not rotors. Returns (count, why)."""
     bodies, joints = analyse(parts)
     ground = min((box(p)[0][2] for p in parts if p.get("type") in HEIGHT), default=0.0)
@@ -587,7 +587,7 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
                 continue
         elif not locked:
             continue  # a part turning loose on an axle, a hinge: not a rotor
-        elif not {parts[i].get("type") for m in locked for i in m} & (HEIGHT.keys() | BEAMS):
+        elif not {parts[i].get("type") for m in locked for i in m} & (HEIGHT.keys() | BEAMS | {"wheel"}):
             why = "nothing is locked on the axle"
             continue
         if sweep(parts, moving, point, ax, 360, steps=24, ignore=partners) is not None:
@@ -598,7 +598,8 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
             continue
         n = np.asarray(ax, float) / np.linalg.norm(ax)
         K = np.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
-        pts = np.vstack([_corners(parts[i]) for i in moving if parts[i].get("type") in HEIGHT.keys() | BEAMS])
+        pts = np.vstack([_corners(parts[i]) for i in moving
+                         if parts[i].get("type") in HEIGHT.keys() | BEAMS | {"wheel"}])
         low = min(((pts - point) @ (np.eye(3) + np.sin(t) * K + (1 - np.cos(t)) * K @ K).T + point)[:, 2].min()
                   for t in np.radians(np.arange(0, 360, 15)))
         if low < ground - TOL:
@@ -623,6 +624,17 @@ def _hit(parts: list[dict], moving: list[int], point: np.ndarray, ignore=()) -> 
                 hit.append(j)
     names = [f"{parts[j]['type']} at (x={parts[j]['x']}, y={parts[j]['y']}, z={parts[j]['z']})" for j in hit[:3]]
     return ", ".join(names) or "a part"
+
+
+def on_wheels(parts: list[dict]) -> bool:
+    """Does the model stand on wheels: some wheel reaches as low as the lowest other part (a rim used as a fan disc,
+    up in the model, is not a road wheel)."""
+    wheels = [p for p in parts if p.get("type") == "wheel"]
+    if not wheels:
+        return False
+    rest = [box(p)[0][2] for p in parts if p.get("type") in HEIGHT]
+    floor = min(rest, default=0.0)
+    return any(box(w)[0][2] <= floor + TOL for w in wheels)
 
 
 JOINT_HALVES = {"bar_plate", "clip_plate", "hinge_base", "hinge_top", "click_a", "click_b", "turntable_base",

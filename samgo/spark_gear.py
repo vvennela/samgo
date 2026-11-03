@@ -186,9 +186,9 @@ def build(photo: Path, parts: list[dict], obj: str, sampler, work: Path, loop, r
 
 
 def stands(parts: list[dict]) -> dict:
-    from .kinematics import locked
+    from .kinematics import locked, on_wheels
     from .mechanism_bases import PIVOT_AS
     from .stability import stability
 
-    st = stability(locked(parts, PIVOT_AS), vehicle=any(p["type"] == "wheel" for p in parts))
+    st = stability(locked(parts, PIVOT_AS), vehicle=on_wheels(parts))
     return {"passed": st.passed, "issues": [i.message for i in st.issues][:4]}
