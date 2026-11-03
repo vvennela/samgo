@@ -158,6 +158,7 @@ def build(photo: Path, parts: list[dict], obj: str, sampler, work: Path, loop, r
     report = {"spark": sp, "legs": []}
     if "legs" not in sp or not sp["legs"]:
         return parts, report
+    unraised = parts
     parts, lift = raised(parts)
     report["lift"] = lift
     taken = []
@@ -174,6 +175,9 @@ def build(photo: Path, parts: list[dict], obj: str, sampler, work: Path, loop, r
         entry.update(site=s, instruction=instruction, passed=rec["passed"], rounds=rec["rounds"])
         if rec["passed"]:
             parts = rec["parts"]
+    if not any(e.get("passed") for e in report["legs"]):  # nothing built: the model stays where it was
+        report.pop("lift")
+        return unraised, report
     report["stands"] = stands(parts)
     return parts, report
 

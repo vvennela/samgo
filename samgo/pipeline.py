@@ -443,8 +443,9 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         reports['assembly_access'] = {
             'status': 'certified_vertical_envelope_path' if formal['passed'] else 'not_certified',
             'physical_validation': 'not_performed'}
-        summary['passed'] = passed and summary.get('assembly_passed', True) and summary.get('doors_passed', True) \
-            and summary.get('mechanism_passed', True)
+        # A flag left None was not applicable to this object (no running gear, doors or family mechanism).
+        summary['passed'] = passed and all(summary.get(k) is not False
+                                           for k in ('assembly_passed', 'doors_passed', 'mechanism_passed'))
         if require_certificate:
             summary['passed'] = summary['passed'] and formal['passed']
         summary.update(structure_passed=reports['structure']['passed'],
