@@ -131,7 +131,9 @@ def attempt(body: list[dict], local: list[int], instruction: str, sampler, round
             entry["passed"] = all(x[0] for x in keep.values())
             issues = explain(body, a.parts, a.sources, a.changed, keep, local)
             if entry["passed"]:
-                record.update(passed=True, parts=a.parts)
+                edits = edits_from(s.text)
+                record.update(passed=True, parts=a.parts, edits=[  # in the whole model's indices, to merge later
+                    e | {"index": local[e["index"]]} if "index" in e else e for e in edits])
         except Exception as e:  # noqa: BLE001 - unparsable or invalid answers are verdicts too
             entry["passed"] = False
             issues = [f"answer: {type(e).__name__}: {e}"[:200]]
@@ -170,85 +172,127 @@ def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler,
         loop.close()
 
 
-def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale=1.0):
+def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop, scale=1.0, workers: int = 8):
+    """Every mechanism Spark names, in parallel against the same model: Spark's layouts all at once, the spots,
+    then Glimmer's attempts (each with its own feedback rounds) at once; the passing edit lists are merged and the
+    merged model is checked again as a whole (one at a time, in Spark's order, if they conflict)."""
+    from concurrent.futures import ThreadPoolExecutor
+
     from .flap_data import _view, instruction
     from .part_layout import ask as ask_layout
     from .part_layout import handoff
     from .primitives import frame
+    from .rotor_data import ROTOR, rotor_site
+    from .rotor_data import instruction as rotor_instruction
 
     named = loop.run_until_complete(name_regions(photo, labels, obj, work))
-    report = {"regions": named.get("regions"), "error": named.get("error"), "surfaces": [], "unsupported": []}
+    report = {"regions": named.get("regions"), "error": named.get("error"), "surfaces": [], "unsupported": [],
+              "rotors": []}
     if "regions" not in named:
         return parts, report
-    jobs = [(r, d["part"], h) for r, d in sorted(named["regions"].items()) for h in d["hinged"]]
-    for region, part, h in jobs:
-        if h.get("axis") != "horizontal":
-            report["unsupported"].append({"region": region, "part": part, **h, "why": "only horizontal hinges"})
-            continue
-        if len([s for s in report["surfaces"] if s.get("passed")]) >= max_surfaces:
-            break
-        entry = {"region": region, "part": part, **h}
-        report["surfaces"].append(entry)
-        ids = [i for i, r in enumerate(region_of_parts(parts, labels)) if r == region]
-        if not ids:
-            entry["error"] = "no parts in the region"
-            continue
-        sp = loop.run_until_complete(ask_layout(photo, parts, ids, work / f"layout_{region}_{h['name']}", obj=obj, part=part,
-                                    mech=h["name"], where=h.get("where", "")))
+    region_of = region_of_parts(parts, labels)
+    jobs = []  # (kind, entry, ids, layout coroutine args)
+    for r, d in sorted(named["regions"].items()):
+        for h in d["hinged"]:
+            if h.get("axis") != "horizontal":
+                report["unsupported"].append({"region": r, "part": d["part"], **h, "why": "only horizontal hinges"})
+                continue
+            entry = {"region": r, "part": d["part"], **h}
+            report["surfaces"].append(entry)
+            jobs.append(("surface", entry, [i for i, x in enumerate(region_of) if x == r],
+                         dict(mech=h["name"], folder=f"layout_{r}_{h['name']}")))
+        for h in d.get("spinning", []):
+            entry = {"region": r, "part": d["part"], **h}
+            if len(report["rotors"]) >= 4:
+                break
+            report["rotors"].append(entry)
+            if h.get("axis") == "vertical":
+                entry["error"] = "only horizontal axles yet"
+                continue
+            jobs.append(("rotor", entry, [i for i, x in enumerate(region_of) if x == r],
+                         dict(mech=f"{h['name']} (a part that spins on an axle)", folder=f"rotor_{r}_{h['name']}")))
+    jobs = [j for j in jobs if j[2] or j[1].update(error="no parts in the region")]
+
+    async def layouts():
+        return await asyncio.gather(*[ask_layout(photo, parts, ids, work / a["folder"], obj=obj, part=e["part"],
+                                                 mech=a["mech"], where=e.get("where", "")) for _, e, ids, a in jobs])
+
+    sizes = dict(lengths=tuple(sorted({round(n * scale) for n in (3, 4, 5)})),
+                 chords=tuple(sorted({round(n * scale) for n in (2, 3, 4)})))
+    tasks = []  # (entry, view, text, reqs)
+    for (kind, entry, ids, _), sp in zip(jobs, loop.run_until_complete(layouts())):
         entry["spark_layout"] = sp
-        sizes = dict(lengths=tuple(sorted({round(n * scale) for n in (3, 4, 5)})),
-                     chords=tuple(sorted({round(n * scale) for n in (2, 3, 4)})))
-        hand = handoff(parts, ids, sp, **sizes) if "error" not in sp else None
-        if hand is None:
-            entry["error"] = "no buildable site on that edge"
-            continue
-        swap, mirror, n = hand["frame"]
-        view = _view(frame(parts, swap, mirror, n), hand["site"], "L2", set(ids))
-        text = instruction("L2", obj, hand["site"], (swap, mirror, n))
-        rec = attempt(parts, view, text, sampler, rounds=rounds)
-        entry.update(handoff={"edge": hand["edge"], "rows": hand["rows"]}, passed=rec["passed"],
-                     rounds=rec["rounds"], instruction=text)
-        if rec["passed"]:
-            parts = rec["parts"]
-    parts = _rotors(photo, parts, obj, sampler, work, rounds, labels, loop, named, report)
+        if kind == "surface":
+            hand = handoff(parts, ids, sp, **sizes) if "error" not in sp else None
+            if hand is None:
+                entry["error"] = "no buildable site on that edge"
+                continue
+            swap, mirror, n = hand["frame"]
+            entry["handoff"] = {"edge": hand["edge"], "rows": hand["rows"]}
+            tasks.append((entry, _view(frame(parts, swap, mirror, n), hand["site"], "L2", set(ids)),
+                          instruction("L2", obj, hand["site"], (swap, mirror, n)), FLAP))
+        else:
+            site = rotor_site(parts, ids, sp["edge"], sp["from"], sp["to"]) if "error" not in sp else None
+            if site is None:
+                entry["error"] = "no buildable spot on that face"
+                continue
+            entry["site"] = site
+            tasks.append((entry, _rotor_view(parts, site), rotor_instruction("L2", obj, site), ROTOR))
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        recs = list(pool.map(lambda t: attempt(parts, t[1], t[2], sampler, rounds=rounds, reqs=t[3]), tasks))
+    for (entry, _, text, _), rec in zip(tasks, recs):
+        entry.update(passed=rec["passed"], rounds=rec["rounds"], instruction=text)
+    passing = [(e, rec, q) for (e, _, _, q), rec in zip(tasks, recs) if rec["passed"]]
+    surfaces = [p for p in passing if p[2] is FLAP][:max_surfaces]
+    passing = surfaces + [p for p in passing if p[2] is not FLAP]
+    parts = _merge(parts, passing, report)
     (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
     return parts, report
 
 
-def _rotors(photo, parts, obj, sampler, work, rounds, labels, loop, named, report, max_rotors: int = 4):
-    """The spinning parts Spark names: Spark reads which face of the part the rotor sits on and where along it
-    (samgo.part_layout, the edge it names on the top view is the face); code picks the nearest spot on that face
-    where a plain rotor passes (samgo.rotor_data); Glimmer builds it from the training's L2 wording, with feedback."""
-    from .part_layout import ask as ask_layout
-    from .rotor_data import ROTOR, instruction, rotor_site
+def _merge(body, passing, report):
+    """All passing edit lists applied to the model at once and checked as a whole; if they conflict, added one at a
+    time in order, each kept only if the whole model still passes everything kept so far."""
+    from .edits import apply_edits
+    from .free_edit_test import check
 
-    report["rotors"] = []
-    jobs = [(r, d["part"], h) for r, d in sorted(named["regions"].items()) for h in d.get("spinning", [])]
-    for region, part, h in jobs[:max_rotors]:
-        entry = {"region": region, "part": part, **h}
-        report["rotors"].append(entry)
-        if h.get("axis") == "vertical":
-            entry["error"] = "only horizontal axles yet"
+    def verdict(chosen):
+        try:
+            a = apply_edits(body, [e for _, rec, _ in chosen for e in rec["edits"]])
+        except Exception:  # noqa: BLE001 - two edit lists touch the same part
+            return None
+        v = check(body, a.parts, a.sources, _merged_reqs(chosen), stand=False)
+        keep = {k: x for k, x in v.items() if k != "stands"}
+        return a.parts if all(x[0] for x in keep.values()) else None
+
+    if not passing:
+        return body
+    together = verdict(passing)
+    if together is not None:
+        return together
+    kept, parts = [], body
+    for item in passing:
+        out = verdict(kept + [item])
+        if out is None:
+            item[0].update(passed=False, merge_error="conflicts with a mechanism built before it")
             continue
-        ids = [i for i, r in enumerate(region_of_parts(parts, labels)) if r == region]
-        if not ids:
-            entry["error"] = "no parts in the region"
-            continue
-        sp = loop.run_until_complete(ask_layout(photo, parts, ids, work / f"rotor_{region}_{h['name']}", obj=obj,
-                                                part=part, mech=f"{h['name']} (a part that spins on an axle)",
-                                                where=h.get("where", "")))
-        entry["spark_layout"] = sp
-        site = rotor_site(parts, ids, sp["edge"], sp["from"], sp["to"]) if "error" not in sp else None
-        if site is None:
-            entry["error"] = "no buildable spot on that face"
-            continue
-        text = instruction("L2", obj, site)
-        view = _rotor_view(parts, site)
-        rec = attempt(parts, view, text, sampler, rounds=rounds, reqs=ROTOR)
-        entry.update(site=site, passed=rec["passed"], rounds=rec["rounds"], instruction=text)
-        if rec["passed"]:
-            parts = rec["parts"]
+        kept.append(item)
+        parts = out
     return parts
+
+
+def _merged_reqs(chosen):
+    """One requirement list for several mechanisms: counts add up per kind and axis."""
+    out = {}
+    for _, _, q in chosen:
+        for r in q:
+            key = (r["kind"], r.get("axis"), r.get("name") if r["kind"] not in ("rotor", "swing") else None)
+            if key in out:
+                out[key] = out[key] | {"count": out[key].get("count", 1) + r.get("count", 1)}
+            else:
+                out[key] = dict(r)
+    return list(out.values())
 
 
 def _rotor_view(parts, site):

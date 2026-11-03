@@ -77,3 +77,17 @@ def test_instructions_and_ldraw_accept_a_rotor(tmp_path):
     parts = apply_edits(block(), answer("+y", 8, 3, 6)).parts
     assert "liftarm" in write(parts, tmp_path).read_text()
     assert export(parts)[0]
+
+
+def test_mechanisms_built_in_parallel_merge_and_conflicts_keep_the_first():
+    from samgo.spark_mechanisms import _merge
+
+    body = block()
+    one, two = answer("+y", 8, 3, 6), answer("-y", 0, 3, 6)
+    passing = [({}, {"edits": one}, ROTOR), ({}, {"edits": two}, ROTOR)]
+    parts = _merge(body, passing, {})
+    from samgo.kinematics import rotors
+    assert rotors(parts)[0] == 2
+    clash = [({}, {"edits": one}, ROTOR), (e := {}, {"edits": answer("+y", 8, 3, 6)}, ROTOR)]
+    parts = _merge(body, clash, {})
+    assert rotors(parts)[0] == 1 and e.get("merge_error")

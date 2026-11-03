@@ -51,6 +51,11 @@ class Sample:
     tokens: int | None = None
 
 
+import threading
+
+_INIT_LOCK = threading.Lock()
+
+
 class FireworksSampler:
     """Lazy adapter for the same external training runtime used by the original demo."""
 
@@ -60,6 +65,11 @@ class FireworksSampler:
         self.client = None
 
     def __call__(self, messages, *, max_tokens, temperature, timeout):
+        with _INIT_LOCK:  # many threads may sample at once; the client is made once
+            self._init()
+        return self._sample(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout)
+
+    def _init(self):
         if self.client is None:
             from dotenv import load_dotenv
             load_dotenv(Path(__file__).resolve().parent.parent / '.env')
@@ -74,6 +84,8 @@ class FireworksSampler:
                                             base_url=serverless_base_url('https://api.fireworks.ai'))
             self.client = service.create_sampling_client(tokenizer=tok, **(
                 {'model_path': self.model} if self.model else {'base_model': MODEL}))
+
+    def _sample(self, messages, *, max_tokens, temperature, timeout):
         from fireworks.training import sdk
         from training.renderer import get_text_content
 
