@@ -74,6 +74,60 @@ def render_views(parts: list[dict], path: Path, f: int = 1) -> None:
 TOP_GLASS = re.compile(r"canopy|roof|sun ?roof|sky ?light|dome|bubble|top", re.I)
 
 
+NAMES_PROMPT = """This is a photo of {obj}. From what you know about the real object: which of its parts are
+transparent glass or clear plastic and visible in this photo? Name each as a short noun phrase an image segmenter can
+find (like "windshield", "side windows", "cockpit windows", "headlight covers"). Answer with one JSON object, nothing
+else: {{"glass": ["<phrase>", ...]}} - an empty list if none."""
+
+
+def names(photo: Path, obj: str) -> list[str]:
+    """Spark's names for the object's transparent parts (cached per photo and object); [] if none or no answer."""
+    import asyncio
+    import os
+
+    from dotenv import load_dotenv
+    from openai import AsyncOpenAI
+
+    from .function_spec import BASE_URL, MODEL, _data_url
+
+    key = hashlib.sha256(Path(photo).read_bytes() + (NAMES_PROMPT + obj).encode()).hexdigest()[:16]
+    cache = Path("runs/research_cache") / f"glass_names_{key}.json"
+    if cache.exists():
+        return json.loads(cache.read_text())
+
+    async def ask():
+        load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+        client = AsyncOpenAI(api_key=os.environ["BASETEN_API_KEY"], base_url=BASE_URL, max_retries=6)
+        text = NAMES_PROMPT.format(obj=f"a{'n' if obj[:1] in 'aeiou' else ''} {obj}")
+        for _ in range(3):
+            r = await client.chat.completions.create(
+                model=MODEL, max_tokens=2000, extra_body={"reasoning_effort": "low"},
+                messages=[{"role": "user", "content": [{"type": "text", "text": text},
+                                                       {"type": "image_url", "image_url": {"url": _data_url(photo)}}]}])
+            m = re.search(r"\{.*\}", r.choices[0].message.content or "", re.S)
+            try:
+                return [str(g)[:40] for g in json.loads(m.group())["glass"]][:6]
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+        return None
+
+    out = asyncio.run(ask())
+    if out is None:
+        return []
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(out))
+    return out
+
+
+def glaze_cells(parts: list[dict], cells: set, cut: bool = True) -> tuple[list[dict], dict]:
+    """Glass exactly where the photo shows it: the visible cells SAM 3.1 marked (samgo.voxelize marker)."""
+    from .glass import glaze, visible_cells
+
+    win = visible_cells(parts) & set(cells)
+    out, n = glaze(parts, win, cut=cut)
+    return out, {"source": "sam", "cells": len(win), "glass_parts": n}
+
+
 def parse(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text or "", re.S)
     try:

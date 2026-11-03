@@ -273,7 +273,7 @@ def paint(parts: list[dict], boxes: list[dict]) -> tuple[list[dict], int]:
 
 
 def look(photo: Path, parts: list[dict], obj: str, work: Path, loop, *, cut: bool = True, allow_paint: bool = True,
-         rounds: int = 2) -> tuple[list[dict], list[dict]]:
+         allow_glass: bool = True, rounds: int = 2) -> tuple[list[dict], list[dict]]:
     """Phase 2: Spark's paint and glass punch list, carried out, up to `rounds` times. Returns (parts, log)."""
     from .spark_glass import apply as glaze_boxes
 
@@ -285,6 +285,8 @@ def look(photo: Path, parts: list[dict], obj: str, work: Path, loop, *, cut: boo
         if "error" in ans:
             break
         todo_paint = ans["paint"] if allow_paint else []
+        if not allow_glass:  # the photo already marked the glass (SAM 3.1): boxes would only add guesses
+            ans["glass"] = []
         base = ans.get("base") if allow_paint and rnd == 1 else None
         if not todo_paint and not ans["glass"] and not base:
             break

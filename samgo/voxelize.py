@@ -131,12 +131,15 @@ def mirror_plane(mesh: trimesh.Trimesh, samples: int = 4000) -> tuple[float, flo
 
 
 def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric: bool = True,
-             exact_mirror: bool = False) -> np.ndarray:
+             exact_mirror: bool = False, marker: tuple[int, int, int] | None = None):
     """Mesh -> grid of COLOR_INDEX values (x, y studs; z plates).
 
     With `symmetric`, a left-right symmetric object is first turned so its mirror plane runs along x through the
     middle of the grid, and every cross-section that nearly matches its mirror is made exactly symmetric
     (one-sided features, like an open door, are kept as they are).
+
+    `marker`: an RGB color painted on the photo before SAM 3D (the pixels SAM 3.1 found for the object's glass);
+    returns (grid, mask) where mask marks the surface cells mostly covered by it (mirrored with the shape).
     """
     mesh = mesh.copy()
     plane = mirror_plane(mesh) if symmetric else None
@@ -164,6 +167,7 @@ def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric
     vertex_rgb = mesh.visual.vertex_colors[:, :3].astype(float)
     n = len(COLORS)
     votes = np.zeros(int(np.prod(shape)) * n, dtype=np.int64)
+    marked = np.zeros(int(np.prod(shape)), dtype=np.int64)
     chunk = 2_000_000
     for k, start in enumerate(range(0, count, chunk)):
         points, faces = trimesh.sample.sample_surface(mesh, min(chunk, count - start), seed=seed + k)
@@ -174,6 +178,9 @@ def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric
         cells = np.clip(np.floor(points).astype(int), 0, shape - 1)
         flat = np.ravel_multi_index(cells.T, shape)
         votes += np.bincount(flat * n + nearest_color(point_rgb) - 1, minlength=votes.size)
+        if marker is not None:
+            near = np.linalg.norm(point_rgb - np.asarray(marker, float), axis=1) < 90
+            marked += np.bincount(flat[near], minlength=marked.size)
     votes = votes.reshape(-1, n)
     surface = (votes.sum(1) > 0).reshape(shape)
     surface_color = (votes.argmax(1) + 1).reshape(shape)
@@ -191,7 +198,14 @@ def voxelize(mesh: trimesh.Trimesh, longest_studs: int, seed: int = 0, symmetric
     votes = votes.reshape(*shape, len(COLORS))
     if plane is not None:
         grid = _mirror(grid, votes, exact=exact_mirror)
-    return merge_small_regions(smooth_colors(grid, mirrored=plane is not None))
+    grid = merge_small_regions(smooth_colors(grid, mirrored=plane is not None))
+    if marker is None:
+        return grid
+    total = votes.reshape(-1, len(COLORS)).sum(1)
+    mask = ((marked >= 0.3 * np.maximum(total, 1)) & (total > 0)).reshape(shape)
+    if plane is not None and exact_mirror:  # the side the photo does not show has the same windows
+        mask |= mask[:, ::-1, :]
+    return grid, mask & (grid > 0)
 
 
 CELL_MM = (8.0, 8.0, 3.2)

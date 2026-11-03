@@ -177,7 +177,8 @@ def attempt(body: list[dict], local: list[int], instruction: str, sampler, round
 
 
 def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler, work: Path, rounds: int = 3,
-          max_surfaces: int = 8, gear: bool = True, glass: bool = True, review: bool = True) -> tuple[list[dict], dict]:
+          max_surfaces: int = 8, gear: bool = True, glass: bool = True, review: bool = True,
+          glass_cells: set | None = None) -> tuple[list[dict], dict]:
     """Add the working parts Spark names that Glimmer can build; Spark reviews them against the real object (missing
     ones added, wrong ones dropped); then the legs it stands on (samgo.spark_gear), glass, and Spark's review of
     colors and glass (samgo.spark_review). Returns (parts, report)."""
@@ -200,11 +201,16 @@ def build(photo: Path, target: np.ndarray, parts: list[dict], obj: str, sampler,
         if glass:  # last: only colours and cuts, after every mechanism is in
             from . import spark_glass
 
-            parts, report["glass"] = spark_glass.build(photo, parts, obj, work / "glass", loop)
-        if review:  # colors and glass, checked against the real object
+            if glass_cells:  # where the photo shows glass (SAM 3.1), moved up with the model if legs raised it
+                lift = (report.get("gear") or {}).get("lift", 0) if (report.get("gear") or {}).get("kept", True) else 0
+                parts, report["glass"] = spark_glass.glaze_cells(parts, {(x, y, z + lift) for x, y, z in glass_cells})
+            else:
+                parts, report["glass"] = spark_glass.build(photo, parts, obj, work / "glass", loop)
+        if review:  # colors (and glass, when the photo did not mark it), checked against the real object
             from . import spark_review
 
-            parts, report["look"] = spark_review.look(photo, parts, obj, work / "review", loop)
+            parts, report["look"] = spark_review.look(photo, parts, obj, work / "review", loop,
+                                                      allow_glass=not glass_cells)
         parts = blend_joints(parts)
         (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
         return parts, report

@@ -25,6 +25,7 @@ META_BASE_URL = "https://api.meta.ai/v1"
 SAM_MODEL = "sam-3.1"
 SAM_3D_ENDPOINT = "fal-ai/sam-3/3d-objects"
 MAX_SIDE = 2048  # downscale large phone photos before uploading
+GLASS_MARK = (255, 0, 255)  # painted on the photo where SAM 3.1 finds the object's glass; read back by voxelize
 
 
 @dataclass
@@ -35,6 +36,7 @@ class Perception:
     mesh: str
     confidence: float | None
     masks_found: int
+    glass_pixels: int = 0
 
 
 def prepare_photo(src: Path, dest: Path) -> Image.Image:
@@ -93,6 +95,26 @@ async def segment(image_url: str, prompt: str, size: tuple[int, int], client: As
     return mask, confidence, len(candidates)
 
 
+async def segment_all(image_url: str, prompt: str, size: tuple[int, int], client: AsyncOpenAI,
+                      min_confidence: float = 0.3) -> np.ndarray:
+    """Every confident SAM 3.1 mask for `prompt`, as one full-photo mask (all the windows, not only the best)."""
+    stream = await client.responses.create(
+        model=SAM_MODEL,
+        input=[{"type": "message", "role": "user", "content": [
+            {"type": "input_text", "text": prompt},
+            {"type": "input_image", "image_url": image_url},
+        ]}],
+        metadata={"include_confidence": "true"},
+        stream=True,
+    )
+    result = await parse_responses_stream(stream, image_segmentation_format()).final_result()
+    out = np.zeros((size[1], size[0]), dtype=bool)
+    for m, c in decode_masks(list(result.records), size):
+        if c is None or c >= min_confidence:
+            out |= m
+    return out
+
+
 async def reconstruct(image_url: str, mask_url: str) -> str:
     result = await fal_client.subscribe_async(SAM_3D_ENDPOINT, arguments={"image_url": image_url, "mask_urls": [mask_url]})
     if "model_glb" not in result:
@@ -100,7 +122,9 @@ async def reconstruct(image_url: str, mask_url: str) -> str:
     return result["model_glb"]["url"]
 
 
-async def perceive(photo: Path, prompt: str, out: Path) -> Perception:
+async def perceive(photo: Path, prompt: str, out: Path, glass_terms: tuple[str, ...] = ()) -> Perception:
+    """`glass_terms`: the object's transparent parts in words (Spark's); SAM 3.1 finds them on the photo, they are
+    painted GLASS_MARK before SAM 3D, so the mesh carries where the glass is."""
     load_dotenv()
     out.mkdir(parents=True, exist_ok=True)
     image_path, mask_path, mesh_path = out / "photo.png", out / "mask.png", out / "object.glb"
@@ -113,13 +137,30 @@ async def perceive(photo: Path, prompt: str, out: Path) -> Perception:
     Image.fromarray(mask.astype(np.uint8) * 255).save(mask_path)  # white object on black
     mask_url = await fal_client.upload_file_async(mask_path)
 
-    glb_url = await reconstruct(image_url, mask_url)
+    glass_pixels, source_url = 0, image_url
+    if glass_terms:
+        glass = np.zeros_like(mask)
+        for term in glass_terms:
+            try:
+                glass |= await segment_all(image_url, term, image.size, client)
+            except Exception:  # noqa: BLE001 - a term SAM cannot find: no glass from it
+                continue
+        glass &= mask
+        glass_pixels = int(glass.sum())
+        if glass_pixels:
+            marked = np.asarray(image).copy()
+            marked[glass] = GLASS_MARK
+            Image.fromarray(glass.astype(np.uint8) * 255).save(out / "glass_mask.png")
+            Image.fromarray(marked).save(out / "marked.png")
+            source_url = await fal_client.upload_file_async(out / "marked.png")
+
+    glb_url = await reconstruct(source_url, mask_url)
     async with httpx.AsyncClient(timeout=120) as http:
         response = await http.get(glb_url)
         response.raise_for_status()
         mesh_path.write_bytes(response.content)
 
-    result = Perception(prompt, str(image_path), str(mask_path), str(mesh_path), confidence, count)
+    result = Perception(prompt, str(image_path), str(mask_path), str(mesh_path), confidence, count, glass_pixels)
     (out / "perception.json").write_text(json.dumps(asdict(result), indent=2))
     return result
 

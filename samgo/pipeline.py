@@ -151,6 +151,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         replay: Path | None = None, sampler=None, require_certificate: bool = False,
         certificate_timeout: float = 20, doors: bool = False, glass: bool = True, mechanisms: bool = True,
         layout_from_spark: bool = False, symmetry_from_spark: bool = False, body_paint: str | None = None,
+        glass_from_sam: bool = False,
         buildable: bool = False, manual: bool = False) -> dict:
     if assembly not in ('procedural', 'learned') or (size not in SIZES and not str(size).isdigit()):
         raise ValueError('unknown assembly mode or size')
@@ -215,18 +216,30 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             summary['perception'] = {'source': 'supplied_mesh', 'path': str(mesh.resolve()),
                                      'photo_mesh_association': 'user_supplied_not_verified'}
         else:
+            glass_terms = ()
+            if glass_from_sam and glass:  # Spark names the transparent parts; SAM 3.1 finds them on the photo
+                from .spark_glass import names as glass_names
+                try:
+                    glass_terms = tuple(glass_names(photo, prompt))
+                except Exception:  # noqa: BLE001 - no Spark: glass from boxes later
+                    glass_terms = ()
+                summary['glass_terms'] = list(glass_terms)
             key = digest({'photo': photo_sha, 'prompt': prompt, 'sam': SAM_MODEL, 'sam3d': SAM_3D_ENDPOINT,
-                          'max_side': MAX_SIDE, 'code': summary['code_sha256']['perceive.py']})
+                          'max_side': MAX_SIDE, 'code': summary['code_sha256']['perceive.py'],
+                          **({'glass': list(glass_terms)} if glass_terms else {})})
             index = cache / f'perception-{key}.json'
             entry = _cached_json(index) if reuse else None
             cached = Path(entry['mesh']) if entry and 'mesh' in entry else None
             if cached and cached.is_file() and file_hash(cached) == entry.get('sha256'):
                 shutil.copyfile(cached, dest)
-                summary['perception'] = {'source': 'cache', 'key': key, 'origin': str(cached)}
+                summary['perception'] = {'source': 'cache', 'key': key, 'origin': str(cached),
+                                         'glass_pixels': entry.get('glass_pixels', 0)}
             else:
-                asyncio.run(async_stage(perceive(photo, prompt, run_dir), 300))
-                save(index, {'mesh': str(dest), 'sha256': file_hash(dest)})
-                summary['perception'] = {'source': 'live', 'key': key}
+                seen = asyncio.run(async_stage(perceive(photo, prompt, run_dir, **(
+                    {'glass_terms': glass_terms} if glass_terms else {})), 420))
+                pixels = getattr(seen, 'glass_pixels', 0)
+                save(index, {'mesh': str(dest), 'sha256': file_hash(dest), 'glass_pixels': pixels})
+                summary['perception'] = {'source': 'live', 'key': key, 'glass_pixels': pixels}
         summary['perception']['mesh_sha256'] = file_hash(dest)
         summary['timings']['perception'] = time.monotonic() - tick
 
@@ -237,10 +250,15 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         if symmetry_from_spark:
             from .spark_symmetry import symmetric as spark_symmetric
             summary['symmetric_by_spark'] = spark_symmetric(photo, prompt)
-        if summary.get('symmetric_by_spark'):
-            original = voxelize(load_mesh(dest), studs, exact_mirror=True)
+        glass_cells = None
+        mirror_kw = {'exact_mirror': True} if summary.get('symmetric_by_spark') else {}
+        if summary['perception'].get('glass_pixels'):  # the mesh carries SAM's glass: read it back per cell
+            from .perceive import GLASS_MARK
+            original, glass_mask = voxelize(load_mesh(dest), studs, marker=GLASS_MARK, **mirror_kw)
+            glass_cells = {tuple(int(v) for v in c) for c in np.argwhere(glass_mask)}
+            summary['glass_cells_from_sam'] = len(glass_cells)
         else:
-            original = voxelize(load_mesh(dest), studs)
+            original = voxelize(load_mesh(dest), studs, **mirror_kw)
         np.savez_compressed(run_dir / 'target.npz', target=original)
         render(original, run_dir / 'target.png')
         summary.update(target_shape=list(original.shape), cells=int((original > 0).sum()))
@@ -314,7 +332,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 chooser = sampler if sampler is not None else FireworksSampler(model)
                 spark_body = parts
                 parts, spark_report = spark_build(photo, target, parts, found.get('object') or prompt, chooser,
-                                                  run_dir / 'spark_mechanisms', rounds=rounds)
+                                                  run_dir / 'spark_mechanisms', rounds=rounds,
+                                                  glass_cells=glass_cells)
                 summary['spark_mechanisms'] = [{k: s.get(k) for k in ('part', 'name', 'handoff', 'passed', 'error')}
                                                for s in spark_report['surfaces']]
                 summary['spark_unsupported'] = [(u['part'], u['name']) for u in spark_report['unsupported']]
@@ -386,15 +405,18 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             loop = asyncio.new_event_loop()
             try:
                 # doors already hang on their hinges: glaze whole parts, never cut a door's plates
-                glazed, glass_report = spark_glass.build(photo, parts, 'car', run_dir / 'glass', loop,
-                                                         cut=not summary.get('doors_cut'))
+                if glass_cells:  # where the photo shows glass (SAM 3.1), else Spark's boxes
+                    glazed, glass_report = spark_glass.glaze_cells(parts, glass_cells, cut=not summary.get('doors_cut'))
+                else:
+                    glazed, glass_report = spark_glass.build(photo, parts, 'car', run_dir / 'glass', loop,
+                                                             cut=not summary.get('doors_cut'))
             except Exception as e:  # noqa: BLE001
                 glazed, glass_report = parts, {'error': f'{type(e).__name__}'}
             finally:
                 loop.close()
             if glass_report.get('glass_parts'):
                 parts, summary['glass_parts'] = glazed, glass_report['glass_parts']
-                summary['glass_source'] = 'spark'
+                summary['glass_source'] = glass_report.get('source', 'spark')
             else:
                 from .glass import add_glass
                 parts, summary['glass_parts'] = add_glass(parts)
@@ -424,7 +446,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 try:
                     parts, summary['look'] = spark_review.look(photo, parts, 'car', run_dir / 'review', rloop,
                                                                cut=not summary.get('doors_cut'),
-                                                               allow_paint=body_paint is None)
+                                                               allow_paint=body_paint is None,
+                                                               allow_glass=not glass_cells)
                 except Exception as e:  # noqa: BLE001 - no Spark: the model stays as built
                     summary['look'] = [{'error': type(e).__name__}]
                 finally:
@@ -570,7 +593,8 @@ def main() -> None:
                  assembly=args.assembly, model=args.model, replay=args.replay, mesh=args.mesh,
                  rounds=args.rounds, max_tokens=args.max_tokens, timeout=args.timeout, sequential=not args.joint,
                  require_certificate=args.require_certificate, certificate_timeout=args.certificate_timeout,
-                 doors=args.doors, glass=not args.no_glass, layout_from_spark=not args.no_spark_layout, symmetry_from_spark=not args.no_spark_layout, body_paint=args.color, mechanisms=not args.no_mechanisms,
+                 doors=args.doors, glass=not args.no_glass, layout_from_spark=not args.no_spark_layout, symmetry_from_spark=not args.no_spark_layout, body_paint=args.color,
+                 glass_from_sam=not args.no_spark_layout, mechanisms=not args.no_mechanisms,
                  buildable=args.buildable, manual=args.manual)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['passed'] else 1)
