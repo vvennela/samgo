@@ -257,8 +257,9 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
             if len(report["rotors"]) >= 4:
                 break
             report["rotors"].append(entry)
-            if h.get("axis") == "vertical":
-                entry["error"] = "only horizontal axles yet"
+            if h.get("axis") == "vertical":  # turns on top: a turntable with blades, at the region's middle
+                jobs.append(("vrotor", entry, [i for i, x in enumerate(region_of) if x == r],
+                             dict(mech=f"{h['name']} (blades turning on top)", folder=f"vrotor_{r}_{h['name']}")))
                 continue
             jobs.append(("rotor", entry, [i for i, x in enumerate(region_of) if x == r],
                          dict(mech=f"{h['name']} (a part that spins on an axle)", folder=f"rotor_{r}_{h['name']}")))
@@ -278,7 +279,7 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
     # A spinning part the mesh lost (a thin tail rotor, a propeller) has no parts of its own: Spark then places it on
     # the whole model, on the face it is mounted to.
     everything = [i for i, p in enumerate(parts) if p["type"] in H]
-    jobs = [(k, e, ids if ids or k != "rotor" else everything, a) for k, e, ids, a in jobs]
+    jobs = [(k, e, ids if ids or k not in ("rotor", "vrotor") else everything, a) for k, e, ids, a in jobs]
     jobs = [j for j in jobs if j[2] or j[1].update(error="no parts in the region")]
 
     async def layouts():
@@ -305,6 +306,14 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
             entry["handoff"] = {"edge": hand["edge"], "rows": hand["rows"]}
             tasks.append((entry, _view(frame(parts, swap, mirror, n), hand["site"], "L2", set(ids)),
                           instruction("L2", obj, hand["site"], (swap, mirror, n)), FLAP))
+        elif kind == "vrotor":
+            from .vrotor_data import VROTOR, _view as vview, instruction as vinstruction
+
+            if spot is None:
+                entry["error"] = "no top spot where blades turn clear"
+                continue
+            entry["site"] = spot
+            tasks.append((entry, vview(parts, spot, "L2"), vinstruction("L2", obj, spot), VROTOR))
         else:
             site = spot
             if site is None:
@@ -432,6 +441,10 @@ def _spot(job):
     from .rotor_data import rotor_site
 
     kind, parts, ids, sp, sizes = job
+    if kind == "vrotor":  # the top of the region Spark named; its layout's edge is not needed
+        from .vrotor_data import vrotor_site
+
+        return vrotor_site(parts, ids)
     if "error" in sp:
         return None
     if kind == "surface":

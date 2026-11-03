@@ -226,7 +226,9 @@ def explain(original: list[dict], parts: list[dict], sources: list[int | None], 
         if ok or (key == "structure" and pairs):
             continue
         if key == "rotor":
-            if "below the table" in why or "nothing is locked" in why:
+            if "turntable" in why:
+                msgs.append(f"rotor: {why}")
+            elif "below the table" in why or "nothing is locked" in why:
                 msgs.append(f"rotor: {why}" + ("" if "below" in why else ": lock arms on it with an axle hole "
                                                 "(liftarm length 2, axle_hole start or end); round holes spin loose"))
             else:

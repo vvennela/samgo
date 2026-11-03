@@ -562,6 +562,9 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
     bodies, joints = analyse(parts)
     ground = min((box(p)[0][2] for p in parts if p.get("type") in HEIGHT), default=0.0)
     count, why = 0, "no axle turns in a round hole"
+    if axis == "vertical":
+        why = ("nothing turns on a turntable yet: set a 2x2 turntable (turntable_base, turntable_top one plate above "
+               "it) on a top face, and put long plates across its top half as blades")
     for k, (a, b, kind, point, ax, partners) in enumerate(joints):
         if kind != "revolute" or (abs(ax[2]) > 0.9) != (axis == "vertical"):
             continue
@@ -572,13 +575,26 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
         small = min(sides, key=lambda g: sum(len(bodies[r]) for r in g))
         moving = [i for r in small for i in bodies[r]]
         locked = [bodies[r] for r in small if any(parts[i].get("type") == "axle" for i in bodies[r])]
-        if not locked:
+        turntable = axis == "vertical" and any(parts[i].get("type") in ("turntable_base", "turntable_top")
+                                               for i in moving)
+        if turntable:  # an upright rotor: blades held by studs on a turntable's turning half
+            blades = [i for i in moving if parts[i].get("type") in HEIGHT
+                      and parts[i]["type"] not in ("turntable_base", "turntable_top")]
+            reach = max((float(np.hypot(*(_corners(parts[i])[:, :2] - point[:2]).T).max()) for i in blades),
+                        default=0.0)
+            if reach < 2 * STUD:
+                why = "nothing reaches out from the turntable: put long plates across its turning half as blades"
+                continue
+        elif not locked:
             continue  # a part turning loose on an axle, a hinge: not a rotor
-        if not {parts[i].get("type") for m in locked for i in m} & (HEIGHT.keys() | BEAMS):
+        elif not {parts[i].get("type") for m in locked for i in m} & (HEIGHT.keys() | BEAMS):
             why = "nothing is locked on the axle"
             continue
         if sweep(parts, moving, point, ax, 360, steps=24, ignore=partners) is not None:
             why = "what is on the axle hits a part when it turns"
+            if turntable:
+                why = ("the blades on the turntable hit " + _hit(parts, moving, point, partners) + " when they turn: "
+                       "raise the turntable on a column of 2x2 bricks above everything the blades pass over")
             continue
         n = np.asarray(ax, float) / np.linalg.norm(ax)
         K = np.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
@@ -590,6 +606,23 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
             continue
         count += 1
     return count, (f"{count} rotor(s) turn all the way round" if count else why)
+
+
+def _hit(parts: list[dict], moving: list[int], point: np.ndarray, ignore=()) -> str:
+    """The fixed parts that what turns about a vertical line through `point` passes through, by type and place."""
+    pts = np.vstack([_corners(parts[i]) for i in moving if parts[i].get("type") in HEIGHT])
+    hit = []
+    for t in np.radians(np.arange(0, 360, 10)):
+        c, s_ = np.cos(t), np.sin(t)
+        d = pts - point
+        q = np.c_[c * d[:, 0] - s_ * d[:, 1], s_ * d[:, 0] + c * d[:, 1], d[:, 2]] + point
+        for j, p in enumerate(parts):
+            if j in moving or j in ignore or j in hit or p.get("type") not in HEIGHT:
+                continue
+            if _inside(q, p):
+                hit.append(j)
+    names = [f"{parts[j]['type']} at (x={parts[j]['x']}, y={parts[j]['y']}, z={parts[j]['z']})" for j in hit[:3]]
+    return ", ".join(names) or "a part"
 
 
 JOINT_HALVES = {"bar_plate", "clip_plate", "hinge_base", "hinge_top", "click_a", "click_b", "turntable_base",
