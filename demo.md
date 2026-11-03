@@ -36,41 +36,50 @@ part. (The body is the pipeline's; the doors were cut by hand with the project's
 "hand-finished".)
 
 ### What to buy
+From `runs/build_kit/camry_red_final/` (the hand-finished red Camry: photo glass, two hinged doors, 4 wheels; 395 elements, 68 certified steps). Buy ~10% spares of the small plates.
 
-**Plates and bricks - the LEGO Store's Pick & Build wall, if it has them** (the wall rotates, and some stores now sell
-pre-filled cups; check it first):
+#### 1. LEGO Store Pick & Build wall (plates and bricks)
 
-| Part | Red | Black |
-|---|---|---|
-| Plate 1x1 (3024) | 15 | 18 |
-| Plate 1x2 (3023) | 17 | 7 |
-| Plate 1x3 (3623) | 25 | 3 |
-| Plate 1x4 (3710) | 30 | 13 |
-| Plate 1x6 (3666) | 24 | 2 |
-| Plate 1x8 (3460) | 20 | 7 |
-| Plate 2x2 (3022) | 8 | - |
-| Plate 2x3 (3021) | 4 | 4 |
-| Plate 2x4 (3020) | 6 | 4 |
-| Plate 2x6 (3795) | 9 | 2 |
-| Plate 2x8 (3034) | 7 | 8 |
-| Brick 1x2 (3004) / 1x1 (3005) | 2 / 1 | - |
+Colour matters only for looks: **red** is the body; **black** the chassis; **dark bluish gray** is hidden inside (floor pan, hinge holders) - any colour works for those.
 
-Color does not matter for strength: if the wall has the size in another color, take it. Buy ~10% spares.
+| Part | Red | Black | Dark Bluish Gray |
+|---|---|---|---|
+| Brick 1x2 (3004) | 1 | - | - |
+| Plate 2x4 (3020) | 11 | 6 | - |
+| Plate 2x3 (3021) | 11 | 5 | - |
+| Plate 2x2 (3022) | 15 | - | - |
+| Plate 1x2 (3023) | 26 | 8 | 5 |
+| Plate 1x1 (3024) | 48 | 9 | 5 |
+| Plate 2x8 (3034) | - | 9 | - |
+| Plate 1x8 (3460) | 2 | 3 | 20 |
+| Plate 1x3 (3623) | 31 | 13 | 4 |
+| Plate 1x6 (3666) | 9 | 4 | 5 |
+| Plate 1x4 (3710) | 38 | 13 | 17 |
+| Plate 2x6 (3795) | 3 | 4 | - |
+| **total** | **195** | **74** | **56** |
 
-**Not sold loose in store** - get these from one small set that contains them, or from BrickLink / LEGO.com
-Pick a Brick online (allow shipping time):
+#### 2. Not on the wall: online (BrickLink / LEGO Pick a Brick) or from a small Technic/City set
 
-| Part | Count | Notes |
-|---|---|---|
-| Technic brick 1x4 with holes (3701), black | 10 | the chassis the axles pass through |
-| Technic axle 9 (60485) | 2 | one per axle line |
-| Wheel rim 24x14 with axle hole (2994) + tyre 30.4x14 (6578) | 4 + 4 | any rim/tyre pair of the same size works |
-| Swivel hinge plate 1x4, base (2429) + top (2430) | 4 + 4 | the door hinges |
-| Trans-clear (or trans-black) plates 1x1 / 1x2 | 12 / 10 | the windows - any color works if not found |
+Upload `bricklink_wanted.xml` on bricklink.com (Want -> Upload) to buy exactly these.
 
-Fastest path for the Technic parts: a small LEGO Technic or City car set with four 30 mm wheels on axles; the
-Technic bricks 1x4 with holes are the one part to look for in its inventory (Brickset / BrickLink list each set's
-parts).
+| Part | Colour | Count | What it is for |
+|---|---|---|---|
+| Plate 1x2 (3023) | Trans-Clear | 12 | windows |
+| Plate 1x1 (3024) | Trans-Clear | 12 | windows |
+| Plate 1x3 (3623) | Trans-Clear | 8 | windows |
+| Plate 1x6 (3666) | Trans-Clear | 1 | windows |
+| Plate 1x4 (3710) | Trans-Clear | 5 | windows |
+| Technic Axle 11 (23948) | Light Bluish Gray | 2 | axle |
+| Hinge Plate 1x4 Swivel Base (2429) | Dark Bluish Gray | 4 | door hinge (base) |
+| Hinge Plate 1x4 Swivel Top (2430) | Dark Bluish Gray | 4 | door hinge (top) |
+| Wheel rim 24x14 with axle hole (2994) | Light Bluish Gray | 4 | wheel rim |
+| Technic Brick 1x4 with holes (3701) | Black | 14 | chassis: the axles pass through these |
+| Tyre 30.4x14 (6578) | Black | 4 | tyre |
+
+Trans-clear plates: the store wall sometimes has them; trans-black or trans-light-blue also work for the windows.
+If you only get the plates today, the car body can be built now and the wheels, axles and hinges added when they arrive.
+
+Build: `BUILD.md` in the same folder has a picture for every step (the first steps are built upside down, then turned over).
 
 ### Sources
 
