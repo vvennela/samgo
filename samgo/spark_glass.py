@@ -119,11 +119,17 @@ def names(photo: Path, obj: str) -> list[str]:
     return out
 
 
-def glaze_cells(parts: list[dict], cells: set, cut: bool = True) -> tuple[list[dict], dict]:
-    """Glass exactly where the photo shows it: the visible cells SAM 3.1 marked (samgo.voxelize marker)."""
-    from .glass import glaze, visible_cells
+def glaze_cells(parts: list[dict], cells: set, cut: bool = True, keep: set | None = None) -> tuple[list[dict], dict]:
+    """Glass exactly where the photo shows it: the visible cells SAM 3.1 marked (samgo.voxelize marker). `keep`:
+    indices of parts never cut (a door's panel: it only turns to glass as a whole part); every other plate across a
+    window edge is cut."""
+    from .glass import _cells, glaze, visible_cells
 
     win = visible_cells(parts) & set(cells)
+    if keep:
+        kept = {c for i in keep for c in _cells(parts[i])}
+        whole = {c for i in keep if set(_cells(parts[i])) <= win for c in _cells(parts[i])}
+        win = (win - kept) | whole
     out, n = glaze(parts, win, cut=cut)
     return out, {"source": "sam", "cells": len(win), "glass_parts": n}
 

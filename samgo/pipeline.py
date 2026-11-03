@@ -388,7 +388,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 # Only the hinges are left out: the running gear is already Glimmer's own, from the stage before.
                 placed, door_trace = place(built['parts'], 'door', car_door_context(built['parts']), chooser,
                                            run_dir / 'doors', rounds=rounds, max_tokens=max_tokens, timeout=timeout,
-                                           only={'hinge_base', 'hinge_top'})
+                                           only={'hinge_base', 'hinge_top'}, k=4 if sampler is None else 1)
                 summary['doors_passed'] = door_trace['passed']
                 summary['artifacts']['door_trace'] = str(run_dir / 'doors' / 'trace.json')
                 if placed is not None:  # no procedural fallback: a failed placement leaves the car without doors
@@ -406,7 +406,11 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             try:
                 # doors already hang on their hinges: glaze whole parts, never cut a door's plates
                 if glass_cells:  # where the photo shows glass (SAM 3.1), else Spark's boxes
-                    glazed, glass_report = spark_glass.glaze_cells(parts, glass_cells, cut=not summary.get('doors_cut'))
+                    keep = None
+                    if summary.get('doors_cut'):  # door panels keep their parts; the rest is cut at window edges
+                        from .learned_mechanisms import car_door_context
+                        keep = {i for g, _ in car_door_context(parts)['moving'].values() for i in g}
+                    glazed, glass_report = spark_glass.glaze_cells(parts, glass_cells, cut=True, keep=keep)
                 else:
                     glazed, glass_report = spark_glass.build(photo, parts, 'car', run_dir / 'glass', loop,
                                                              cut=not summary.get('doors_cut'))

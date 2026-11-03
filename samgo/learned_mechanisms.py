@@ -50,8 +50,11 @@ def car_door_context(parts: list[dict]) -> dict:
 
 
 def place(parts: list[dict], family: str, ctx: dict, sampler, out: Path, *, rounds: int = 3,
-          max_tokens: int = 8000, timeout: float = 180, only: set | None = None) -> tuple[list[dict] | None, dict]:
-    """(the accepted model or None, the trace). `only`: the part types left for Glimmer to place."""
+          max_tokens: int = 8000, timeout: float = 180, only: set | None = None,
+          k: int = 1) -> tuple[list[dict] | None, dict]:
+    """(the accepted model or None, the trace). `only`: the part types left for Glimmer to place. `k`: answers asked
+    for at once each round; the checker keeps one that passes, else the one with the fewest problems."""
+    from concurrent.futures import ThreadPoolExecutor
     out.mkdir(parents=True, exist_ok=True)
     case = place_case(parts, family, ctx, f"pipeline_{family}", only)
     chat = messages(case)
@@ -60,15 +63,26 @@ def place(parts: list[dict], family: str, ctx: dict, sampler, out: Path, *, roun
     accepted = None
     for rnd in range(1, rounds + 1):
         entry = {"round": rnd}
-        try:
-            sample = sampler(chat, max_tokens=max_tokens, temperature=0.0 if rnd == 1 else 0.7, timeout=timeout)
+
+        def one(n):
+            try:
+                s = sampler(chat, max_tokens=max_tokens, temperature=0.0 if rnd == 1 and n == 0 else 0.7,
+                            timeout=timeout)
+                return s, inspect_case(case, edits_from(s.text))
+            except Exception as e:  # noqa: BLE001 - a service or parse failure consumes the try
+                return None, {"passed": False, "issues": [f"{type(e).__name__}: {e}"[:300]], "candidate": None,
+                              "codes": []}
+
+        if k > 1:
+            with ThreadPoolExecutor(max_workers=k) as pool:
+                tries = list(pool.map(one, range(k)))
+        else:
+            tries = [one(0)]
+        sample, verdict = min(tries, key=lambda r: (not r[1]["passed"], r[0] is None, len(r[1]["issues"])))
+        if sample is not None:
             entry.update(answer=sample.text, tokens=sample.tokens)
-            edits = edits_from(sample.text)
-            verdict = inspect_case(case, edits)
-        except Exception as e:  # noqa: BLE001 - a service or parse failure consumes the round
-            verdict = {"passed": False, "issues": [f"{type(e).__name__}: {e}"[:300]], "candidate": None, "codes": []}
-            sample = None
-        entry.update(passed=verdict["passed"], codes=verdict.get("codes", []), issues=verdict["issues"][:12])
+        entry.update(passed=verdict["passed"], codes=verdict.get("codes", []), issues=verdict["issues"][:12],
+                     tries=k, passing_tries=sum(1 for _, v in tries if v["passed"]))
         trace["rounds"].append(entry)
         save(out / "trace.json", trace)
         if verdict["passed"]:
