@@ -109,37 +109,55 @@ async def name_regions(photo: Path, labels: np.ndarray, obj: str, work: Path, cl
 
 
 def attempt(body: list[dict], local: list[int], instruction: str, sampler, rounds: int = 3,
-            max_tokens: int = 8000, timeout: int = 600, reqs: list[dict] = FLAP) -> dict:
-    """Glimmer edits the local view; the edited whole model is checked; precise feedback between rounds."""
+            max_tokens: int = 8000, timeout: int = 600, reqs: list[dict] = FLAP, k: int = 4) -> dict:
+    """Glimmer edits the local view; the edited whole model is checked; precise feedback between rounds. Each round
+    asks for `k` answers at once (the first round's first one greedy, the rest sampled) and keeps the one the
+    checker passes, else the one with the fewest problems, whose feedback goes into the next round."""
+    from concurrent.futures import ThreadPoolExecutor
+
     from .edits import apply_edits
     from .free_edit_test import RULES, check, explain
     from .running_gear_task import FEEDBACK, edits_from
 
-    chat = [{"role": "system", "content": RULES},
-            {"role": "user", "content": instruction + "\nParts:\n" +
-             "\n".join(f"{k}: {json.dumps(body[i])}" for k, i in enumerate(local))}]
-    record = {"instruction": instruction, "parts_shown": len(local), "rounds": [], "passed": False}
-    for rnd in range(1, rounds + 1):
-        t, s, entry = time.time(), None, {"round": rnd}
+    names = {"structure", "connected"} | {q["name"] for q in reqs}
+
+    def judge(s):
         try:
-            s = sampler(chat, max_tokens=max_tokens, temperature=0.0 if rnd == 1 else 0.7, timeout=timeout)
-            entry.update(tokens=s.tokens, seconds=round(time.time() - t, 1), text=s.text)
             a = apply_edits(body, edits_from(s.text), local=local)
             v = check(body, a.parts, a.sources, reqs, stand=False)
-            names = {"structure", "connected"} | {q["name"] for q in reqs}
-            keep = {k: x for k, x in v.items() if k in names or k.endswith("_surfaces")}
-            entry["passed"] = all(x[0] for x in keep.values())
-            issues = explain(body, a.parts, a.sources, a.changed, keep, local)
-            if entry["passed"]:
-                edits = edits_from(s.text)
-                record.update(passed=True, parts=a.parts, edits=[  # in the whole model's indices, to merge later
-                    e | {"index": local[e["index"]]} if "index" in e else e for e in edits])
+            keep = {key: x for key, x in v.items() if key in names or key.endswith("_surfaces")}
+            ok = all(x[0] for x in keep.values())
+            return ok, explain(body, a.parts, a.sources, a.changed, keep, local), a
         except Exception as e:  # noqa: BLE001 - unparsable or invalid answers are verdicts too
-            entry["passed"] = False
-            issues = [f"answer: {type(e).__name__}: {e}"[:200]]
-        entry["feedback"] = issues
+            return False, [f"answer: {type(e).__name__}: {e}"[:200]], None
+
+    chat = [{"role": "system", "content": RULES},
+            {"role": "user", "content": instruction + "\nParts:\n" +
+             "\n".join(f"{n}: {json.dumps(body[i])}" for n, i in enumerate(local))}]
+    record = {"instruction": instruction, "parts_shown": len(local), "rounds": [], "passed": False}
+    for rnd in range(1, rounds + 1):
+        t = time.time()
+
+        def one(n):
+            temp = 0.0 if rnd == 1 and n == 0 else 0.7
+            try:
+                s = sampler(chat, max_tokens=max_tokens, temperature=temp, timeout=timeout)
+            except Exception as e:  # noqa: BLE001
+                return None, (False, [f"answer: {type(e).__name__}: {e}"[:200]], None)
+            return s, judge(s)
+
+        with ThreadPoolExecutor(max_workers=k) as pool:
+            tries = list(pool.map(one, range(k)))
+        s, (ok, issues, a) = min(tries, key=lambda r: (not r[1][0], r[0] is None, len(r[1][1])))
+        entry = {"round": rnd, "seconds": round(time.time() - t, 1), "tries": k,
+                 "passing_tries": sum(1 for _, (o, _, _) in tries if o), "passed": ok, "feedback": issues}
+        if s is not None:
+            entry.update(tokens=s.tokens, text=s.text)
         record["rounds"].append(entry)
-        if entry["passed"]:
+        if ok:
+            edits = edits_from(s.text)
+            record.update(passed=True, parts=a.parts, edits=[  # in the whole model's indices, to merge later
+                e | {"index": local[e["index"]]} if "index" in e else e for e in edits])
             break
         if s is not None:
             chat = chat + [{"role": "assistant", "content": s.text},
