@@ -360,15 +360,45 @@ def sweep(parts: list[dict], moving: list[int], point: np.ndarray, axis: np.ndar
     # Only fixed parts the turning points can reach: within the ball they sweep around the pivot.
     reach = float(np.linalg.norm(pts - point, axis=1).max())
     near = np.all((LO <= point + reach) & (HI >= point - reach), axis=1)
-    LO, HI = LO[near], HI[near]
-    if not len(LO):
+    if not near.any():
         return None
+    # Grid-aligned parts (plates, bricks: whole cells) go in a cell -> part table, so each turning point is checked
+    # only against the part owning its cell; cells two parts share, and parts off the grid (arms, wheels), are
+    # tested box by box. Same answer as testing every point against every box.
+    grid_ok = np.array([f["type"] in HEIGHT and "w" in f for f in fixed]) & near
+    LOg, HIg = LO[grid_ok], HI[grid_ok]
+    LOo, HIo = LO[near & ~grid_ok], HI[near & ~grid_ok]
+    cell = np.array([STUD, STUD, PLATE])
+    if len(LOg):
+        c0 = np.floor((LOg - TOL) / cell + 1e-6).astype(int)
+        c1 = np.ceil((HIg + TOL) / cell - 1e-6).astype(int)
+        base = c0.min(axis=0)
+        owner = np.full(tuple(c1.max(axis=0) - base), -1, dtype=np.int64)
+        for k in range(len(LOg)):
+            a, b = c0[k] - base, c1[k] - base
+            region = owner[a[0]:b[0], a[1]:b[1], a[2]:b[2]]
+            region[region >= 0] = -2  # shared cell: box test
+            region[region == -1] = k
+        LOo, HIo = np.vstack([LOo, LOg]), np.vstack([HIo, HIg])  # box test sees every part for shared cells
     for s in range(steps + 1):
         th = np.radians(degrees * s / steps)
         R = np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
         moved = (pts - point) @ R.T + point
-        # _inside for every fixed part at once: a point strictly inside a box (tolerance off each face)
-        if ((moved[:, None, :] > LO[None]) & (moved[:, None, :] < HI[None])).all(axis=2).any():
+        rest = moved
+        if len(LOg):
+            idx = np.floor(moved / cell).astype(int) - base
+            ok = np.all((idx >= 0) & (idx < owner.shape), axis=1)
+            own = np.full(len(moved), -1)
+            own[ok] = owner[tuple(idx[ok].T)]
+            single = own >= 0
+            k = own[single]
+            if np.any(np.all((moved[single] > LOg[k]) & (moved[single] < HIg[k]), axis=1)):
+                return degrees * s / steps
+            rest = moved[own == -2]  # points in shared cells; points in empty cells hit no grid part
+            off = LO[near & ~grid_ok], HI[near & ~grid_ok]
+            if len(off[0]) and ((moved[:, None, :] > off[0][None]) & (moved[:, None, :] < off[1][None])).all(axis=2).any():
+                return degrees * s / steps
+        if len(rest) and len(LOo) and ((rest[:, None, :] > LOo[None]) & (rest[:, None, :] < HIo[None])).all(axis=2).any():
             return degrees * s / steps
     return None
 
