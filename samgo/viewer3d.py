@@ -110,6 +110,7 @@ def _part(p: dict, boxes: list, axles: list, wheels: list, cyls: list) -> None:
 
 
 SPIN_PARTS = {"wheel", "axle", "half_bush", "axle_joiner", "pin", "axle_pin"}  # a wheel with its axle and hub
+ROTOR_ARMS = {"liftarm", "cross_block"}  # locked on a turning axle: a fan's blades, a propeller
 SWINGS = (360, 180, 120, 90, 60, 30, 15)
 
 
@@ -137,7 +138,9 @@ def motions(parts: list[dict], budget: float = 20.0) -> list[dict]:
         small = min(sides, key=lambda g: (sum(len(bodies[r]) for r in g), any(i in low for r in g for i in bodies[r])))
         moving = sorted(i for r in small for i in bodies[r])
         types = {parts[i].get("type") for i in moving}
-        spin = ("wheel" in types and types <= SPIN_PARTS
+        # A wheel set, or a rotor (arms locked on an axle), makes full turns; anything else swings.
+        spin = ((("wheel" in types) or ("axle" in types and types & ROTOR_ARMS))
+                and types <= SPIN_PARTS | ROTOR_ARMS | {"bush"}
                 and all(wheel_axis_matches(parts[i], point, axis)
                         for i in moving if parts[i].get("type") == "wheel"))
         deg = next((sign * d for d in ((360,) if spin else SWINGS) for sign in (1, -1)
