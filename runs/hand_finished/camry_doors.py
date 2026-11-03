@@ -22,7 +22,8 @@ def main():
     p = json.load(open(src))
     p = p["parts"] if isinstance(p, dict) else p
     Y = max(q["y"] + q["l"] for q in p if "l" in q) - 1          # the far side row
-    for row, inner in ((0, 1), (Y, Y - 1)):
+    k = int(__import__("os").environ.get("SIDE_ROW", "0"))  # the side wall's row from the outside (inset bodies: 1)
+    for row, inner in ((k, k + 1), (Y - k, Y - k - 1)):
         p = hollow(p, (X0, X1, inner, inner, Z0 + 1, Z1))           # the skin behind the door opens
         occ = occupancy(p)
         p += [{"type": "plate", "w": 1, "l": 1, "x": x, "y": row, "z": z,
@@ -30,7 +31,7 @@ def main():
               for x in range(X0, X1 + 1) for z in range(Z0, Z1 + 1) if (x, row, z) not in occ]
     p, _ = consolidate(p)
     p = [dict(q, color="tan") if q.get("color") == "trans_clear" else q for q in p]
-    r = add_car_doors(p, outline={"x0": X0, "x1": X1, "z0": Z0, "z1": Z1}, front_high=True)
+    r = add_car_doors(p, outline={"x0": X0, "x1": X1, "z0": Z0, "z1": Z1}, front_high=__import__("os").environ.get("FRONT", "high") == "high")
     q = r["parts"]
     doors = r.get("doors", [])
     # the door's own rows from ZG up are its window
@@ -49,7 +50,7 @@ def main():
     print("doors", [(d["side"], d["x"], d["z"]) for d in doors], "passed", ok,
           {k: v.get("passed") for k, v in rep.items() if isinstance(v, dict) and "passed" in v}, flush=True)
     print({k: v for k, v in rep["checks"].items()}, rep["doors"], flush=True)
-    if ok:
+    if ok or "KEEP" in __import__("os").environ:  # KEEP=1: write a failing one too, to look at
         json.dump(q, open(sys.argv[1], "w"))
 
 

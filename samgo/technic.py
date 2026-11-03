@@ -92,11 +92,13 @@ LENGTH = {"axle_pin": 2, "axle_joiner": 2, "half_bush": 0.5, "cross_block": 1}  
 # Parts that live in holes or on axles and hold by pins, not studs: never stud-grid cells.
 OFF_GRID = {"axle", "wheel", "bush", "pin", "axle_pin", "axle_joiner", "half_bush", "cross_block", "liftarm",
             "propeller"}
-# Propeller: a round 2x2 plate with an axle hole (4032) locked on the axle, its studs facing out along it, and two
-# 2 x `blade` plates crossed on its studs (the first gripping the round plate's four studs, the second the first's
-# middle four): a blade cross turning with the axle. One rigid assembly; 3 plates thick along the axle.
+# Propeller: a round 2x2 plate with an axle hole (4032) locked on the END of the axle (the axle stops inside it: a
+# plate has no hole, so no axle may run on through the blades), its studs facing out along the axle; two 2 x `blade`
+# plates crossed on its studs (the first gripping the round plate's four studs, the second the first's middle four);
+# and a round 2x2 plate on the middle four studs of the second, the cap that locks the cross. One rigid assembly.
+# Position: the stud line where the axle ends; the hub plate is the plate before it, blades and cap the 3 plates after.
 PROPELLER_BLADES = (4, 6, 8)
-PROPELLER_THICK = 3 * PLATE
+PROPELLER_THICK = 3 * PLATE  # two blade plates and the cap, past the axle's end
 
 
 @dataclass(frozen=True)
@@ -136,7 +138,7 @@ def extent(p: dict) -> tuple[tuple[float, float, float], tuple[float, float, flo
     if p["type"] == "propeller":  # the blade cross's bounding box: square across the axle, 3 plates along it
         r = p["blade"] * STUD / 2
         e, s0 = (p["x"], p["y"]) if p["axis"] == "y" else (p["y"], p["x"])
-        a0, a1 = s0 * STUD, s0 * STUD + PROPELLER_THICK
+        a0, a1 = s0 * STUD - PLATE, s0 * STUD + PROPELLER_THICK  # hub, then blades and cap
         x0, x1, y0, y1 = (e * STUD - r, e * STUD + r, a0, a1) if p["axis"] == "y" else (a0, a1, e * STUD - r, e * STUD + r)
         return (x0, y0, h - r), (x1, y1, h + r)
     # cross block: a 1-stud cube round the axle hole, and one round the pin hole beside it

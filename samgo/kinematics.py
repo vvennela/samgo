@@ -111,8 +111,8 @@ def connectors(p: dict) -> list[Connector]:
         centre = _start(p) + ax * STUD / 2 + off
         return [Connector("axle_hole", _start(p), ax, (0.0, STUD)),
                 Connector("round_hole", centre - pin_axis * STUD / 2, pin_axis, (0.0, STUD))]
-    if t == "propeller":  # 4032's axle hole, one plate long, at the start of the assembly
-        return [Connector("axle_hole", _start(p), AXES[p["axis"]], (0.0, PLATE))]
+    if t == "propeller":  # 4032's axle hole: the one plate just before the propeller's line, where the axle ends
+        return [Connector("prop_hub", _start(p), AXES[p["axis"]], (-PLATE, 0.0))]
     if t in ("hinge_base", "hinge_top"):  # swivel hinge 2429/2430: pin vertical, on the long edge at the joint
         pin = np.array([p["pin_x"] * STUD, p["pin_y"] * STUD, p["z"] * PLATE])
         return [Connector("hinge_pin_a" if t == "hinge_base" else "hinge_pin_b", pin, z_axis, (0.0, PLATE))]
@@ -151,7 +151,7 @@ def _on_axis(a: Connector, b: Connector) -> bool:
     s0, s1 = a.span
     t0, t1 = sorted((float(d @ a.axis) + b.span[0], float(d @ a.axis) + b.span[1]))
     # A pin must reach into the hole: a pin end only touching a hole's face holds nothing.
-    if {a.kind, b.kind} & {"pin", "pin_free"}:
+    if {a.kind, b.kind} & {"pin", "pin_free", "prop_hub"}:  # a propeller hub too: the axle must end inside it
         return min(s1, t1) - max(s0, t0) > TOL
     return min(s1, t1) - max(s0, t0) > -TOL
 
@@ -169,6 +169,7 @@ JOINT = {  # (kind, kind) -> joint type
     frozenset(["axle", "round_hole"]): "revolute",
     frozenset(["axle", "axle_hole"]): "rigid",
     frozenset(["axle", "hub"]): "rigid",
+    frozenset(["axle", "prop_hub"]): "rigid",
     frozenset(["pin", "round_hole"]): "rigid",
     frozenset(["pin_free", "round_hole"]): "revolute",
     frozenset(["hinge_pin_a", "hinge_pin_b"]): "revolute",
@@ -332,7 +333,7 @@ def _corners(p: dict) -> np.ndarray:
         v = AXES["z"]
         r = p["blade"] * STUD / 2
         g = lambda a, b, n: np.linspace(a, b, max(2, int(np.ceil((b - a) / 4)) + 1))
-        pts = [c + a * along + s * u + w * v for a in g(0, PROPELLER_THICK, 0) for s in g(-r, r, 0)
+        pts = [c + a * along + s * u + w * v for a in g(-PLATE, PROPELLER_THICK, 0) for s in g(-r, r, 0)
                for w in g(-STUD, STUD, 0)]
         pts += [c + a * along + s * u + w * v for a in g(0, PROPELLER_THICK, 0) for s in g(-STUD, STUD, 0)
                 for w in g(-r, r, 0)]
@@ -604,6 +605,10 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
         elif not {parts[i].get("type") for m in locked for i in m} & (HEIGHT.keys() | BEAMS | {"wheel"}):
             why = "nothing is locked on the axle"
             continue
+        elif _through_blades(parts, moving):
+            why = ("the axle runs on through the propeller's blade plates, which have no hole: shorten it so it ends "
+                   "inside the round hub plate")
+            continue
         if sweep(parts, moving, point, ax, 360, steps=24, ignore=partners) is not None:
             why = "what is on the axle hits a part when it turns"
             if turntable:
@@ -621,6 +626,17 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
             continue
         count += 1
     return count, (f"{count} rotor(s) turn all the way round" if count else why)
+
+
+def _through_blades(parts: list[dict], ids: list[int]) -> bool:
+    """Does an axle among `ids` pass the end of a propeller's hub into its blades (a plate cannot be threaded)?"""
+    for p in (parts[i] for i in ids if parts[i].get("type") == "propeller"):
+        along, end = AXES[p["axis"]], float(_start(p) @ AXES[p["axis"]])
+        for a in (parts[i] for i in ids if parts[i].get("type") == "axle" and parts[i]["axis"] == p["axis"]):
+            off = _start(a) - _start(p)
+            if np.linalg.norm(off - (off @ along) * along) <= TOL and float(_start(a) @ along) + a["length"] * STUD > end + TOL:
+                return True
+    return False
 
 
 def _hit(parts: list[dict], moving: list[int], point: np.ndarray, ignore=()) -> str:

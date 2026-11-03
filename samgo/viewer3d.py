@@ -26,7 +26,7 @@ MECHANISM_PARTS = {"technic_brick", "hinge_base", "hinge_top", "turntable_base",
 HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "tile": 1, "slope": 3, "invslope": 3, "curve": 2,
           "roundbrick": 3, "roundplate": 1, "arch": 3, "hinge_base": 1, "hinge_top": 1, "car_door": 3, "bar_plate": 1, "clip_plate": 1, "click_a": 1,
           "click_b": 1, "turntable_base": 1, "turntable_top": 1}
-EXTRA = {"trans_clear": (205, 225, 240), "trans_black": (45, 60, 75)}
+EXTRA = {"trans_clear": (70, 110, 150), "trans_black": (45, 60, 75)}
 SHAPE = {"slope": 1, "curve": 2, "invslope": 3, "roundbrick": 4, "roundplate": 4}  # 0 = box
 # Usual colours of the Technic connectors (LDraw/BrickLink): 2780 black, 3673 gray, 6558 and 43093 blue.
 PIN_COLOR = {(2, True): "black", (2, False): "light_gray", (3, True): "blue"}
@@ -61,18 +61,18 @@ def _technic(p: dict, boxes: list, cyls: list) -> None:
             dx, dy = (0, 0.15) if across == "y" else (0.15, 0)  # a little longer than the beam, so it shows
             cyls.append([x * STUD - dx, h, y * STUD - dy, STUD + 0.3, across, PIN_RADIUS, HOLE])
         return
-    if t == "propeller":  # two crossed 2-wide plates and the round hub plate under them
-        from .technic import PROPELLER_THICK
+    if t == "propeller":  # hub (round 2x2 on the axle's end), two crossed 2-wide plates on its studs, a round cap
         r = p["blade"] * STUD / 2
         e, s0 = (p["x"], p["y"]) if p["axis"] == "y" else (p["y"], p["x"])
-        a0 = s0 * STUD
-        for wide, tall in ((r, STUD), (STUD, r)):  # (half-span across, half-span up)
+        a0 = s0 * STUD  # the axle's end: hub just before it, blades and cap after
+        for k, (wide, tall) in enumerate(((r, STUD), (STUD, r))):  # (half-span across, half-span up)
             if p["axis"] == "y":
-                boxes.append([e * STUD - wide, h - tall, a0 + PLATE, 2 * wide, 2 * tall, 2 * PLATE, col, 1, 0, "", 0])
+                boxes.append([e * STUD - wide, h - tall, a0 + k * PLATE, 2 * wide, 2 * tall, PLATE, col, 1, 0, "", 0])
             else:
-                boxes.append([a0 + PLATE, h - tall, e * STUD - wide, 2 * PLATE, 2 * tall, 2 * wide, col, 1, 0, "", 0])
-        x, y = (e * STUD, a0) if p["axis"] == "y" else (a0, e * STUD)
-        cyls.append([x, h, y, PLATE, p["axis"], STUD, col])
+                boxes.append([a0 + k * PLATE, h - tall, e * STUD - wide, PLATE, 2 * tall, 2 * wide, col, 1, 0, "", 0])
+        for a in (a0 - PLATE, a0 + 2 * PLATE):  # hub and cap: round 2x2 plates
+            x, y = (e * STUD, a) if p["axis"] == "y" else (a, e * STUD)
+            cyls.append([x, h, y, PLATE, p["axis"], STUD, col])
         return
     if t == "cross_block":
         lo, hi = extent(p)
@@ -278,7 +278,7 @@ function build(m) {
   for (const [key, list] of Object.entries(groups)) {
     const [col, shape, glass] = key.split("|");
     const technic = hl && col === "#ffb000";
-    const see = glass === "1" ? 0.45 : (xray && !technic ? 0.18 : 1);
+    const see = glass === "1" ? 0.62 : (xray && !technic ? 0.18 : 1);
     const mat = new THREE.MeshLambertMaterial({color: col, transparent: see < 1, opacity: see});
     list.sort((a, b) => stepOf(m, a) - stepOf(m, b));
     const inst = new THREE.InstancedMesh(geo[shape], mat, list.length);
