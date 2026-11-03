@@ -452,7 +452,38 @@ new ResizeObserver(resize).observe(stage);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", bg);
 new MutationObserver(bg).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
 bg(); show(0); resize();
-(function loop() { controls.update(); buildFrame(); animate(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+// Recording (scripts/record_video.py): one exact frame at time t, every joint moving at once (spins turn on, swings
+// open and close), the camera orbiting; o.build = seconds into the build animation. The live loop stands down.
+window.RECORDING = false;
+window.renderAt = (i, t, o = {}) => {
+  window.RECORDING = true;
+  if (current !== i || !group) { show(i, true); MODELS[i]._bb = null; }
+  const m = MODELS[i], joints = m.joints || [];
+  if (!m._bb) { buildOn = false; buildFrame(); m._bb = bounds(group); }
+  const mats = joints.map(j => {
+    const a = j.spin ? Math.sign(j.degrees || 1) * 2 * Math.PI * t / (o.spin || 2.5)
+                     : j.degrees * Math.PI / 180 * (1 - Math.cos(2 * Math.PI * t / (o.swing || 4))) / 2;
+    jr.makeRotationAxis(jv.set(j.axis[0], j.axis[1], j.axis[2]).normalize(), a);
+    const out = new THREE.Matrix4().makeTranslation(j.point[0], j.point[1], j.point[2]).multiply(jr);
+    return out.multiply(new THREE.Matrix4().makeTranslation(-j.point[0], -j.point[1], -j.point[2]));
+  });
+  for (const h of movers) {
+    h.matrix.identity();
+    if (o.move !== false) for (const n of h.userData.chain) if (mats[n]) h.matrix.multiply(mats[n]);
+    h.matrixWorldNeedsUpdate = true; h.userData.rest = false;
+  }
+  if (o.build != null) { buildOn = true; buildStart = performance.now() - o.build * 1000; buildFrame(); }
+  else if (buildOn) { buildOn = false; }
+  const bb = m._bb, c = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3());
+  const R = Math.max(size.x, size.y, size.z) * (o.dist || 1.55), ang = (o.az || 0.8) + 2 * Math.PI * t / (o.orbit || 14);
+  camera.position.set(c.x + Math.cos(ang) * R, c.y + R * (o.elev || 0.45), c.z + Math.sin(ang) * R);
+  camera.lookAt(c); renderer.render(scene, camera);
+  return true;
+};
+(function loop() {
+  if (!window.RECORDING) { controls.update(); buildFrame(); animate(); renderer.render(scene, camera); }
+  requestAnimationFrame(loop);
+})();
 </script>
 """
 
