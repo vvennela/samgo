@@ -19,7 +19,9 @@ from samgo.viewer3d import EXTRA, facts_for, page
 
 HIDE = ("header, .bar, .facts { display: none !important; } body { padding: 0 !important; gap: 0 !important; "
         "background: #ffffff !important; } #stage { border-radius: 0 !important; height: 100vh !important; }")
-PAGE = (1240, 1754)          # A4 at 150 dpi
+PAGE = (1240, 1754)          # A4 at 150 dpi (portrait: parts list)
+LAND = (1754, 1240)          # landscape: cover and steps
+RED = (215, 25, 32)
 BG, CALLOUT, INK, NEW = (255, 255, 255), (214, 232, 247), (25, 25, 25), (255, 140, 0)
 FONT = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
 FONT_R = "/System/Library/Fonts/Supplemental/Arial.ttf"
@@ -156,6 +158,40 @@ def callout(groups, maxw=1100):
     return box
 
 
+def arrows(img, marks):
+    """LEGO arrows: from each hovering part down to where it goes (one arrow per place, near ones merged)."""
+    d = ImageDraw.Draw(img)
+    done = []
+    for (tx, ty), (hx, hy) in marks:
+        if any(abs(tx - a) < 30 and abs(ty - b) < 30 for a, b in done):
+            continue
+        done.append((tx, ty))
+        vx, vy = tx - hx, ty - hy
+        L = (vx * vx + vy * vy) ** 0.5
+        if L < 20:
+            continue
+        ux, uy = vx / L, vy / L
+        sx, sy = hx + vx * 0.35, hy + vy * 0.35        # from under the hovering part
+        ex, ey = tx - ux * 6, ty - uy * 6               # to the place
+        head = 26
+        bx, by = ex - ux * head, ey - uy * head
+        px_, py_ = -uy, ux
+        for wdt, col in ((15, (255, 255, 255)), (9, RED)):
+            d.line((sx, sy, bx, by), fill=col, width=wdt)
+        tri = [(ex + ux * 4, ey + uy * 4), (bx + px_ * 17, by + py_ * 17), (bx - px_ * 17, by - py_ * 17)]
+        d.polygon(tri, fill=RED, outline=(255, 255, 255))
+
+
+def turn_over(page, at):
+    """A curved 'turn the model over' arrow with its label."""
+    d = ImageDraw.Draw(page)
+    x, y = at
+    d.rounded_rectangle((x - 20, y - 10, x + 300, y + 190), radius=18, fill=(255, 245, 230), outline=RED, width=4)
+    d.arc((x + 40, y + 10, x + 200, y + 150), 200, 520, fill=RED, width=12)
+    d.polygon([(x + 205, y + 60), (x + 175, y + 95), (x + 235, y + 100)], fill=RED)
+    d.text((x + 10, y + 150), "Turn over", fill=RED, font=font(30))
+
+
 def outline_new(before, after):
     """Outline the pixels that changed between the two renders (the new parts) in orange."""
     diff = ImageChops.difference(before.convert("RGB"), after.convert("RGB")).convert("L").point(lambda v: 255 if v > 18 else 0)
@@ -174,64 +210,67 @@ def main():
     steps = man["steps"]
     import samgo.animation as anim  # the manual's certified order, not the video-game build order cars get
     anim.order = lambda ps, m=None: [next(k for k, st in enumerate(steps) if i in st["parts"]) for i in range(len(ps))]
+    flipped = {i for st in steps if st.get("frame", {}).get("flipped") for i in st["parts"]}
+    plain = {i for st in steps if st.get("kind") == "layer" for i in st["parts"]}
+    _paths = anim.paths
+
+    def paths(ps, order):  # a layer comes straight down onto the model (from below while it is built upside down)
+        dirs, blocked = _paths(ps, order)
+        return [[0, 0, -1] if i in flipped else [0, 0, 1] if i in plain else d for i, d in enumerate(dirs)], blocked
+    anim.paths = paths
     html = Path(tempfile.mkdtemp()) / "m.html"
     html.write_text(page([("model", parts, facts_for(parts), man)]))
     shots = Path(tempfile.mkdtemp())
-    view = {"dist": 0.95, "az": 0.75, "elev": 0.55, "orbit": 1e9, "move": False, "fit": 0.45}
+    view = {"dist": 0.9, "az": 0.75, "elev": 0.6, "orbit": 1e9, "move": False, "fit": 0.4}
+    LIFT = 30   # mm the new parts hover above their places
+    marks = {}
     with sync_playwright() as pw:
         br = pw.chromium.launch(args=["--use-gl=angle", "--use-angle=swiftshader", "--ignore-gpu-blocklist"])
-        pg = br.new_page(viewport={"width": 1100, "height": 760}, color_scheme="light")
+        pg = br.new_page(viewport={"width": 1500, "height": 960}, color_scheme="light")
         pg.goto(html.as_uri())
         pg.wait_for_function("typeof window.renderAt === 'function'", timeout=60000)
         pg.add_style_tag(content=HIDE)
         pg.wait_for_timeout(400)
         for k in range(len(steps)):
             flip = bool(steps[k].get("frame", {}).get("flipped"))
-            for j, s in (("a", k - 1), ("b", k)):
-                pg.evaluate("([o]) => window.renderAt(0, 0, o)", [dict(view, step=s, fitTo=k, flip=flip)])
-                pg.locator("#stage canvas").screenshot(path=str(shots / f"{k:03d}{j}.png"))
-        pg.evaluate("([o]) => window.renderAt(0, 0, o)", [dict(view, step=len(steps), az=0.45, elev=0.35, dist=1.1, fit=None)])
+            marks[k] = pg.evaluate("([o]) => window.renderAt(0, 0, o)", [dict(view, step=k, fitTo=k, lift=LIFT, flip=flip)])
+            pg.locator("#stage canvas").screenshot(path=str(shots / f"{k:03d}.png"))
+        pg.evaluate("([o]) => window.renderAt(0, 0, o)", [dict(view, step=len(steps), az=0.45, elev=0.35, dist=1.05, fit=None)])
         pg.locator("#stage canvas").screenshot(path=str(shots / "cover.png"))
         br.close()
 
     pages = []
     # cover
-    pgc = Image.new("RGB", PAGE, (196, 22, 28))
+    pgc = Image.new("RGB", LAND, (196, 22, 28))
     d = ImageDraw.Draw(pgc)
-    d.text((80, 90), title, fill=(255, 255, 255), font=font(84))
-    d.text((80, 200), f"{len(parts)} parts  ·  {len(steps)} steps  ·  every step checked to hold", fill=(255, 230, 200), font=font(34, False))
+    d.text((80, 70), title, fill=(255, 255, 255), font=font(96))
+    d.text((84, 190), f"{len(parts)} parts  ·  {len(steps)} steps  ·  every step checked to hold", fill=(255, 230, 200), font=font(36, False))
     cov = Image.open(shots / "cover.png").convert("RGB")
-    cov = cov.resize((PAGE[0] - 120, int(cov.height * (PAGE[0] - 120) / cov.width)))
-    pgc.paste(cov, (60, 360))
-    d.text((80, PAGE[1] - 120), "Built from one photo by SAMgo", fill=(255, 230, 200), font=font(30, False))
+    sc = min((LAND[0] - 160) / cov.width, (LAND[1] - 270 - 120) / cov.height)
+    cov = cov.resize((int(cov.width * sc), int(cov.height * sc)), Image.LANCZOS)
+    pgc.paste(cov, ((LAND[0] - cov.width) // 2, 270))
+    d.text((84, LAND[1] - 80), "Built from one photo by SAMgo", fill=(255, 230, 200), font=font(30, False))
     pages.append(pgc)
 
-    # steps: two per page
-    panel_h = (PAGE[1] - 60) // 2
-    cur = None
     for k, s in enumerate(steps):
-        if k % 2 == 0:
-            cur = Image.new("RGB", PAGE, BG)
-            pages.append(cur)
-        y0 = 30 + (k % 2) * panel_h
-        d = ImageDraw.Draw(cur)
+        cur = Image.new("RGB", LAND, BG)
+        pages.append(cur)
+        img = Image.open(shots / f"{k:03d}.png").convert("RGB")
+        arrows(img, marks[k] if isinstance(marks[k], list) else [])
+        top = 40
         groups = sorted(collections.Counter(key(parts[i]) for i in s["parts"]).items(), key=lambda kv: (kv[0][0], kv[0][3], kv[0][1], kv[0][2]))
-        box = callout(groups, maxw=900)
-        d.text((40, y0 + 6), str(k + 1), fill=INK, font=font(96))
-        cur.paste(box, (220, y0 + 10))
-        a = Image.open(shots / f"{k:03d}a.png")
-        b = Image.open(shots / f"{k:03d}b.png")
-        img = outline_new(a, b)
-        room = panel_h - box.height - 50
-        scale = min((PAGE[0] - 80) / img.width, room / img.height)
-        img = img.resize((int(img.width * scale), int(img.height * scale)))
-        cur.paste(img, ((PAGE[0] - img.width) // 2, y0 + box.height + 30))
+        box = callout(groups, maxw=1000)
+        scale = min((LAND[0] - 60) / img.width, (LAND[1] - 40) / img.height)
+        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
+        cur.paste(img, ((LAND[0] - img.width) // 2, LAND[1] - img.height - 20))
+        d = ImageDraw.Draw(cur)
+        d.text((50, top - 10), str(k + 1), fill=INK, font=font(120))
+        cur.paste(box, (260, top))
         flip_now = bool(s.get("frame", {}).get("flipped"))
         flip_before = k > 0 and bool(steps[k - 1].get("frame", {}).get("flipped"))
         if flip_now != flip_before and k > 0:
-            d.text((60, y0 + panel_h - 70), "Turn the model over", fill=(196, 22, 28), font=font(40))
-        if k % 2 == 0:
-            d.line((40, 30 + panel_h - 4, PAGE[0] - 40, 30 + panel_h - 4), fill=(220, 220, 220), width=2)
+            turn_over(cur, (LAND[0] - 330, top + 10))
+        d.text((LAND[0] - 140, LAND[1] - 60), f"{k + 2}", fill=(150, 150, 150), font=font(30, False))
 
     # inventory
     inv = collections.Counter(key(p) for p in parts)

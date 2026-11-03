@@ -455,19 +455,43 @@ bg(); show(0); resize();
 // Recording (scripts/record_video.py): one exact frame at time t, every joint moving at once (spins turn on, swings
 // open and close), the camera orbiting; o.build = seconds into the build animation. The live loop stands down.
 window.RECORDING = false;
-function showUpTo(k) {
+function showUpTo(k, lift = 0) {  // everything up to step k at rest; step k's parts lifted along their way in
+  const q = new THREE.Matrix4(), mv = new THREE.Matrix4();
   for (const o of buildables) {
     if (o.isInstancedMesh) {
-      const st = o.userData.steps, base = o.userData.base;
+      const st = o.userData.steps, base = o.userData.base, ds = o.userData.dirs;
       let n = 0; while (n < st.length && st[n] <= k) n++;
       o.count = n;
-      for (let i = 0; i < n; i++) o.setMatrixAt(i, base[i]);
+      for (let i = 0; i < n; i++) {
+        if (lift && st[i] === k) { const d = ds[i]; mv.makeTranslation(d[0] * lift, d[1] * lift, d[2] * lift); q.multiplyMatrices(mv, base[i]); o.setMatrixAt(i, q); }
+        else o.setMatrixAt(i, base[i]);
+      }
       o.instanceMatrix.needsUpdate = true;
     } else {
       if (o.userData.p0 === undefined) o.userData.p0 = o.position.clone();
       o.visible = o.userData.step <= k; o.position.copy(o.userData.p0);
+      if (lift && o.userData.step === k) { const d = o.userData.dir || [0, 1, 0]; o.position.x += d[0] * lift; o.position.y += d[1] * lift; o.position.z += d[2] * lift; }
     }
   }
+}
+function stepMarks(k, lift) {  // screen points of step k's parts: [x, y] where each goes and [x, y] where it hovers
+  const W = renderer.domElement.clientWidth, H = renderer.domElement.clientHeight, out = [];
+  const px = v => { v.project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
+  for (const o of buildables) {
+    o.updateMatrixWorld(true);
+    if (o.isInstancedMesh) {
+      const st = o.userData.steps, base = o.userData.base, ds = o.userData.dirs;
+      for (let i = 0; i < st.length; i++) if (st[i] === k) {
+        const at = new THREE.Vector3().setFromMatrixPosition(base[i]).applyMatrix4(o.matrixWorld), d = ds[i];
+        const up = at.clone().add(new THREE.Vector3(d[0] * lift, d[1] * lift, d[2] * lift));
+        out.push([px(at.clone()), px(up)]);
+      }
+    } else if (o.userData.step === k && o.userData.p0) {
+      const at = o.parent.localToWorld(o.userData.p0.clone()), d = o.userData.dir || [0, 1, 0];
+      out.push([px(at.clone()), px(at.clone().add(new THREE.Vector3(d[0] * lift, d[1] * lift, d[2] * lift)))]);
+    }
+  }
+  return out;
 }
 window.renderAt = (i, t, o = {}) => {
   window.RECORDING = true;
@@ -488,12 +512,12 @@ window.renderAt = (i, t, o = {}) => {
   }
   if (o.build != null) { buildOn = true; buildStart = performance.now() - o.build * 1000; buildFrame(); }
   else if (buildOn) { buildOn = false; }
-  if (o.step != null) showUpTo(o.step);  // instructions: everything placed up to step o.step, at rest
+  if (o.step != null) showUpTo(o.step, o.lift || 0);  // instructions: everything placed up to step o.step, at rest
   let bb = m._bb;
   if (o.step != null && o.fit) {  // frame what is built so far (not less than o.fit of the whole model)
     if (o.fitTo != null) showUpTo(o.fitTo);  // frame for another step (so before/after pictures share a camera)
     const part = bounds(group);
-    if (o.fitTo != null) showUpTo(o.step);
+    if (o.fitTo != null) showUpTo(o.step, o.lift || 0);
     const full = m._bb.getSize(new THREE.Vector3()), ctr = part.getCenter(new THREE.Vector3());
     const half = part.getSize(new THREE.Vector3()).max(full.clone().multiplyScalar(o.fit)).multiplyScalar(0.5);
     bb = new THREE.Box3(ctr.clone().sub(half), ctr.clone().add(half));
@@ -504,7 +528,7 @@ window.renderAt = (i, t, o = {}) => {
   camera.up.set(0, flip, 0);
   camera.position.set(c.x + Math.cos(ang) * R, c.y + flip * R * (o.elev || 0.45), c.z + Math.sin(ang) * R);
   camera.lookAt(c); renderer.render(scene, camera);
-  return true;
+  return o.step != null && o.lift ? stepMarks(o.step, o.lift) : true;
 };
 (function loop() {
   if (!window.RECORDING) { controls.update(); buildFrame(); animate(); renderer.render(scene, camera); }
