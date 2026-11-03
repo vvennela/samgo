@@ -105,7 +105,7 @@ chain script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/
   feedback), `samgo/kinematics.py` (joints, motion), `samgo/stability.py`, `samgo/manual.py` (certified steps).
 - Skill data generators: `samgo/flap_data.py`, `samgo/rotor_data.py`, `samgo/primitives.py`, `samgo/flap_mistakes.py`.
 - `brickgpt/`: Fireworks training and the BrickGPT-style decoder on Glimmer. `docs/HANDOFF.md`: detailed state.
-- Photo sources and licences: `photos/SOURCES.txt`.
+- Photo sources and licences: `docs/photo-sources.txt` (photos are not in the repo; download them from there).
 
 ## Limits (honest)
 

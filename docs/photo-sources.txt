@@ -1,0 +1,3 @@
+photos/prius_black_2015.jpg: 'Toyota Prius (XW30) Washington DC Metro Area, USA', Wikimedia Commons, CC BY 4.0
+desk_fan.jpg - "Small Desk Fan 1", Wikimedia Commons, public domain: https://commons.wikimedia.org/wiki/File:Small_Desk_Fan_1.jpg
+wind_turbine.jpg - "Mod-5B 3200 kW experimental wind turbine, Kahuku Point", US DOE/NASA, public domain: https://commons.wikimedia.org/wiki/File:Mod-58_3200_kW_experimental_wind_turbine,_Kahuku_Point_Island.jpg
