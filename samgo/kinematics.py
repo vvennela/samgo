@@ -528,6 +528,25 @@ def dangling(parts: list[dict], bodies: dict | None = None) -> list[int]:
     return sorted(m[0] for m in bodies.values() if len(m) == 1 and parts[m[0]].get("type") in JOINT_HALVES)
 
 
+def groups(parts: list[dict]) -> int:
+    """How many separate structures (through studs and joints), ground or not."""
+    parent = list(range(len(parts)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    bodies, joints = analyse(parts)
+    for members in bodies.values():
+        for k in members[1:]:
+            parent[find(k)] = find(members[0])
+    for a, b, *_ in joints:
+        parent[find(a)] = find(b)
+    return len({find(i) for i in range(len(parts))})
+
+
 def connected(parts: list[dict]) -> bool:
     """One structure through rigid links and joints together, standing on the ground (z = 0) or on wheels: the
     structural check for builds with moving parts, where a hinged lid hangs on its hinge, not on studs."""

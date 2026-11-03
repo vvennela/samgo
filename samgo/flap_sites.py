@@ -28,7 +28,7 @@ def site_answer(body: list[dict], site: dict, color: str = "dark_gray") -> list[
 
 
 def sites(body: list[dict], part_ids: list[int], lengths=(3, 4, 5), chords=(2, 3, 4), rng=None,
-          limit: int | None = None, ys: tuple[int, int] | None = None) -> list[dict]:
+          limit: int | None = None, ys: tuple[int, int] | None = None, crop: bool = False) -> list[dict]:
     """Verified flap sites on the +x edge of the parts `part_ids` of `body`: all of them, or (with `rng` and
     `limit`) the first `limit` found in a random order."""
     edge_x: dict = {}
@@ -58,7 +58,7 @@ def sites(body: list[dict], part_ids: list[int], lengths=(3, 4, 5), chords=(2, 3
         site = dict(xh=xh, y0=span[0], y1=span[-1], z=top[hr[0]] + 1, hinge_rows=list(hr), chord=chord)
         try:
             a = apply_edits(body, site_answer(body, site))
-            v = check(body, a.parts, a.sources, FLAP, stand=False)
+            v = check(body, a.parts, a.sources, FLAP, stand=False, crop=crop)
         except EditError:
             continue
         if all(v[k][0] for k in v if k in ("structure", "connected") or k.endswith("surfaces")):

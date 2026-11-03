@@ -162,7 +162,7 @@ def handoff(body: list[dict], part_ids: list[int], spark: dict, **sizes) -> dict
         keep = local_parts(turned, part_ids)
         sub = [turned[i] for i in keep]
         ids = [keep.index(i) for i in part_ids]
-        found = sites(sub, ids, ys=(lo, hi), **sizes) or sites(sub, ids, **sizes)
+        found = sites(sub, ids, ys=(lo, hi), crop=True, **sizes) or sites(sub, ids, crop=True, **sizes)
     else:
         found = sites(turned, part_ids, **sizes)
     if not found:

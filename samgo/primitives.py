@@ -35,7 +35,7 @@ VALID = {tuple(sorted(f)) for f in FOOTPRINTS}
 COLORS = ("white", "light_gray", "red", "blue", "yellow", "dark_gray", "tan", "black", "green", "orange")
 FLAP = [{"name": "flap", "kind": "swing", "axis": "horizontal", "degrees": 20, "count": 1}]
 LEG = [{"name": "leg", "kind": "spin", "count": 2, "stands": False}]
-KEEP = ("structure", "connected", "flap", "leg")
+KEEP = ("structure", "connected", "flap", "leg", "rotor")
 
 
 # ---------------------------------------------------------------- geometry helpers

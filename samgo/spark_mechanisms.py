@@ -31,14 +31,18 @@ H = {"plate": 1, "brick": 3}
 NAME_PROMPT = """The first image is a photo of {obj}. The second shows a LEGO-scale model of it split into numbered
 regions (a top view and a side view; each region has one colour and its number at its centre).
 
-For each numbered region, say which part of the real object it is, and list the hinged surfaces that part has on the
-real object: a panel along one edge of the part that swings about a hinge line along that edge. Use what you know
-about the real object; list only surfaces that really exist on it, and none if it has none. Answer with one JSON
-object and nothing else:
+For each numbered region, say which part of the real object it is, and list
+- the hinged surfaces that part has on the real object: a panel along one edge of the part that swings about a hinge
+  line along that edge;
+- the parts on it that spin all the way round on an axle (not the wheels the object rolls on).
+Use what you know about the real object; list only what really exists on it, and none if it has none. Answer with
+one JSON object and nothing else:
 {{"regions": {{"<number>": {{"part": "<name>",
                            "hinged": [{{"name": "<name>", "where": "<which edge, where along it, in words>",
-                                       "axis": "horizontal" | "vertical"}}]}}}}}}
-"axis" is the hinge line's direction when the object stands as in the photo."""
+                                       "axis": "horizontal" | "vertical"}}],
+                           "spinning": [{{"name": "<name>", "where": "<which face of the part, in words>",
+                                         "axis": "horizontal" | "vertical"}}]}}}}}}
+"axis" is the hinge line's or spin axle's direction when the object stands as in the photo."""
 
 
 def region_of_parts(parts: list[dict], labels: np.ndarray) -> list[int]:
@@ -90,7 +94,9 @@ async def name_regions(photo: Path, labels: np.ndarray, obj: str, work: Path, cl
         try:
             d = json.loads(m.group()) if m else None
             regions = {int(k): {"part": str(v.get("part", "")),
-                                "hinged": [h for h in v.get("hinged", []) if isinstance(h, dict) and h.get("name")]}
+                                "hinged": [h for h in v.get("hinged", []) if isinstance(h, dict) and h.get("name")],
+                                "spinning": [h for h in v.get("spinning", []) or []
+                                             if isinstance(h, dict) and h.get("name")]}
                        for k, v in d["regions"].items()}
             out = {"regions": regions}
             break
@@ -200,8 +206,51 @@ def _build(photo, parts, obj, sampler, work, rounds, max_surfaces, labels, loop,
                      rounds=rec["rounds"], instruction=text)
         if rec["passed"]:
             parts = rec["parts"]
+    parts = _rotors(photo, parts, obj, sampler, work, rounds, labels, loop, named, report)
     (work / "spark_mechanisms.json").write_text(json.dumps(report, indent=1, default=str))
     return parts, report
+
+
+def _rotors(photo, parts, obj, sampler, work, rounds, labels, loop, named, report, max_rotors: int = 4):
+    """The spinning parts Spark names: Spark reads which face of the part the rotor sits on and where along it
+    (samgo.part_layout, the edge it names on the top view is the face); code picks the nearest spot on that face
+    where a plain rotor passes (samgo.rotor_data); Glimmer builds it from the training's L2 wording, with feedback."""
+    from .part_layout import ask as ask_layout
+    from .rotor_data import ROTOR, instruction, rotor_site
+
+    report["rotors"] = []
+    jobs = [(r, d["part"], h) for r, d in sorted(named["regions"].items()) for h in d.get("spinning", [])]
+    for region, part, h in jobs[:max_rotors]:
+        entry = {"region": region, "part": part, **h}
+        report["rotors"].append(entry)
+        if h.get("axis") == "vertical":
+            entry["error"] = "only horizontal axles yet"
+            continue
+        ids = [i for i, r in enumerate(region_of_parts(parts, labels)) if r == region]
+        if not ids:
+            entry["error"] = "no parts in the region"
+            continue
+        sp = loop.run_until_complete(ask_layout(photo, parts, ids, work / f"rotor_{region}_{h['name']}", obj=obj,
+                                                part=part, mech=f"{h['name']} (a part that spins on an axle)",
+                                                where=h.get("where", "")))
+        entry["spark_layout"] = sp
+        site = rotor_site(parts, ids, sp["edge"], sp["from"], sp["to"]) if "error" not in sp else None
+        if site is None:
+            entry["error"] = "no buildable spot on that face"
+            continue
+        text = instruction("L2", obj, site)
+        view = _rotor_view(parts, site)
+        rec = attempt(parts, view, text, sampler, rounds=rounds, reqs=ROTOR)
+        entry.update(site=site, passed=rec["passed"], rounds=rec["rounds"], instruction=text)
+        if rec["passed"]:
+            parts = rec["parts"]
+    return parts
+
+
+def _rotor_view(parts, site):
+    from .rotor_data import _view
+
+    return _view(parts, site, "L2")
 
 
 def main() -> None:
@@ -233,6 +282,9 @@ def main() -> None:
         print(f"region {s['region']} {s['part']!r}: {s['name']} ({s.get('where')}) -> "
               f"{s.get('handoff')} passed={s.get('passed')} {s.get('error', '')}")
     print("unsupported:", [(u["part"], u["name"], u.get("axis")) for u in report["unsupported"]])
+    for r in report.get("rotors", []):
+        print(f"rotor region {r['region']} {r['part']!r}: {r['name']} ({r.get('where')}) -> {r.get('site')} "
+              f"passed={r.get('passed')} {r.get('error', '')}")
     for g in report.get("gear", {}).get("legs", []):
         print(f"leg {g['name']!r} at ({g['x']}, {g['y']}) -> {g.get('site')} passed={g.get('passed')} "
               f"{g.get('error', '')}")

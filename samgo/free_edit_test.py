@@ -51,8 +51,10 @@ def messages(obj: str, parts: list[dict], reqs: list[dict]) -> list[dict]:
 
 
 def check(original: list[dict], parts: list[dict], sources: list[int | None], reqs: list[dict],
-          stand: bool = True) -> dict:
-    """Generic verdicts. `sources[i]`: the original index of candidate part i (None if added)."""
+          stand: bool = True, crop: bool = False) -> dict:
+    """Generic verdicts. `sources[i]`: the original index of candidate part i (None if added). `crop`: the parts are
+    a neighbourhood cut out of a bigger model (it need not reach the table, and may be in pieces that join outside
+    it): connected then means the edit made no new separate piece and left no joint half holding nothing."""
     from .kinematics import _sides, analyse, connected, locked, requirement_met, sweep
     from .mechanism_bases import PIVOT_AS, structural
     from .stability import stability
@@ -63,7 +65,13 @@ def check(original: list[dict], parts: list[dict], sources: list[int | None], re
     r = verify(technic_structural(structural(parts)), None)
     rule = [i for i in r.issues if i.code not in ("floating", "disconnected")]
     out["structure"] = (not rule, "; ".join(i.message for i in rule[:4]) or "valid parts, no overlaps")
-    out["connected"] = (connected(parts), "one structure through studs and joints")
+    if crop:
+        from .kinematics import dangling, groups
+
+        ok = groups(parts) <= groups(original) and not dangling(parts)
+        out["connected"] = (ok, "no new loose piece" if ok else "the edit left a piece or joint half unattached")
+    else:
+        out["connected"] = (connected(parts), "one structure through studs and joints")
     if stand:
         st = stability(locked(parts, PIVOT_AS), vehicle=any(p["type"] == "wheel" for p in parts))
     else:  # a part-level task: the whole object's balance is checked when every mechanism is in
