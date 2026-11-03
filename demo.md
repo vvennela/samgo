@@ -28,10 +28,12 @@ To make a page for any build: `PYTHONPATH=. python -m samgo.viewer3d out.html "N
 
 ## The real build
 
-The kit: `runs/build_kit/camry_red_certified/` - the photo Camry, painted red, **286 LEGO elements in 49 steps,
-certified** (every step held by stud forces, checked exactly). `BUILD.md` has a picture per step; `parts.csv` and
-`bricklink_wanted.xml` list every part. For your own car photo: run it (see the README), then
-`python -m samgo.build_kit <run>/artifacts/<id> <out> --title "My car"` gives the same kit for it.
+**The kit to buy and build: `runs/build_kit/camry_red_final/`** - the red Camry with the photo's glass, two
+full-height hinged doors (windows in the doors) and four wheels: **395 LEGO elements, 68 steps, certified** (every
+step held by stud forces, checked exactly). **`SHOPPING.md` is the store list** (what the Pick & Build wall has, by
+colour, and what to order online); `BUILD.md` has a picture per step; `parts.csv` and `bricklink_wanted.xml` list every
+part. (The body is the pipeline's; the doors were cut by hand with the project's door builder, so this kit is
+"hand-finished".)
 
 ### What to buy
 
