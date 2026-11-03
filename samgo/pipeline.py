@@ -73,6 +73,32 @@ def _reports(parts, target, original, vehicle):
     return bool(passed), reports
 
 
+def _spark_reports(body, parts, report):
+    """Final checks for an object whose mechanisms Spark named and Glimmer built: the same generic checker Glimmer
+    was graded by (samgo.free_edit_test.check: real parts incl. Technic, connected through studs and joints, stands),
+    asked for every mechanism that passed (rotors turn all the way round, freed surfaces swing)."""
+    from .free_edit_test import check
+
+    reqs = []
+    for axis in ("horizontal", "vertical"):
+        n = sum(1 for r in report.get("rotors", []) if r.get("passed") and r.get("axis", "horizontal") == axis)
+        if n:
+            reqs.append({"name": f"{axis}_rotors", "kind": "rotor", "axis": axis, "count": n})
+        n = sum(1 for s in report.get("surfaces", []) if s.get("passed") and s.get("axis") == axis)
+        if n:
+            reqs.append({"name": f"{axis}_surfaces", "kind": "swing", "axis": axis, "degrees": 20, "count": n})
+    index = {json.dumps(p, sort_keys=True): i for i, p in enumerate(body)}
+    sources = [index.get(json.dumps(p, sort_keys=True), -1) for p in parts]  # recolored parts count as kept
+    out = check(body, parts, sources, reqs, stand=True)
+    ok = lambda k: bool(out[k][0]) if k in out else True
+    reports = {'structure': {'passed': ok('structure') and ok('connected')},
+               'function': {'passed': all(ok(q['name']) for q in reqs), 'requirements': reqs} if reqs
+               else {'status': 'not_applicable'},
+               'stability': {'passed': ok('stands')},
+               'checks': {k: list(v) for k, v in out.items()}}
+    return all(ok(k) for k in out), reports
+
+
 def _door_reports(parts):
     """Final checks for a car with hinged doors: the door module's checks plus each door's own sampled swing."""
     from .doors import CAR_REQUIREMENTS, checks
@@ -212,6 +238,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
         summary.update(target_shape=list(original.shape), cells=int((original > 0).sum()))
         target = original
         family, mechanism_ctx = None, None
+        spark_report, spark_body = None, None
         if car:
             # The builder returns its last candidate even when no stable layout was found.
             # Validate scaffolding before spending model calls, with a small deterministic search.
@@ -277,6 +304,7 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
                 stage('spark_mechanisms')
                 from .spark_mechanisms import build as spark_build
                 chooser = sampler if sampler is not None else FireworksSampler(model)
+                spark_body = parts
                 parts, spark_report = spark_build(photo, target, parts, found.get('object') or prompt, chooser,
                                                   run_dir / 'spark_mechanisms', rounds=rounds)
                 summary['spark_mechanisms'] = [{k: s.get(k) for k in ('part', 'name', 'handoff', 'passed', 'error')}
@@ -393,6 +421,8 @@ def run(photo: Path, prompt: str, out: Path, car: bool | None = None, size: str 
             door_reports = _door_reports(parts)
         elif family is not None:
             door_reports = _mechanism_reports(parts, family, mechanism_ctx)
+        elif spark_report is not None:
+            door_reports = _spark_reports(spark_body, parts, spark_report)
         np.savez_compressed(run_dir / 'assembly_target.npz', target=target)
         save(run_dir / 'build.json', parts)
         summary['artifacts']['build'] = str(run_dir / 'build.json')
