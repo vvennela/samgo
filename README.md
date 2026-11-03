@@ -17,7 +17,7 @@ models: **SAM 3.1**, **SAM 3D**, **Muse Spark** and **Muse Glimmer** (fine-tuned
 
 **The fan was never in training.** Spark looked at the photo and said "the blades spin, on a horizontal axis, at
 the front of the head"; Glimmer set a Technic bearing into the head's face, put an axle through it and locked arms
-on it, **first try**; code checked that every part is real and held, the arms turn all the way round without
+on it, **first try** (5 of 5 runs on two fan photos); code checked that every part is real and held, the arms turn all the way round without
 touching anything, and the fan still stands. Same models and code as the cars.
 
 
@@ -121,3 +121,7 @@ chain script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/
   part over instead of removing what is in the way). The fix is more generic data on irregular bodies, not a patch.
 - Very large models are not always certifiable step by step (an airliner fuselage overhangs the table).
 - Colours come from the SAM 3D mesh texture, which can wash out dark liveries.
+- One photo gives limited depth: a wind turbine from a flat painting came out 3-5 studs deep, with no room for a
+  rotor bearing (reported, not built). Rotor arms are the trained 2-stud size, smaller than real fan blades.
+- Spark's part naming varies from run to run; on one desk-fan run it split the blades into several regions with no
+  buildable spot.
