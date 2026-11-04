@@ -225,8 +225,10 @@ def main():
     }
     for name, s in labels.items():
         text_png(out / f"{name}.png", [s], size=54, color=MUTED, track=0.12)
-    text_png(out / "cap_res.png", ["RESOLUTION IS A DIAL"], size=96, track=0.1)
-    text_png(out / "cap_res2.png", ["TURN IT DOWN TO A SIZE YOU CAN BUILD"], size=64, color=MUTED, track=0.1)
+    text_png(out / "cap_res.png", ["FULL SCALE  ·  144,753 PIECES"], size=96, track=0.1)
+    text_png(out / "cap_valid.png", ["EVERY PIECE CONNECTED"], size=64, color=MUTED, track=0.1)
+    text_png(out / "cap_layers.png", ["LAYER BY LAYER"], size=64, color=MUTED, track=0.1)
+    text_png(out / "cap_res2.png", ["SCALED DOWN TO SOMETHING YOU CAN BUILD"], size=64, color=MUTED, track=0.1)
     text_png(out / "cap_slab.png", ["REAL PLATES.  NO WHEELS, NO DOORS, NOTHING MOVES."], size=60, color=MUTED, track=0.1)
     text_png(out / "cap_parts.png", ["THIS IS A REAL BUILD, WITH REAL PARTS"], size=84, track=0.08)
     text_png(out / "cap_unseen.png", ["NONE OF THESE WERE IN THE TRAINING DATA"], size=84, track=0.1)

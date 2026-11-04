@@ -121,8 +121,9 @@ ELEMENTS = [
          fade=0.5),
     dict(src=f"{FILM}/res_layers", x=RES[0], y=RES[1] - 10, w=1550, start=T_RES + 8.0, show=(T_RES + 8.0, T_FILL + 1),
          fade=0.5),
-    card("cap_res", RES[0], RES[1] - 430, 0.8, pop=T_RES + 0.8),
-    card("cap_res2", RES[0], RES[1] + 380, 0.8, pop=T_RES + 8.5),
+    card("cap_res", RES[0], RES[1] - 430, 0.8, pop=T_RES + 0.8),                  # the full-scale model
+    card("cap_valid", RES[0], RES[1] + 380, 0.85, pop=T_RES + 8.6, show=(T_RES + 8.6, T_RES + 11.6), fade=0.3),
+    card("cap_res2", RES[0], RES[1] + 380, 0.8, pop=T_RES + 11.8),
     dict(src=f"{FILM}/fill", x=FILL[0], y=FILL[1], w=1920, start=T_FILL),
     card("cap_slab", FILL[0], FILL[1] + 520, 0.85, pop=T_FILL + 11.0, show=(T_FILL + 11.0, T_WORK + 1)),
 
