@@ -1,28 +1,15 @@
 # SAMgo
 
-**A photo of any machine -> a LEGO model of it that works, and that you can actually build.**
+**One photo of a machine → a LEGO model of it that works, and that you can actually build.**
 
-A car whose wheels roll and doors swing, a fan whose blades spin, a Cessna with a turning propeller and swinging
-ailerons, a helicopter with its tail rotor, an airliner with its engine fans: the same models and the same code, with
-nothing written for any one object. Built for the Meta Global AI Developer Hackathon (Indie track, "Push the
-Frontier"), Oct 27 - Nov 4, 2026, on Meta's models: **SAM 3.1**, **SAM 3D**, **Muse Spark** and **Muse Glimmer**
-(fine-tuned by us).
+Wheels that roll, doors that swing, propellers, rotors and engine fans that spin: SAMgo turns a single photo into a
+LEGO model made only of real parts, with working mechanisms, a certified step-by-step manual and a parts list you can
+order. Built in one week for the Meta Global AI Developer Hackathon (Oct 27 - Nov 4, 2026) on **SAM 3.1**, **SAM 3D**,
+**Muse Spark** and **Muse Glimmer**, fine-tuned by us.
 
 - **Demo video (3 min):** https://youtu.be/jUHE-NSDsxY
-- **Fine-tuned model:** Muse Glimmer 30B + our LoRA (run 11), served on Fireworks as `accounts/vvennela/models/objects-r11-tuned`.
-  Training data, script and card: https://huggingface.co/datasets/vvennelakanti/samgo-glimmer-train-r11
-- **Built during the hackathon:** all of it. This repository starts on Oct 27; every model, dataset, checker,
-  training run and tool here was made during the event.
-
-### Where Meta's models are used
-
-| Model | Where | What it does in SAMgo |
-|---|---|---|
-| **SAM 3.1** (Meta Model API) | `samgo/perceive.py` | cuts the object out of the photo; finds the pixels of each glass part Spark names |
-| **SAM 3D** | `samgo/perceive.py` | turns the one photo (object mask, glass marked) into a textured 3D mesh |
-| **Muse Spark** (Muse Spark Open) | `samgo/spark_*.py`, `samgo/car_layout.py`, `samgo/part_layout.py` | names the working parts and where they go (wheels, doors, rotors, flaps), mirror twins, glass, colours; reviews the finished build against the photo |
-| **Muse Glimmer 30B** + our LoRA (Fireworks) | `samgo/assembly.py`, `samgo/spark_mechanisms.py`, `samgo/learned_mechanisms.py` | the only thing that builds: writes the edit list that adds axles, wheels, hinges, rotors, turntables, and fixes its own answer from the checker's feedback |
-| **Muse Image** | `runs/video/muse_image/` | (demo only) the "models can draw" pictures in the video |
+- **Training data, script and card:** https://huggingface.co/datasets/vvennelakanti/samgo-glimmer-train-r11
+- **Model:** Muse Glimmer 30B + our LoRA (run 11), served on Fireworks as `accounts/vvennela/models/objects-r11-tuned`
 
 | Camry (from a photo) | Fan (held-out) | Helicopter (held-out) |
 |---|---|---|
@@ -34,7 +21,22 @@ Every object except the cars was a **held-out exam**: never in training, never t
 (Camry, supercar, 747, helicopter, Cessna) are the pipeline's builds completed with SAMgo's own mechanism builders
 (`runs/hand_finished/`), every one verified by the same checker.
 
-## How it works: Spark knows, Glimmer does, code verifies
+## What SAMgo achieves
+
+- **Real LEGO, not a picture.** Every part is a real catalogue element (official LDraw geometry, within 0.4 mm). The red
+  Camry is 320 parts with a 56-step manual, a BrickLink wanted list and a model for BrickLink Studio
+  (`runs/build_kit/camry_red_current/`).
+- **Verified, piece by piece.** Nothing overlaps, every part is held by studs (joint halves included), axles pass only
+  through holes, mechanisms swing or spin clear, the model stands under an exact force balance, and every step of the
+  build is certified to hold.
+- **Any size.** The same photo at full scale is 140,493 pieces, every piece connected; scaled down to 293 pieces it keeps
+  its shape.
+- **Working mechanisms, built by a model.** Muse Glimmer, fine-tuned by us, writes every mechanism: axles and wheels,
+  hinges, side rotors, rotors on turntables. It reads the checker's exact feedback and fixes its own answer.
+- **It generalizes.** Trained only on generic blocks and panels with generic skills, it built the engine fans of a 747,
+  a helicopter's rotors and a Cessna's propeller and ailerons, none of which it had seen.
+
+## How it works: Spark knows, Glimmer builds, code verifies
 
 ```mermaid
 flowchart LR
@@ -50,26 +52,16 @@ flowchart LR
     review -- done --> out[3D viewer, build animation,<br/>certified steps, BrickLink list]
 ```
 
-- **Spark knows** (Muse Spark Open). From the photo and its world knowledge it names the object's working parts -
-  hinged panels, spinning parts (propellers, fans, rotors), legs and wheels - and points where each goes; says
-  which are mirror twins and whether the object is mirror-symmetric; names its transparent parts; and, after the
-  build, **reviews it against the real object**: missing working parts are added, misplaced ones moved to the right
-  spot, and colors corrected (a base color, then the trim). It never places a brick.
-- **SAM sees.** SAM 3.1 cuts the object out of the photo and also finds exactly the pixels of the glass Spark named
-  ("windshield", "side windows"); those are marked before SAM 3D builds the mesh, so the LEGO model's glass is where
-  the photo shows it, mirrored to the hidden side.
-- **Glimmer does** (Muse Glimmer 30B + our LoRA, trained on Fireworks). It gets the parts near the spot and one
-  generic sentence ("set a rotor into this face", "one edge of a flat structure should swing") and writes the edit
-  list. It is the only thing that builds. Each round it gives several answers at once and the checker keeps one that
-  passes.
-- **Code verifies.** Every part is a real LEGO element; nothing overlaps; every part is held by studs (joint halves
-  included); no axle passes through plastic except at a round hole; the mechanism turns or swings clear; the model
-  stands (exact force balance per part); the build order is certified step by step. The checker's findings become
-  **feedback**: exact sentences ("input part 86 overlaps your bar plate: remove it first", "this clip holds nothing")
-  that Glimmer uses to fix its answer, up to 3 rounds. Every mechanism in a pipeline build is Glimmer's own work.
+| Meta model | Where | What it does |
+|---|---|---|
+| **SAM 3.1** (Meta Model API) | `samgo/perceive.py` | cuts the object out of the photo; finds the pixels of each glass part Spark names |
+| **SAM 3D** | `samgo/perceive.py` | turns the one photo (object mask, glass marked) into a textured 3D mesh |
+| **Muse Spark** | `samgo/spark_*.py`, `samgo/car_layout.py`, `samgo/part_layout.py` | names the working parts and where they go (wheels, doors, rotors, flaps), mirror twins, glass, colours; reviews the build against the photo |
+| **Muse Glimmer 30B** + our LoRA | `samgo/assembly.py`, `samgo/spark_mechanisms.py`, `samgo/learned_mechanisms.py` | the only thing that builds: writes the edit list that adds axles, wheels, hinges, rotors and turntables, and fixes it from the checker's feedback |
 
-**Nothing is object-specific.** Glimmer's training data is generic bodies (blocks, panels, lids, fins, shelves) with
-generic skills; the airliner, Cessna, helicopter and fan are held-out exams.
+The checker's findings become exact sentences ("input part 86 overlaps your bar plate: remove it first", "this clip
+holds nothing") that Glimmer uses to fix its answer, up to 3 rounds. Nothing is object-specific: no object names in
+the training data, prompts or code.
 
 ## What Glimmer learned
 
@@ -86,50 +78,24 @@ Frozen test sets, made before training and never regenerated (`runs/audit/`). Fi
 | Door hinges on unseen vehicles (10) | 10 | 9 | 10 | **10** |
 | Objects: place/repair a mechanism (112) | 92 | 88 | 87 | **92** |
 
-On real photos, Glimmer built the fan's rotor on the first try in 5 of 5 runs on two fan photos, the Cessna's
-propeller, ailerons and flap, the helicopter's tail rotor, and the 747's engine fans (one built, its twin mirrored).
-At 40 studs across, run 11 built every rotor it was asked for on the first try: the helicopter's main and tail
-rotors, the Cessna's propeller, the wind turbine's rotor.
-
-What moved the numbers (details in `fireworks-training-runs/*/run.md`): a `clear` edit (Glimmer makes the
-decisions, code does the cell bookkeeping: hinges 4/20 -> 15/20); mistake -> feedback -> fix rows built from
-Glimmer's own answers; physical checks strict enough to catch a clip hanging over empty space; generic rotor skills
-(side rotors 1/30 -> 30/30, upright rotors 8/30 -> 24/30); several answers per round with the checker choosing.
+What moved the numbers (details in `fireworks-training-runs/*/run.md`): a `clear` edit (Glimmer makes the decisions,
+code does the cell bookkeeping: hinges 4/20 -> 15/20); mistake -> feedback -> fix rows built from Glimmer's own
+answers; physical checks strict enough to catch a clip hanging over empty space; generic rotor skills (side rotors
+1/30 -> 30/30, upright rotors 8/30 -> 24/30); several answers per round with the checker choosing.
 
 ## Proofs and checks
 
+- `samgo/manual.py`: the build order certified step by step with an exact rational force balance.
 - `formal/MergeRule.lean` (Lean 4): merging neighbouring pieces into one real piece keeps every cell and every
   outside stud grip (`samgo/consolidate.py`; `tests/test_consolidate.py` ties the code to the proof).
 - `formal/AnimationPath.lean` (Lean 4): every piece of the build animation arrives along a path that never passes
-  through a placed piece, and an axle slid along a hole's line never meets the brick's plastic (`samgo/animation.py`
-  checks exactly these hypotheses for every move).
-- `samgo/manual.py`: build order certified step by step with an exact rational force balance.
-- The wheel catalogue (`scripts/wheel_catalog.py`) pairs rims and tyres from the official LDraw geometry; every model
-  exports to LDraw with no part off by more than 0.4 mm. 353 tests (`pytest`).
-
-## SAMgo Studio: a run, with every model call
-
-`scripts/studio_run.py` runs the pipeline unchanged and logs every live call to SAM 3.1, SAM 3D, Muse Spark and
-Muse Glimmer (what was asked, the answer, how long it took) to `calls.jsonl`. `scripts/studio.py` shows a run live as
-it happens; `scripts/studio_show.py` replays a logged run in its recorded order (the demo video's "real run").
-
-```bash
-PYTHONPATH=. python scripts/studio_run.py photos/camry.jpg --prompt car --car --assembly learned \
-    --model <Glimmer sampler> --doors --buildable --color red -o runs/live   # same arguments as samgo.pipeline
-python scripts/studio.py runs/live                                         # http://127.0.0.1:8765
-```
-
-## Build one for real
-
-Every passing model gets a build kit (`python -m samgo.build_kit <artifacts> <out>`): `parts.csv` and a
-**BrickLink wanted list** with the exact parts, `model.ldr` for BrickLink Studio, and the certified build order as
-one picture per step. The red Camry: 320 elements, 56 certified steps, and a 60-page LEGO-style manual
-(`runs/build_kit/camry_red_current/Camry_manual.pdf`).
+  through a placed piece, and an axle slid along a hole's line never meets the brick's plastic.
+- 353 tests (`pytest`).
 
 ## Run it
 
 ```bash
-export UV_PROJECT_ENVIRONMENT=$HOME/.venvs/samgo     # the repo .venv can hang on iCloud
+export UV_PROJECT_ENVIRONMENT=$HOME/.venvs/samgo
 uv sync --locked --inexact
 # keys in .env (see .env.example): MODEL_API_KEY (Meta Model API, SAM 3.1), FAL_KEY (SAM 3D),
 # BASETEN_API_KEY (Muse Spark), FIREWORKS_API_KEY (Glimmer)
@@ -144,29 +110,25 @@ PYTHONPATH=. python -m samgo.pipeline photos/car.jpg --prompt car --car --assemb
 python -m samgo.viewer3d out.html "Car=runs/car/artifacts/<run>/build.json"   # 3D: Build it, Preview motion
 python -m samgo.build_kit runs/car/artifacts/<run> runs/car_kit --title "My car"  # parts list + steps
 PYTHONPATH=. python -m pytest -q tests/
-lean formal/MergeRule.lean && lean formal/AnimationPath.lean
 ```
 
-Training: `brickgpt/train_serverless.py` (LoRA rank 32, batch 64, 2 epochs, Fireworks serverless); each run's chain
-script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/objects-rN/run.md`. Run 11 is the model
-used everywhere (Fireworks sampler `vvennela/run-736d451107854752b6ba9b0cb0ad5b78/objects-r11-tuned-d5f4be8e`;
-its training data on Hugging Face above). Run 13 trained the same skills on 1.5-2.5x larger bodies: rotors and blade crosses improved at
-large sizes; its notes are in `fireworks-training-runs/objects-r13/run.md`.
+**SAMgo Studio** shows a run with every model call: `scripts/studio_run.py` takes the same arguments as
+`samgo.pipeline` and logs each call to SAM 3.1, SAM 3D, Muse Spark and Muse Glimmer (what was asked, the answer, how
+long it took); `python scripts/studio.py <out dir>` shows it live at http://127.0.0.1:8765.
+
+Training: `brickgpt/train_serverless.py` (LoRA rank 32, batch 64, 2 epochs, Fireworks serverless). Each run's chain
+script and notes are in `runs/rN_chain.sh` and `fireworks-training-runs/objects-rN/run.md`; run 11 is the model used
+everywhere.
 
 ## Layout
 
-- `samgo/pipeline.py`: photo -> model. `samgo/perceive.py`: SAM 3.1 + SAM 3D (object and glass).
-- Spark: `samgo/spark_mechanisms.py` (working parts, mirror twins, parallel build), `samgo/spark_review.py` (review
-  against the real object), `samgo/spark_glass.py`, `samgo/spark_gear.py`, `samgo/spark_symmetry.py`,
-  `samgo/car_layout.py`, `samgo/part_layout.py`.
-- Checks: `samgo/free_edit_test.py` (`check`, `explain` = feedback), `samgo/kinematics.py` (joints, motion),
-  `samgo/stability.py`, `samgo/manual.py`, `samgo/verifier.py`, `samgo/technic.py`.
-- Outputs: `samgo/viewer3d.py` (3D, motion, build animation), `samgo/animation.py`, `samgo/build_kit.py`,
-  `samgo/ldraw.py`.
-- Skill data: `samgo/rotor_data.py`, `samgo/flap_data.py`, `samgo/primitives.py`, `samgo/flap_mistakes.py`.
-- Training: `brickgpt/` (Fireworks serverless LoRA SFT), `fireworks-training-runs/` (one note per run), frozen tests
-  in `runs/audit/`.
-- Studio and the demo video: `scripts/studio*.py`; `scripts/film*.py` (the video's compositor, transitions, voice-over
-  cutting). The 10x Camry: `runs/hand_finished/camry_10x.py`, videos in `runs/video/camry_10x/`.
-- `formal/`: Lean proofs. `docs/`: verification notes, a feedback example, photo sources.
-- Photos: `docs/photo-sources.txt` (public domain / CC; photos are not in the repo).
+- `samgo/pipeline.py`: photo -> model. `samgo/perceive.py`: SAM 3.1 + SAM 3D.
+- Spark: `samgo/spark_mechanisms.py`, `samgo/spark_review.py`, `samgo/spark_glass.py`, `samgo/spark_gear.py`,
+  `samgo/spark_symmetry.py`, `samgo/car_layout.py`, `samgo/part_layout.py`.
+- Checks: `samgo/free_edit_test.py` (`check`, `explain` = feedback), `samgo/kinematics.py`, `samgo/stability.py`,
+  `samgo/manual.py`, `samgo/verifier.py`, `samgo/technic.py`.
+- Outputs: `samgo/viewer3d.py`, `samgo/animation.py`, `samgo/build_kit.py`, `samgo/ldraw.py`; `scripts/studio*.py`.
+- Training: `brickgpt/`, skill data generators (`samgo/rotor_data.py`, `samgo/flap_data.py`, `samgo/primitives.py`,
+  `samgo/flap_mistakes.py`), frozen tests in `runs/audit/`, one note per run in `fireworks-training-runs/`.
+- `formal/`: Lean proofs. `docs/`: verification notes, a feedback example, images, photo sources (photos are not in the
+  repo).
