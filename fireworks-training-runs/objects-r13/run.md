@@ -19,3 +19,11 @@ everything here".
   name and promoted model listed here; nothing deleted except the training session after it ends.
 - Tests: the four large tests (r11 baseline first), regressions (r6 primitives, r9 sheets, r10 rotors, r11 vrotors,
   r12 blades, doors, objects, cars, 747 sweep), then the 40-stud showcase builds again.
+
+## Log
+- Nov 4 00:31: warm start from objects-r11-s30720 failed ("Adapter could not be loaded from durable storage", as on
+  run 10); trainer stopped, sessions ts-e45207ba..., ts-19cf6dc5... deleted. Falling back to scratch: run id
+  objects-r13s on data/mix_r13 (run 12's mix + 5,244 large rows = 22,980 rows, 2 epochs).
+- Baseline, run 11 on the large tests (first try / within 3 rounds / n):
+  flaps 15/20/30, side rotors 27/27/30, upright rotors 23/25/30, blade crosses 22/23/30 (any rotor; r11 seldom
+  builds the blade cross itself).
