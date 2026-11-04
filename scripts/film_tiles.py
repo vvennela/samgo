@@ -52,6 +52,30 @@ CLEAR = """() => {
 }"""
 
 
+MESH = """(d) => {
+  const dec = (b, T) => { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new T(u.buffer); };
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(dec(d.pos, Float32Array), 3));
+  g.setAttribute('color', new THREE.BufferAttribute(dec(d.col, Float32Array), 3));
+  g.setIndex(new THREE.BufferAttribute(dec(d.idx, Uint32Array), 1));
+  g.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({vertexColors: true, transparent: true, side: THREE.DoubleSide});
+  const mesh = new THREE.Mesh(g, mat); mesh.userData.catcher = true;  // not a floor: never hidden
+  scene.add(mesh); window.__mesh = mesh;
+}"""
+
+
+def keyed(spec: str, t: float) -> float:
+    """Piecewise-linear value at t from "t0:v0,t1:v1,..." (held flat outside the range)."""
+    keys = [tuple(float(x) for x in kv.split(":")) for kv in spec.split(",")]
+    if t <= keys[0][0]:
+        return keys[0][1]
+    for (a, va), (b, vb) in zip(keys, keys[1:]):
+        if a <= t <= b:
+            return va + (vb - va) * (t - a) / max(1e-9, b - a)
+    return keys[-1][1]
+
+
 def load(path: Path):
     parts = json.loads(path.read_text())
     parts = parts["parts"] if isinstance(parts, dict) else parts
@@ -67,6 +91,9 @@ def main():
     building = opts.pop("build", "0") == "1"
     speed = float(opts.pop("build_speed", "1"))
     start = float(opts.pop("start", "0"))
+    build_start = float(opts.pop("build_start", "0"))
+    mesh = opts.pop("mesh", None)
+    mesh_alpha = opts.pop("mesh_alpha", "0:1")
     o = {k: (False if v == "false" else float(v)) for k, v in opts.items()}
     if "move" in o:
         o["move"] = bool(o["move"])
@@ -83,13 +110,22 @@ def main():
         pg.add_style_tag(content=HIDE)
         pg.wait_for_timeout(300)
         pg.evaluate(CLEAR)
+        if mesh:
+            pg.evaluate(MESH, json.loads(Path(mesh).read_text()))
         t0 = time.time()
         n = max(1, round(secs * FPS))
         for k in range(n):
             t = start + k / FPS
             frame = dict(o)
             if building:
-                frame["build"] = t * speed
+                if t < build_start:
+                    frame["step"] = -1                       # nothing built yet
+                else:
+                    frame["build"] = (t - build_start) * speed
+            if mesh:
+                a = keyed(mesh_alpha, t)
+                pg.evaluate("(a) => { const m = window.__mesh; m.visible = a > 0.01; m.material.opacity = a; "
+                            "m.material.depthWrite = a > 0.97; m.castShadow = a > 0.5; }", a)
             pg.evaluate("([t, o]) => { const r = window.renderAt(0, t, o); window.__hide(); window.__shadows(); "
                         "renderer.render(scene, camera); return r; }", [t, frame])
             pg.locator("#stage canvas").screenshot(path=str(out / f"{k:05d}.png"), omit_background=True)

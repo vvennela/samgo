@@ -89,8 +89,14 @@ def _shadow(w: int, h: int, radius: float, blur: float) -> Image.Image:
 def frame_of(e: dict, t: float):
     """The source image of element e at film time t, or None before it appears / after it is gone."""
     files = _frames(e["src"])
+    if not files or not Path(files[0]).exists():
+        return None                 # not rendered yet
     if len(files) == 1:
         return files[0]
+    if "schedule" in e:   # stop motion: file i shows from start + schedule[i]
+        import bisect
+        k = bisect.bisect_right(e["schedule"], t - e.get("start", 0)) - 1
+        return files[max(0, min(len(files) - 1, k))]
     k = int(round((t - e.get("start", 0)) * e.get("fps", 30) * e.get("rate", 1)))
     if e.get("loop"):
         k %= len(files)
@@ -145,9 +151,13 @@ def render(k: int) -> Image.Image:
         scale = e.get("scale_fn", lambda t: 1.0)(t) if callable(e.get("scale_fn")) else 1.0
         ww = e["w"] * scale
         wh = ww * src.height / src.width
-        sx = (e["x"] - cx) * z + W / 2
-        sy = (e["y"] - cy) * z + H / 2
-        sw, sh = ww * z, wh * z
+        if e.get("screen"):   # fixed on screen (x, y, w in 1920x1080 frame pixels), not on the canvas
+            k = W / 1920
+            sx, sy, sw, sh = e["x"] * k, e["y"] * k, ww * k, wh * k
+        else:
+            sx = (e["x"] - cx) * z + W / 2
+            sy = (e["y"] - cy) * z + H / 2
+            sw, sh = ww * z, wh * z
         if sx + sw / 2 < 0 or sx - sw / 2 > W or sy + sh / 2 < 0 or sy - sh / 2 > H or sw < 2:
             continue
         # crop to what is on screen before scaling (a zoomed-in tile only scales its visible part)
