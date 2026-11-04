@@ -124,7 +124,5 @@ team · photo credits
 ## Recording notes
 
 - One file per section, quiet room, phone close (Voice Memos is fine). A second of silence before and after each take.
-- Read slower than feels natural, and land the short lines ("Real doors. Real wheels. Real pieces.") with a beat
-  between them: the cuts hit on those beats.
-- Small wording changes are fine: the cut follows your words, not this page.
+- Talk the way you talk; the cut follows your words, not this page.
 - Civil machines only on screen.

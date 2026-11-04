@@ -26,3 +26,5 @@ everything here".
 - 01:04 checkpoint promoted: accounts/vvennela/models/objects-r13s-s4096 (session ts-bfca046feccf4c7b88a8ce03a34af7d1)
 - 01:20 checkpoint promoted: accounts/vvennela/models/objects-r13s-s6144
 - 01:34 checkpoint promoted: accounts/vvennela/models/objects-r13s-s8192
+- 01:49 checkpoint promoted: accounts/vvennela/models/objects-r13s-s10240
+- 02:05 checkpoint promoted: accounts/vvennela/models/objects-r13s-s12288
