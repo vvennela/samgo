@@ -1,4 +1,4 @@
-"""The running-gear task: Glimmer makes a car body roll by editing it (spec.md section 0, task 1).
+"""The running-gear task: Glimmer makes a car body roll by editing it.
 
 One definition used three ways, so training and use always match:
 - `gen_running_gear` turns verified bases (gen_bases) into SFT rows;

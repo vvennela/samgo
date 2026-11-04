@@ -1,4 +1,4 @@
-"""Training bases: Objaverse vehicles turned into verified rolling LEGO cars (spec.md section 0, training data step 1).
+"""Training bases: Objaverse vehicles turned into verified rolling LEGO cars.
 
 Each vehicle mesh is voxelized (mirror-aligned) at several lengths and built by the arched car builder; only cars
 that pass structure (S3a), function (S3c) and stability (S3b) are kept. Our photo cars are never used here: they

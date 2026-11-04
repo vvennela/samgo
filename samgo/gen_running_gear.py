@@ -1,4 +1,4 @@
-"""SFT rows for the running-gear task from verified bases (spec.md section 0, training data steps 2-4).
+"""SFT rows for the running-gear task from verified bases.
 
 Per base car: three problems (running gear taken off the front axle line, the rear one, both). Each reference
 answer is applied and re-checked; rows that do not pass are dropped. About 20% of rows are two-turn: a typical

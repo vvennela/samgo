@@ -7,7 +7,7 @@ not lifted onto a separate chassis, and every part is a real LEGO part:
 - stop axles only in real lengths (3, 4, 5, 8), through at least 2 aligned round holes, the stop on the outside;
 - wheels from the measured LDraw sizes (technic.WHEELS), inside the body's width, under arches;
 - Technic brick holes 5.6 mm above their bottom (LDraw), so each wheel's height follows from its brick row.
-The reference answer for the running-gear training task (spec.md section 0).
+The reference answer for the running-gear training task.
 """
 
 from dataclasses import dataclass
