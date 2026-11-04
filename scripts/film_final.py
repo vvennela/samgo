@@ -84,6 +84,12 @@ def main():
             ms = int((st + LEAD) * 1000)
             filters.append(f"[{n}:a]aresample=48000,volume=1.6,adelay={ms}|{ms}[v{n}]")
             voices.append(f"[v{n}]"); n += 1
+    for s_, st in zip(plan["sections"], starts):            # on-camera clips: their own sound, from their start
+        if s_.get("own_audio"):
+            inputs += ["-i", s_["clips"][0]]
+            ms = int(st * 1000)
+            filters.append(f"[{n}:a]aresample=48000,volume=1.5,adelay={ms}|{ms}[o{n}]")
+            voices.append(f"[o{n}]"); n += 1
     for path, at, gain in plan.get("extra_audio", []):      # e.g. the title's boom
         inputs += ["-i", path]
         ms = int(at * 1000)

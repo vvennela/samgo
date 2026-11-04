@@ -16,7 +16,7 @@ W, H, FPS = 1920, 1080, 30
 BG = (238, 241, 245)
 T0 = 0.0
 CAMERA = [dict(t=0, x=0, y=0, zoom=1.0)]
-FIX = {"drop,": "draw,", "drop": "draw"}
+FIX = {"drop,": "draw,", "drop": "draw", "Samgo.": "SAMgo.", "Samgo": "SAMgo"}
 WORDS = [dict(w, w=FIX.get(w["w"], w["w"])) for w in json.loads(Path(f"{FILM}/why_words.json").read_text())]
 _at = {w["w"].strip(",.?").lower(): w for w in WORDS}
 T_BUT = _at["but"]["t0"]
@@ -32,5 +32,5 @@ ELEMENTS = [
          shadow=True),
     dict(src=lbl, screen=True, x=960, y=880, w=Image.open(lbl).width * 0.9, show=(0, T_BUT), fade=0.25),
     dict(src=TITLE, screen=True, x=960, y=540, w=1920, start=T_END + 0.15, show=(T_END + 0.15, 999), fade=0.0),
-    dict(words=WORDS, y=1000, size=44),
+    dict(words=[w for w in WORDS if w["t0"] < _at.get("introducing", {"t0": 99})["t0"]], y=1000, size=44),
 ]
