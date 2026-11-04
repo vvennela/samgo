@@ -48,10 +48,19 @@ def sheet_body(rng: random.Random) -> tuple[list[dict], set]:
     Returns (parts, ids of the structure's parts outside the block)."""
     from .verifier import verify
 
+    import os
+
+    # SAMGO_BODY_SCALE="lo,hi": bodies lo..hi times larger across (heights by the square root), for large models.
+    # Unset: the original sizes and the original random sequence.
+    scale = tuple(float(v) for v in os.environ["SAMGO_BODY_SCALE"].split(",")) if os.environ.get(
+        "SAMGO_BODY_SCALE") else None
     for _ in range(30):
         cells: set = set()
         bx, by, bz = rng.randint(4, 16), rng.randint(4, 14), rng.randint(4, 14)
-        ox, oy = 2, 2 + 14
+        s = rng.uniform(*scale) if scale else 1.0
+        sz = s ** 0.5
+        bx, by, bz = round(bx * s), round(by * s), round(bz * sz)
+        ox, oy = 2, 2 + round(14 * s)
         for x in range(ox, ox + bx):
             for y in range(oy, oy + by):
                 for z in range(0, bz):
@@ -63,12 +72,12 @@ def sheet_body(rng: random.Random) -> tuple[list[dict], set]:
                       for z in range(bz, bz + rng.randint(2, 6))}
         along = rng.choice(("y", "x"))  # the direction it reaches out from the block
         face = by if along == "y" else bx  # the length of the block face it leaves from
-        reach = rng.randint(4, 14)
-        w_root = rng.randint(3, max(3, min(face + 4, 14)))
+        reach = round(rng.randint(4, 14) * s)
+        w_root = round(rng.randint(3, max(3, min(face + 4, 14))) * (s if scale else 1))
         w_far = max(2, w_root + rng.randint(-w_root // 2, 2))
         on_top = rng.random() < 0.3
         zmid0 = (bz + 1) if on_top else rng.randint(2, bz)  # on top, or out of the side at any height
-        t_root = rng.randint(2, 6)
+        t_root = round(rng.randint(2, 6) * sz)
         t_far = rng.randint(2, max(2, t_root))
         toward_edge = rng.choice((0.0, 0.0, 0.5))  # thinner toward the +x edge as well
         step = rng.choice((0, 0, 3, 5, 8))  # the top steps one plate every `step` rows out (0: level)

@@ -1,0 +1,19 @@
+{
+ "train_rows": 1496,
+ "by_level": {
+  "L1": 366,
+  "L2": 743,
+  "L3": 387
+ },
+ "masts": [
+  1088,
+  188,
+  162,
+  45,
+  13
+ ],
+ "two_turn": 785,
+ "test": 30,
+ "errors": 0,
+ "error_examples": []
+}
