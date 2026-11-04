@@ -225,3 +225,12 @@ photos/
 data/
 fireworks-training-runs/
 models/
+
+# internal notes (kept locally, not published)
+CLAUDE.md
+video_handoff.md
+demo.md
+docs/HANDOFF.md
+docs/demo-script.md
+docs/video-script.md
+runs/build_kit/camry_red_final/

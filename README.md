@@ -8,6 +8,21 @@ nothing written for any one object. Built for the Meta Global AI Developer Hacka
 Frontier"), Oct 27 - Nov 4, 2026, on Meta's models: **SAM 3.1**, **SAM 3D**, **Muse Spark** and **Muse Glimmer**
 (fine-tuned by us).
 
+- **Demo video (3 min):** DEMO_VIDEO_LINK
+- **Fine-tuned model:** HF_MODEL_LINK (Muse Glimmer 30B LoRA, run 11)
+- **Built during the hackathon:** all of it. This repository starts on Oct 27; every model, dataset, checker,
+  training run and tool here was made during the event.
+
+### Where Meta's models are used
+
+| Model | Where | What it does in SAMgo |
+|---|---|---|
+| **SAM 3.1** (Meta Model API) | `samgo/perceive.py` | cuts the object out of the photo; finds the pixels of each glass part Spark names |
+| **SAM 3D** | `samgo/perceive.py` | turns the one photo (object mask, glass marked) into a textured 3D mesh |
+| **Muse Spark** (Muse Spark Open) | `samgo/spark_*.py`, `samgo/car_layout.py`, `samgo/part_layout.py` | names the working parts and where they go (wheels, doors, rotors, flaps), mirror twins, glass, colours; reviews the finished build against the photo |
+| **Muse Glimmer 30B** + our LoRA (Fireworks) | `samgo/assembly.py`, `samgo/spark_mechanisms.py`, `samgo/learned_mechanisms.py` | the only thing that builds: writes the edit list that adds axles, wheels, hinges, rotors, turntables, and fixes its own answer from the checker's feedback |
+| **Muse Image** | `runs/video/muse_image/` | (demo only) the "models can draw" pictures in the video |
+
 | Camry (from a photo) | Fan (held-out) | Helicopter (held-out) |
 |---|---|---|
 | ![Camry](docs/images/camry_red.png) | ![Fan](docs/images/fan.png) | ![Helicopter](docs/images/helicopter.png) |
@@ -89,7 +104,19 @@ Glimmer's own answers; physical checks strict enough to catch a clip hanging ove
   checks exactly these hypotheses for every move).
 - `samgo/manual.py`: build order certified step by step with an exact rational force balance.
 - The wheel catalogue (`scripts/wheel_catalog.py`) pairs rims and tyres from the official LDraw geometry; every model
-  exports to LDraw with no part off by more than 0.4 mm. 351 tests (`pytest`).
+  exports to LDraw with no part off by more than 0.4 mm. 353 tests (`pytest`).
+
+## SAMgo Studio: a run, with every model call
+
+`scripts/studio_run.py` runs the pipeline unchanged and logs every live call to SAM 3.1, SAM 3D, Muse Spark and
+Muse Glimmer (what was asked, the answer, how long it took) to `calls.jsonl`. `scripts/studio.py` shows a run live as
+it happens; `scripts/studio_show.py` replays a logged run in its recorded order (the demo video's "real run").
+
+```bash
+PYTHONPATH=. python scripts/studio_run.py photos/camry.jpg --prompt car --car --assembly learned \
+    --model <Glimmer sampler> --doors --buildable --color red -o runs/live   # same arguments as samgo.pipeline
+python scripts/studio.py runs/live                                         # http://127.0.0.1:8765
+```
 
 ## Build one for real
 
@@ -120,8 +147,10 @@ lean formal/MergeRule.lean && lean formal/AnimationPath.lean
 ```
 
 Training: `brickgpt/train_serverless.py` (LoRA rank 32, batch 64, 2 epochs, Fireworks serverless); each run's chain
-script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/objects-rN/run.md`. Latest sampler (run 11):
-`vvennela/run-736d451107854752b6ba9b0cb0ad5b78/objects-r11-tuned-d5f4be8e`.
+script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/objects-rN/run.md`. Run 11 is the model
+used everywhere (Fireworks sampler `vvennela/run-736d451107854752b6ba9b0cb0ad5b78/objects-r11-tuned-d5f4be8e`, weights
+on Hugging Face above). Run 13 trained the same skills on 1.5-2.5x larger bodies: rotors and blade crosses improved at
+large sizes; its notes are in `fireworks-training-runs/objects-r13/run.md`.
 
 ## Layout
 
@@ -134,5 +163,9 @@ script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/object
 - Outputs: `samgo/viewer3d.py` (3D, motion, build animation), `samgo/animation.py`, `samgo/build_kit.py`,
   `samgo/ldraw.py`.
 - Skill data: `samgo/rotor_data.py`, `samgo/flap_data.py`, `samgo/primitives.py`, `samgo/flap_mistakes.py`.
-- `formal/`: Lean proofs. `docs/`: handoff, feedback example, photo sources. `demo.md`: the demo plan.
+- Training: `brickgpt/` (Fireworks serverless LoRA SFT), `fireworks-training-runs/` (one note per run), frozen tests
+  in `runs/audit/`.
+- Studio and the demo video: `scripts/studio*.py`; `scripts/film*.py` (the video's compositor, transitions, voice-over
+  cutting). The 10x Camry: `runs/hand_finished/camry_10x.py`, videos in `runs/video/camry_10x/`.
+- `formal/`: Lean proofs. `docs/`: verification notes, a feedback example, photo sources.
 - Photos: `docs/photo-sources.txt` (public domain / CC; photos are not in the repo).
