@@ -1,4 +1,4 @@
-"""The SAMgo part model: 22 rectangular bricks and plates on a stud grid.
+"""The SAMgo part model: rectangular bricks and plates on a stud grid (22 sizes to build with, more to merge into).
 
 Units: x and y are studs, z is plate heights (a brick is 3 plates tall).
 A part is described by its size, not a catalog ID. There is no rotation
@@ -40,6 +40,22 @@ COLORS = {
     "dark_gray": (72, (100, 100, 100)),
     "dark_blue": (272, (10, 52, 99)),  # appended: earlier colours keep their COLOR_INDEX
 }
+
+# Sizes LEGO has used in sets since 2021 (scripts/lego_current.py, from Rebrickable's inventories), by colour.
+# Only the final merge (samgo.consolidate) builds them: the body builder and Glimmer keep FOOTPRINTS.
+def _current() -> dict:
+    import json
+    from pathlib import Path
+
+    f = Path(__file__).with_name("current_parts.json")
+    return json.loads(f.read_text())["parts"] if f.exists() else {}
+
+
+CURRENT = {(k.split()[0], *map(int, k.split()[1].split("x"))): e for k, e in _current().items()}
+for (_kind, _a, _b), _e in CURRENT.items():
+    LDRAW_IDS.setdefault((_kind, _a, _b), _e["part"])
+# Every valid size: the builder's palette plus the current ones (validity, export, merging).
+ALL_FOOTPRINTS = sorted(set(FOOTPRINTS) | {(a, b) for _, a, b in CURRENT})
 
 # Transparent colors for glass (LDraw codes). Valid on parts, but never chosen when voxelizing a photo's colors.
 GLASS_COLORS = {"trans_clear": 47, "trans_black": 40}
@@ -89,7 +105,8 @@ def parse_piece(raw: dict) -> Piece:
             raise PartError(f"{f} must be an integer")
     if raw["type"] not in HEIGHTS:
         raise PartError(f"unknown type {raw['type']!r}")
-    if tuple(sorted((raw["w"], raw["l"]))) not in FOOTPRINTS:
+    size = tuple(sorted((raw["w"], raw["l"])))
+    if size not in FOOTPRINTS and (raw["type"], *size) not in CURRENT:
         raise PartError(f"no {raw['w']}x{raw['l']} {raw['type']} in the palette")
     if raw["color"] not in COLORS and raw["color"] not in GLASS_COLORS:
         raise PartError(f"unknown color {raw['color']!r}")

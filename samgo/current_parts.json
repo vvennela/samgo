@@ -1,0 +1,755 @@
+{
+ "since": 2021,
+ "min_sets": 3,
+ "source": "rebrickable.com downloads",
+ "parts": {
+  "brick 1x1": {
+   "part": "3005",
+   "colors": {
+    "white": 483,
+    "light_gray": 340,
+    "yellow": 114,
+    "blue": 100,
+    "reddish_brown": 230,
+    "dark_gray": 243,
+    "black": 362,
+    "tan": 245,
+    "trans_clear": 81,
+    "green": 70,
+    "orange": 82,
+    "dark_blue": 79,
+    "red": 175,
+    "trans_black": 6
+   }
+  },
+  "brick 1x10": {
+   "part": "6111",
+   "colors": {
+    "white": 84,
+    "tan": 47,
+    "light_gray": 66,
+    "blue": 20,
+    "black": 77,
+    "yellow": 15,
+    "green": 7,
+    "dark_gray": 67,
+    "red": 19,
+    "reddish_brown": 25
+   }
+  },
+  "brick 1x12": {
+   "part": "6112",
+   "colors": {
+    "light_gray": 70,
+    "dark_gray": 45,
+    "tan": 52,
+    "reddish_brown": 31,
+    "white": 58,
+    "black": 65,
+    "red": 20
+   }
+  },
+  "brick 1x16": {
+   "part": "2465",
+   "colors": {
+    "white": 60,
+    "black": 65,
+    "tan": 30,
+    "reddish_brown": 18,
+    "light_gray": 41,
+    "dark_gray": 27,
+    "red": 5,
+    "green": 6,
+    "dark_blue": 6
+   }
+  },
+  "brick 1x2": {
+   "part": "3004",
+   "colors": {
+    "light_gray": 313,
+    "red": 234,
+    "orange": 100,
+    "reddish_brown": 216,
+    "dark_gray": 264,
+    "yellow": 179,
+    "tan": 275,
+    "white": 499,
+    "green": 94,
+    "black": 388,
+    "blue": 127,
+    "dark_blue": 99
+   }
+  },
+  "brick 1x3": {
+   "part": "3622",
+   "colors": {
+    "reddish_brown": 129,
+    "white": 249,
+    "black": 213,
+    "tan": 182,
+    "light_gray": 220,
+    "orange": 31,
+    "blue": 46,
+    "green": 42,
+    "dark_blue": 39,
+    "yellow": 89,
+    "dark_gray": 174,
+    "red": 97
+   }
+  },
+  "brick 1x4": {
+   "part": "3010",
+   "colors": {
+    "white": 398,
+    "orange": 61,
+    "light_gray": 271,
+    "red": 140,
+    "reddish_brown": 155,
+    "tan": 231,
+    "dark_gray": 185,
+    "dark_blue": 61,
+    "black": 333,
+    "green": 57,
+    "blue": 89,
+    "yellow": 90
+   }
+  },
+  "brick 1x6": {
+   "part": "3009",
+   "colors": {
+    "light_gray": 202,
+    "red": 85,
+    "black": 221,
+    "dark_gray": 153,
+    "reddish_brown": 107,
+    "tan": 158,
+    "white": 270,
+    "blue": 45,
+    "green": 41,
+    "dark_blue": 37,
+    "yellow": 76,
+    "orange": 22
+   }
+  },
+  "brick 1x8": {
+   "part": "3008",
+   "colors": {
+    "light_gray": 128,
+    "tan": 93,
+    "red": 38,
+    "black": 125,
+    "reddish_brown": 67,
+    "white": 158,
+    "dark_gray": 94,
+    "blue": 15,
+    "yellow": 31,
+    "dark_blue": 13,
+    "green": 12
+   }
+  },
+  "brick 2x10": {
+   "part": "3006",
+   "colors": {
+    "light_gray": 39,
+    "black": 50,
+    "white": 28,
+    "reddish_brown": 13,
+    "tan": 19,
+    "red": 9
+   }
+  },
+  "brick 2x2": {
+   "part": "3003",
+   "colors": {
+    "dark_gray": 174,
+    "yellow": 111,
+    "tan": 212,
+    "reddish_brown": 200,
+    "red": 148,
+    "light_gray": 293,
+    "orange": 75,
+    "black": 246,
+    "white": 312,
+    "green": 116,
+    "blue": 87,
+    "dark_blue": 40
+   }
+  },
+  "brick 2x3": {
+   "part": "3002",
+   "colors": {
+    "light_gray": 170,
+    "dark_gray": 141,
+    "blue": 50,
+    "yellow": 60,
+    "red": 68,
+    "reddish_brown": 97,
+    "black": 152,
+    "white": 150,
+    "tan": 126,
+    "orange": 27,
+    "green": 43,
+    "dark_blue": 11
+   }
+  },
+  "brick 2x4": {
+   "part": "3001",
+   "colors": {
+    "dark_gray": 175,
+    "light_gray": 280,
+    "red": 196,
+    "blue": 78,
+    "reddish_brown": 144,
+    "tan": 152,
+    "white": 276,
+    "black": 267,
+    "yellow": 75,
+    "dark_blue": 33,
+    "green": 76,
+    "orange": 49
+   }
+  },
+  "brick 2x6": {
+   "part": "2456",
+   "colors": {
+    "light_gray": 163,
+    "yellow": 56,
+    "dark_gray": 94,
+    "red": 44,
+    "white": 129,
+    "reddish_brown": 61,
+    "tan": 113,
+    "blue": 24,
+    "green": 18,
+    "black": 123,
+    "dark_blue": 17,
+    "orange": 15
+   }
+  },
+  "brick 2x8": {
+   "part": "3007",
+   "colors": {
+    "black": 97,
+    "reddish_brown": 47,
+    "blue": 16,
+    "tan": 50,
+    "white": 56,
+    "red": 16,
+    "light_gray": 80,
+    "yellow": 19,
+    "dark_gray": 41,
+    "dark_blue": 3
+   }
+  },
+  "plate 16x16": {
+   "part": "91405",
+   "colors": {
+    "dark_gray": 24,
+    "light_gray": 27,
+    "blue": 3,
+    "white": 19,
+    "tan": 29,
+    "green": 7,
+    "black": 16
+   }
+  },
+  "plate 1x1": {
+   "part": "3024",
+   "colors": {
+    "red": 329,
+    "light_gray": 491,
+    "white": 637,
+    "blue": 156,
+    "reddish_brown": 323,
+    "tan": 341,
+    "yellow": 226,
+    "black": 650,
+    "dark_blue": 122,
+    "orange": 133,
+    "trans_clear": 130,
+    "dark_gray": 363,
+    "green": 144,
+    "trans_black": 6
+   }
+  },
+  "plate 1x10": {
+   "part": "4477",
+   "colors": {
+    "light_gray": 181,
+    "dark_gray": 158,
+    "yellow": 41,
+    "dark_blue": 29,
+    "white": 185,
+    "black": 220,
+    "tan": 103,
+    "red": 63,
+    "blue": 31,
+    "reddish_brown": 106,
+    "orange": 9,
+    "green": 20
+   }
+  },
+  "plate 1x12": {
+   "part": "60479",
+   "colors": {
+    "white": 125,
+    "light_gray": 133,
+    "red": 42,
+    "yellow": 32,
+    "dark_gray": 142,
+    "reddish_brown": 98,
+    "black": 209,
+    "tan": 80,
+    "dark_blue": 10,
+    "blue": 3
+   }
+  },
+  "plate 1x2": {
+   "part": "3023",
+   "colors": {
+    "yellow": 444,
+    "red": 564,
+    "black": 917,
+    "dark_gray": 544,
+    "white": 951,
+    "light_gray": 716,
+    "orange": 234,
+    "tan": 575,
+    "green": 290,
+    "reddish_brown": 472,
+    "dark_blue": 205,
+    "trans_clear": 175,
+    "blue": 324,
+    "trans_black": 10
+   }
+  },
+  "plate 1x3": {
+   "part": "3623",
+   "colors": {
+    "reddish_brown": 266,
+    "light_gray": 397,
+    "green": 114,
+    "white": 451,
+    "yellow": 181,
+    "dark_gray": 311,
+    "red": 221,
+    "black": 523,
+    "tan": 313,
+    "blue": 102,
+    "dark_blue": 90,
+    "orange": 72
+   }
+  },
+  "plate 1x4": {
+   "part": "3710",
+   "colors": {
+    "dark_gray": 467,
+    "red": 324,
+    "white": 673,
+    "green": 164,
+    "light_gray": 578,
+    "black": 730,
+    "orange": 128,
+    "yellow": 232,
+    "reddish_brown": 378,
+    "tan": 450,
+    "dark_blue": 132,
+    "blue": 173
+   }
+  },
+  "plate 1x5": {
+   "part": "78329",
+   "colors": {
+    "white": 148,
+    "tan": 128,
+    "black": 213,
+    "red": 74,
+    "dark_blue": 38,
+    "light_gray": 178,
+    "dark_gray": 137,
+    "yellow": 22,
+    "reddish_brown": 4
+   }
+  },
+  "plate 1x6": {
+   "part": "3666",
+   "colors": {
+    "dark_gray": 323,
+    "yellow": 128,
+    "light_gray": 411,
+    "green": 96,
+    "white": 462,
+    "orange": 80,
+    "red": 215,
+    "black": 581,
+    "tan": 313,
+    "reddish_brown": 273,
+    "dark_blue": 83,
+    "blue": 104
+   }
+  },
+  "plate 1x8": {
+   "part": "3460",
+   "colors": {
+    "black": 359,
+    "light_gray": 270,
+    "dark_gray": 245,
+    "yellow": 65,
+    "red": 113,
+    "reddish_brown": 157,
+    "tan": 171,
+    "white": 280,
+    "blue": 58,
+    "green": 54,
+    "dark_blue": 51,
+    "orange": 29
+   }
+  },
+  "plate 2x10": {
+   "part": "3832",
+   "colors": {
+    "yellow": 32,
+    "red": 50,
+    "light_gray": 163,
+    "black": 214,
+    "tan": 94,
+    "reddish_brown": 94,
+    "white": 132,
+    "dark_gray": 166,
+    "green": 30,
+    "blue": 34,
+    "orange": 4
+   }
+  },
+  "plate 2x12": {
+   "part": "2445",
+   "colors": {
+    "reddish_brown": 58,
+    "dark_gray": 138,
+    "red": 29,
+    "black": 202,
+    "blue": 20,
+    "green": 19,
+    "light_gray": 126,
+    "white": 101,
+    "orange": 13,
+    "tan": 73,
+    "dark_blue": 18
+   }
+  },
+  "plate 2x14": {
+   "part": "91988",
+   "colors": {
+    "dark_gray": 101,
+    "red": 25,
+    "black": 122,
+    "light_gray": 86,
+    "tan": 55,
+    "dark_blue": 6,
+    "white": 38,
+    "reddish_brown": 33
+   }
+  },
+  "plate 2x16": {
+   "part": "4282",
+   "colors": {
+    "light_gray": 103,
+    "black": 159,
+    "white": 63,
+    "red": 18,
+    "dark_blue": 11,
+    "tan": 63,
+    "dark_gray": 101,
+    "green": 8,
+    "blue": 7,
+    "reddish_brown": 8
+   }
+  },
+  "plate 2x2": {
+   "part": "3022",
+   "colors": {
+    "black": 741,
+    "yellow": 292,
+    "white": 647,
+    "red": 390,
+    "reddish_brown": 366,
+    "orange": 168,
+    "light_gray": 557,
+    "dark_gray": 494,
+    "tan": 425,
+    "blue": 196,
+    "green": 196,
+    "dark_blue": 115
+   }
+  },
+  "plate 2x3": {
+   "part": "3021",
+   "colors": {
+    "tan": 330,
+    "red": 270,
+    "dark_gray": 436,
+    "black": 651,
+    "yellow": 188,
+    "light_gray": 451,
+    "orange": 92,
+    "dark_blue": 103,
+    "white": 500,
+    "reddish_brown": 293,
+    "green": 149,
+    "blue": 144
+   }
+  },
+  "plate 2x4": {
+   "part": "3020",
+   "colors": {
+    "white": 588,
+    "light_gray": 598,
+    "tan": 462,
+    "green": 198,
+    "reddish_brown": 406,
+    "red": 356,
+    "orange": 139,
+    "blue": 200,
+    "yellow": 243,
+    "black": 804,
+    "dark_gray": 490,
+    "dark_blue": 124
+   }
+  },
+  "plate 2x6": {
+   "part": "3795",
+   "colors": {
+    "blue": 106,
+    "orange": 75,
+    "reddish_brown": 264,
+    "light_gray": 406,
+    "dark_blue": 73,
+    "white": 392,
+    "black": 586,
+    "dark_gray": 387,
+    "red": 160,
+    "green": 115,
+    "tan": 263,
+    "yellow": 150
+   }
+  },
+  "plate 2x8": {
+   "part": "3034",
+   "colors": {
+    "light_gray": 277,
+    "dark_gray": 257,
+    "red": 117,
+    "blue": 62,
+    "green": 65,
+    "black": 356,
+    "white": 234,
+    "yellow": 61,
+    "tan": 191,
+    "reddish_brown": 147,
+    "dark_blue": 49,
+    "orange": 5
+   }
+  },
+  "plate 3x3": {
+   "part": "11212",
+   "colors": {
+    "red": 59,
+    "dark_gray": 142,
+    "black": 213,
+    "white": 177,
+    "tan": 103,
+    "green": 42,
+    "light_gray": 154,
+    "dark_blue": 27,
+    "blue": 30,
+    "orange": 11,
+    "reddish_brown": 45,
+    "yellow": 5
+   }
+  },
+  "plate 4x10": {
+   "part": "3030",
+   "colors": {
+    "blue": 8,
+    "light_gray": 68,
+    "reddish_brown": 41,
+    "tan": 43,
+    "black": 103,
+    "white": 46,
+    "dark_gray": 91,
+    "orange": 5,
+    "green": 15
+   }
+  },
+  "plate 4x12": {
+   "part": "3029",
+   "colors": {
+    "red": 12,
+    "white": 53,
+    "black": 83,
+    "dark_gray": 86,
+    "blue": 8,
+    "light_gray": 80,
+    "green": 16,
+    "dark_blue": 3,
+    "reddish_brown": 7
+   }
+  },
+  "plate 4x4": {
+   "part": "3031",
+   "colors": {
+    "white": 183,
+    "green": 77,
+    "light_gray": 203,
+    "dark_gray": 196,
+    "reddish_brown": 123,
+    "black": 309,
+    "red": 84,
+    "blue": 55,
+    "yellow": 39,
+    "tan": 166,
+    "dark_blue": 37
+   }
+  },
+  "plate 4x6": {
+   "part": "3032",
+   "colors": {
+    "light_gray": 186,
+    "white": 164,
+    "dark_gray": 168,
+    "reddish_brown": 121,
+    "tan": 139,
+    "black": 211,
+    "red": 49,
+    "blue": 37,
+    "green": 79,
+    "orange": 21,
+    "yellow": 30,
+    "dark_blue": 39
+   }
+  },
+  "plate 4x8": {
+   "part": "3035",
+   "colors": {
+    "light_gray": 142,
+    "tan": 114,
+    "black": 170,
+    "reddish_brown": 91,
+    "dark_gray": 145,
+    "green": 46,
+    "white": 119,
+    "blue": 23,
+    "red": 29,
+    "yellow": 18,
+    "dark_blue": 11
+   }
+  },
+  "plate 6x10": {
+   "part": "3033",
+   "colors": {
+    "dark_gray": 99,
+    "black": 71,
+    "light_gray": 69,
+    "reddish_brown": 40,
+    "tan": 53,
+    "white": 48,
+    "blue": 7,
+    "orange": 4,
+    "dark_blue": 16,
+    "yellow": 8,
+    "green": 19,
+    "red": 7
+   }
+  },
+  "plate 6x12": {
+   "part": "3028",
+   "colors": {
+    "black": 44,
+    "tan": 30,
+    "dark_gray": 36,
+    "light_gray": 32,
+    "white": 25,
+    "reddish_brown": 14,
+    "green": 12
+   }
+  },
+  "plate 6x14": {
+   "part": "3456",
+   "colors": {
+    "tan": 19,
+    "light_gray": 15,
+    "dark_gray": 20,
+    "black": 19,
+    "white": 8
+   }
+  },
+  "plate 6x16": {
+   "part": "3027",
+   "colors": {
+    "dark_gray": 14,
+    "light_gray": 13,
+    "black": 23,
+    "white": 3,
+    "tan": 14
+   }
+  },
+  "plate 6x6": {
+   "part": "3958",
+   "colors": {
+    "dark_gray": 87,
+    "black": 186,
+    "tan": 82,
+    "red": 31,
+    "orange": 3,
+    "reddish_brown": 53,
+    "light_gray": 90,
+    "white": 73,
+    "dark_blue": 14,
+    "blue": 27,
+    "green": 26,
+    "yellow": 3
+   }
+  },
+  "plate 6x8": {
+   "part": "3036",
+   "colors": {
+    "white": 67,
+    "dark_gray": 149,
+    "reddish_brown": 52,
+    "green": 42,
+    "blue": 26,
+    "tan": 79,
+    "black": 115,
+    "light_gray": 100,
+    "dark_blue": 12,
+    "red": 16,
+    "orange": 10
+   }
+  },
+  "plate 8x16": {
+   "part": "92438",
+   "colors": {
+    "white": 12,
+    "green": 29,
+    "tan": 48,
+    "black": 32,
+    "blue": 8,
+    "dark_gray": 36,
+    "light_gray": 31,
+    "yellow": 3,
+    "red": 4
+   }
+  },
+  "plate 8x8": {
+   "part": "41539",
+   "colors": {
+    "light_gray": 52,
+    "green": 16,
+    "white": 32,
+    "black": 38,
+    "dark_gray": 37,
+    "tan": 34
+   }
+  }
+ }
+}

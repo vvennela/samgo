@@ -6,12 +6,13 @@
 
 The cells filled and their colors never change. Pieces merge only inside one rigid body (never a door into the car,
 never across a hinge or onto a turning axle), so every stud grip is kept: a merged piece grips every stud its parts
-did. A merged piece must be a size LEGO made in that color (glass included). Mechanism parts are never touched.
+did. A merged piece must be a size LEGO made in that color (glass included); sizes beyond the builder's palette
+(2x16, 4x8, 6x12 plates, 1x16 bricks...) only if they were in sets since 2021 in that colour (parts.CURRENT). Mechanism parts are never touched.
 """
 
-from .parts import FOOTPRINTS
+from .parts import ALL_FOOTPRINTS, CURRENT, FOOTPRINTS
 
-VALID = {tuple(sorted(f)) for f in FOOTPRINTS}
+VALID = {tuple(sorted(f)) for f in ALL_FOOTPRINTS}
 SOLID = ("plate", "brick")
 
 
@@ -33,9 +34,14 @@ def _made(p: dict) -> bool:
     from .colors import NAMED, exists
     from .parts import LDRAW_IDS
 
-    pid = LDRAW_IDS.get((p["type"], *sorted((p["w"], p["l"]))))
+    key = (p["type"], *sorted((p["w"], p["l"])))
+    pid = LDRAW_IDS.get(key)
     if pid is None:
         return False
+    if key in CURRENT and p.get("color") in CURRENT[key]["colors"]:
+        return True                    # in sets since 2021 in this colour
+    if key[1:] not in FOOTPRINTS:
+        return False                   # a size beyond the builder's palette: only where it is current
     color = NAMED.get(p.get("color"))
     if color is None:
         return True

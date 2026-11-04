@@ -70,7 +70,7 @@ def test_different_parts_same_cells_pass():
 
 @pytest.mark.parametrize("bad", [
     piece(2, 5, "brick", 0, 0, 0),             # no 2x5
-    piece(3, 3, "plate", 0, 0, 0),             # no 3x3
+    piece(3, 3, "brick", 0, 0, 0),             # no 3x3 brick (a 3x3 plate is current)
     piece(2, 2, "tile", 0, 0, 0),              # tiles are out of the palette
     piece(2, 2, "brick", 0, 0, 0, "purple"),   # unknown color
     piece(2, 2, "brick", 0.5, 0, 0),           # off-grid
@@ -175,3 +175,22 @@ def test_extra_geometry_lowers_iou():
 
 def test_ldraw_id_ignores_orientation():
     assert Piece(4, 2, "brick", 0, 0, 0, "red").ldraw_id == Piece(2, 4, "brick", 0, 0, 0, "red").ldraw_id == "3001"
+
+
+def test_current_sizes_valid_only_for_their_type():
+    assert verify([piece(2, 16, "plate", 0, 0, 0)], bounds=(20, 20, 4)).codes != {"invalid_part"}
+    assert verify([piece(2, 16, "brick", 0, 0, 0)], bounds=(20, 20, 4)).codes == {"invalid_part"}
+
+
+def test_merge_into_current_long_plate():
+    from samgo.consolidate import consolidate
+    from samgo.parts import CURRENT
+
+    a = {"type": "plate", "w": 2, "l": 8, "x": 0, "y": 0, "z": 0, "color": "red"}
+    bridge = a | {"y": 4, "z": 1}                   # holds the two together: one rigid body
+    merged, saved = consolidate([a, a | {"y": 8}, bridge])
+    assert saved == 1 and sorted(map(str, merged)) == sorted(map(str, [a | {"l": 16}, bridge]))
+    gray = [a | {"color": "orange", "w": 6, "l": 8}, a | {"color": "orange", "w": 6, "l": 8, "y": 8},
+            bridge | {"color": "orange"}]
+    assert consolidate(gray)[1] == (1 if ("plate", 6, 16) in CURRENT and "orange" in CURRENT[("plate", 6, 16)]["colors"]
+                                    else 0)
