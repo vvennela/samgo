@@ -12,7 +12,7 @@ numbers that are safe to put on screen, and what to be careful about. State as o
 - **Show real use of Meta models:** SAM 3.1 (Meta Model API), SAM 3D, Muse Spark Open (Baseten), Muse Glimmer
   (fine-tuned by us on Fireworks). Name them on screen.
 - **No military objects.** Never show the F-16 (`photos/f16.jpg`) or anything from it. Civil machines only.
-- **Only assets we have rights to.** See section 7: three photos have no recorded source.
+- **Only assets we have rights to** (photo sources: `photos/SOURCES.txt`).
 
 ## 2. The story (recommended cut)
 
@@ -108,10 +108,7 @@ All from frozen tests (never regenerated, never trained on); run 11 is the curre
 
 ## 7. Open items before submitting
 
-1. **Photo sources missing** in `photos/SOURCES.txt` for **`camry.jpg`, `747.jpg`, `gt1.png`** (the supercar). The
-   Camry is the lead object, so this matters: either record where each came from (with a licence that allows use),
-   or replace the photo with one you took / a Wikimedia public-domain one and rebuild. Cessna, helicopter, desk fan,
-   fan2, wind turbine are sourced (public domain, Wikimedia).
+1. Photo sources: `camry.jpg`, `747.jpg`, `gt1.png` have no entry in `photos/SOURCES.txt` (user's call: fine as is).
 2. Credits slide: team members; models (SAM 3.1, SAM 3D, Muse Spark, Muse Glimmer); photo sources; any stock
    footage URL.
 3. Make the repo public (you push; nothing is pushed by Claude). Check no keys are in it (`.env` is ignored).

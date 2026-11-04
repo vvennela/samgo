@@ -27,3 +27,6 @@ everything here".
 - Baseline, run 11 on the large tests (first try / within 3 rounds / n):
   flaps 15/20/30, side rotors 27/27/30, upright rotors 23/25/30, blade crosses 22/23/30 (any rotor; r11 seldom
   builds the blade cross itself).
+- Training run id: objects-r13s (started Nov 04 00:32)
+- 01:04 checkpoint promoted: accounts/vvennela/models/objects-r13s-s4096 (session ts-bfca046feccf4c7b88a8ce03a34af7d1)
+- 01:20 checkpoint promoted: accounts/vvennela/models/objects-r13s-s6144
