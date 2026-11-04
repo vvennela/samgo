@@ -96,7 +96,7 @@ def main():
     filters.append("[vo]asplit[vo1][vo2]")
     filters.append("[mu][vo2]sidechaincompress=threshold=0.02:ratio=6:attack=20:release=400[mud]")
     filters.append(f"{''.join(labels)}[vo1][mud]amix=inputs={len(labels) + 2}:duration=longest:normalize=0,"
-                   f"atrim=0:{total:.3f}[a]")
+                   f"atrim=0:{total:.3f},alimiter=limit=0.89:level=false[a]")
     subprocess.run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(filters), "-map", "0:v",
                     "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(out)], check=True)
     print(f"final -> {out}  {total:.1f}s; section starts {[round(s, 1) for s in starts]}")
