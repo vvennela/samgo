@@ -13,8 +13,8 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DISSOLVE = 22 / 30          # film_join's dissolve length
-LEAD, TAIL, MAX_SLOW = 0.35, 0.6, 1.25
+DISSOLVE = 20 / 30          # film_join's dissolve length
+LEAD, TAIL, MAX_SLOW = 0.3, 0.42, 1.25
 
 
 def dur(p) -> float:

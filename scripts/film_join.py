@@ -14,7 +14,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from film_dissolve import frames  # noqa: E402
 
-N = 22          # dissolve frames (0.73 s)
+N = 20          # dissolve frames (0.73 s)
 
 
 def grab(clip: Path, last: bool, out: Path) -> Image.Image:
