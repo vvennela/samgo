@@ -95,9 +95,10 @@ def _score(layout: _Layout, x: int, y: int, z: int, w: int, l: int, h: int) -> f
 
 
 def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, given: list[dict] = (),
-            sizes: dict | None = None, mirror: bool = False) -> list[dict]:
+            sizes: dict | None = None, mirror: bool = False, brick_ok: np.ndarray | None = None) -> list[dict]:
     """With `mirror` (a target symmetric across the middle of y), every part gets its mirror twin and a part
-    that crosses the middle must be centered on it, so the brickwork itself is symmetric."""
+    that crosses the middle must be centered on it, so the brickwork itself is symmetric.
+    `brick_ok` (bool, the target's shape): a brick only where all its cells are True (e.g. hidden inside)."""
     layout = _Layout(target)
     # Per-kind footprints, both orientations, largest first (default: the v1 palette for every kind).
     allowed = {k: {s for a, b in (sizes or {}).get(k, FOOTPRINTS) for s in ((a, b), (b, a))} for k in ("brick", "plate")}
@@ -122,6 +123,8 @@ def _layout(target: np.ndarray, rng: np.random.Generator | None, bricks: bool, g
                         x = ax if sx > 0 else ax - w + 1
                         y = ay if sy > 0 else ay - l + 1
                         h = HEIGHTS[kind]
+                        if brick_ok is not None and h > 1 and not brick_ok[x:x + w, y:y + l, z:z + h].all():
+                            continue
                         if not _fits(layout, x, y, z, w, l, h, color):
                             continue
                         if mirror:
