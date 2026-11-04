@@ -111,7 +111,7 @@ PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><title>SAMgo Studio<
   background: radial-gradient(ellipse at 50% 42%, #fbfaf8 0%, #f1f2f5 55%, #e6e9ee 100%); overflow:hidden }
 header { position:absolute; left:48px; right:48px; top:30px; height:70px; display:flex; align-items:center; gap:22px }
 .brand { font-size:30px; letter-spacing:.16em; font-weight:500 } .brand b { font-weight:500; color:var(--muted) }
-.meta { font:14px Menlo,monospace; color:var(--muted) }
+.meta { font:15px Futura,sans-serif; letter-spacing:.06em; color:var(--muted) }
 .right { margin-left:auto; display:flex; align-items:center; gap:16px }
 .live { display:flex; align-items:center; gap:9px; font-size:14px; letter-spacing:.14em; color:var(--muted) }
 .dot { width:11px; height:11px; border-radius:50%; background:var(--red); animation:pulse 1.3s infinite }
@@ -150,7 +150,7 @@ aside h2, .stage h2 { margin:0 0 4px; font-size:14px; letter-spacing:.18em; colo
 iframe { width:100%; height:100%; border:0; border-radius:14px }
 .badge { position:absolute; left:30px; bottom:26px; font-size:16px; letter-spacing:.08em; color:var(--muted) }
 </style></head><body>
-<header><div class="brand">SAMGO <b>STUDIO</b></div><div class="meta">camry.jpg  ·  recorded live run, Nov 4</div>
+<header><div class="brand">SAMGO <b>STUDIO</b></div><div class="meta">A REAL RUN, RECORDED NOV 4  ·  every model call and its timing as it happened  ·  waits sped up</div>
 <div class="right"><div class="live"><div class="dot"></div>RUN</div><div class="clock" id="clock">0:00</div><div class="speed" id="speed">4×</div></div></header>
 <aside><h2>LIVE META MODEL CALLS</h2><div id="calls"></div></aside>
 <section class="stage">
@@ -160,13 +160,13 @@ iframe { width:100%; height:100%; border:0; border-radius:14px }
   <div class="view" id="v-mesh"><video src="/a/mesh.mp4" muted loop playsinline></video></div>
   <div class="view" id="v-spark"><video src="/a/spark.mp4" muted playsinline></video></div>
   <div class="view" id="v-body"><video src="/a/body.mp4" muted loop playsinline></video></div>
-  <div class="view" id="v-glimmer"><div class="term" id="term"></div></div>
+  <div class="view" id="v-glimmer" style="flex-direction:column;gap:16px"><video src="/a/body.mp4" muted loop playsinline style="height:58%"></video><div class="term" id="term" style="height:40%;font-size:15px;line-height:1.5;padding:16px 22px"></div></div>
   <div class="view" id="v-final"><iframe id="viewer" src="about:blank"></iframe></div>
   <div class="badge" id="badge"></div>
 </section>
 <script>
 const TITLES = { photo:"ONE PHOTO", sam:"SAM 3.1  ·  THE CAR, AND WHICH PIXELS ARE GLASS", mesh:"SAM 3D  ·  ONE PHOTO TO A 3D SHAPE",
-  spark:"MUSE SPARK  ·  WHERE THE WHEELS AND DOORS GO", body:"THE LEGO BODY  ·  REAL PLATES", glimmer:"MUSE GLIMMER  ·  WRITES THE BUILD, THE CHECKER CHECKS IT",
+  spark:"MUSE SPARK  ·  WHERE THE WHEELS AND DOORS GO", body:"THE LEGO BODY  ·  REAL PLATES", glimmer:"MUSE GLIMMER  ·  ADDS THE WHEELS AND AXLES; THE CHECKER CHECKS EVERY PIECE",
   final:"THE BUILD  ·  REAL PARTS, CHECKED" };
 const COLORS = { "SAM 3.1":"#0866ff", "SAM 3D":"#00897b", "Muse Spark":"#7c3aed", "Muse Glimmer":"#0a7cff" };
 let cur = null, nCalls = -1, typed = 0, bubble = null, seen = new Set(), queue = [], shownAt = 0, sparkReady = false;
@@ -211,7 +211,7 @@ function term(g) {
   if (doors.length && doors.length === g.total_doors && !g.pending)
     lines.push(`<span class="dim">doors: every answer rejected → left out and reported, never faked by code</span>`);
   if (g.pending && g.pending.first !== false) lines.push(`<span class="g">glimmer</span> <span class="dim">› ${esc(g.pending.task)} — thinking</span> <span class="cursor"></span>`);
-  const el = document.getElementById("term"); el.innerHTML = lines.slice(-15).join("<br>");
+  const el = document.getElementById("term"); el.innerHTML = lines.slice(-8).join("<br>");
 }
 async function tick() {
   const st = await (await fetch("/state")).json();

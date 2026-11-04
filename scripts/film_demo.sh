@@ -10,15 +10,18 @@ W=$F/demo; mkdir -p $W
 PY=$HOME/.venvs/samgo/bin/python
 seg() { $PY scripts/film.py scripts/film_spec.py $W/$1.mp4 --from $2 --to $3 --workers 10 --blur 3 >/dev/null; echo "segment $1 $2-$3"; }
 seg 1_intro 0 9.6            # "we know models can draw (Muse Image's picture) ... but can they build" + the title
-seg 3_scale 43.6 62.4        # full scale 144,753 -> 293 pieces -> the 293 over SAM 3D's mesh
-seg 4_skill 85.3 91.8        # what Glimmer learned: hinges, before -> now
-seg 5_manual 91.8 99.7       # the certified manual, flipped
-seg 7_close 127.5 144.5      # today LEGO, next real CAD; the numbers; the end card
-# the real footage, normalised to 30 fps; the tour at 2x
-ffmpeg -v error -y -i "$STUDIO" -r 30 -c:v libx264 -pix_fmt yuv420p -crf 18 -an $W/2_studio.mp4
-ffmpeg -v error -y -i "$TOUR" -filter:v "setpts=PTS/2,fps=30" -c:v libx264 -pix_fmt yuv420p -crf 18 -an $W/6_tour.mp4
+seg 3_photo 9.6 12.6         # one photo
+seg 4_scale 43.6 62.4        # full scale 144,753 -> 293 pieces -> the 293 over SAM 3D's mesh
+seg 5_work 62.4 85.3         # Spark and Glimmer make it a car: wheels and axles, glass, doors
+seg 7_manual 91.8 99.7       # the certified manual, flipped
+seg 9_close 127.5 144.5      # today LEGO, next real CAD; the numbers; the end card
+# the marked-up drawing (scripts/film_drawing.py)
+ffmpeg -v error -y -framerate 30 -i $F/drawing/%05d.png -c:v libx264 -pix_fmt yuv420p -crf 18 $W/2_drawing.mp4
+# the real footage, normalised to 30 fps; the tour at 3x
+ffmpeg -v error -y -i "$STUDIO" -r 30 -c:v libx264 -pix_fmt yuv420p -crf 18 -an $W/6_studio.mp4
+ffmpeg -v error -y -i "$TOUR" -filter:v "setpts=PTS/3,fps=30" -c:v libx264 -pix_fmt yuv420p -crf 18 -an $W/8_tour.mp4
 # join with 0.4 s fades
-FILES=($W/1_intro.mp4 $W/2_studio.mp4 $W/3_scale.mp4 $W/4_skill.mp4 $W/5_manual.mp4 $W/6_tour.mp4 $W/7_close.mp4)
+FILES=($W/1_intro.mp4 $W/2_drawing.mp4 $W/3_photo.mp4 $W/4_scale.mp4 $W/5_work.mp4 $W/6_studio.mp4 $W/7_manual.mp4 $W/8_tour.mp4 $W/9_close.mp4)
 IN=""; FG=""; OFF=0; prev="0:v"
 for i in "${!FILES[@]}"; do IN="$IN -i ${FILES[$i]}"; done
 for i in $(seq 1 $((${#FILES[@]} - 1))); do

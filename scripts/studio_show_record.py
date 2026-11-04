@@ -45,7 +45,7 @@ def main():
         ctx.close()
         br.close()
     webm = max(vids.glob("*.webm"), key=lambda p: p.stat().st_mtime)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(webm), "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "1.6", "-i", str(webm), "-c:v", "libx264", "-pix_fmt", "yuv420p",
                     "-crf", "18", str(video)], check=True)
     print("recorded", video, flush=True)
 

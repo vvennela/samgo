@@ -37,7 +37,8 @@ def main():
         name, rest = a.split("=", 1)
         path, *flags = rest.split(":")
         az = next((float(f[3:]) for f in flags if f.startswith("az=")), 0.6)
-        specs.append((name, Path(path), "motion" in flags, az))
+        dist = next((float(f[5:]) for f in flags if f.startswith("dist=")), 1.05)
+        specs.append((name, Path(path), "motion" in flags, (az, dist)))
     models = []
     for name, path, _, _ in specs:
         parts = json.loads(path.read_text())
@@ -66,9 +67,9 @@ def main():
             tab.click()
             pg.wait_for_timeout(500)
             # the front three-quarter, close in (the viewer's own camera and controls)
-            pg.evaluate("""(az) => { const bb = bounds(group), c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3());
-              const d = Math.max(s.x, s.y, s.z) * 1.05; camera.position.set(c.x + Math.cos(az) * d, c.y + 0.45 * d, c.z + Math.sin(az) * d);
-              controls.target.copy(c); controls.update(); }""", az)
+            pg.evaluate("""([az, k]) => { const bb = bounds(group), c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3());
+              const d = Math.max(s.x, s.y, s.z) * k; camera.position.set(c.x + Math.cos(az) * d, c.y + 0.45 * d, c.z + Math.sin(az) * d);
+              controls.target.copy(c); controls.update(); }""", list(az))
             pg.wait_for_timeout(900)
             # a small turn with the mouse, staying on the front
             glide(pg, 1000, 640, 18)
@@ -89,7 +90,7 @@ def main():
         ctx.close()
         br.close()
     webm = max(vids.glob("*.webm"), key=lambda p: p.stat().st_mtime)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(webm), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "1.6", "-i", str(webm), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
                     str(out)], check=True)
     print("recorded", out, flush=True)
 
