@@ -30,13 +30,15 @@ def nat(path, k=1.0):
     return Image.open(path).width * k
 
 
-def fit(path, cx, cy, content_w, **kw):
+def fit(path, cx, cy, content_w, content_h=None, **kw):
     """Place a transparent frame by its content: the drawn model's bounding box centred at (cx, cy), content_w wide."""
     if not Path(path).exists():          # not rendered yet: left out of previews
         return dict(src=path, x=cx, y=cy, w=content_w, show=(0, 0))
     im = Image.open(path)
     x0, y0, x1, y1 = im.getchannel("A").point(lambda v: 255 if v > 24 else 0).getbbox()
     k = content_w / (x1 - x0)
+    if content_h:
+        k = min(k, content_h / (y1 - y0))      # tall models fit the height instead
     return dict(src=path, x=cx - ((x0 + x1) / 2 - im.width / 2) * k, y=cy - ((y0 + y1) / 2 - im.height / 2) * k,
                 w=im.width * k, **kw)
 
@@ -50,13 +52,13 @@ def chip(name, x, y, at, until, k=0.82):
     return card(name, x, y, k, pop=at, show=(at, until), fade=0.35, shadow=True, radius=0.05)
 
 
-def swap(paths, cx, cy, content_w, t0, each, fade=0.18):
+def swap(paths, cx, cy, content_w, t0, each, fade=0.18, content_h=None):
     """A montage in one spot: each frame replaces the last."""
     out = []
     for i, p in enumerate(paths):
         if not Path(p).exists():
             continue
-        out.append(fit(p, cx, cy, content_w, show=(t0 + i * each, t0 + (i + 1) * each + (99 if i == len(paths) - 1 else 0)),
+        out.append(fit(p, cx, cy, content_w, content_h, show=(t0 + i * each, t0 + (i + 1) * each + (99 if i == len(paths) - 1 else 0)),
                        fade=fade))
     return out
 
@@ -107,7 +109,7 @@ ELEMENTS = [
          show=(T_SAM31 + 3.3, T_SHAPE + 1), fade=0.5),
     card("lbl_sam31", PHOTO[0], -400, 0.9, show=(T_SAM31 + 0.3, T_SHAPE + 1), fade=0.45),
     dict(src=f"{FILM}/camry_move", x=PROMISE[0], y=PROMISE[1], w=1920, start=15.5),
-    *swap(ANY_OBJECTS, ANY[0], ANY[1], 820, 22.4, 1.35),
+    *swap(ANY_OBJECTS, ANY[0], ANY[1], 820, 22.4, 1.35, content_h=520),
     dict(src=f"{FILM}/helicopter", x=HELI[0], y=HELI[1], w=1800, start=29.0, loop=True),
     dict(src=f"{FILM}/b747", x=B747[0], y=B747[1], w=1800, start=33.0, loop=True),
 
@@ -115,12 +117,12 @@ ELEMENTS = [
     dict(src=f"{FILM}/fill", x=SHAPE[0], y=SHAPE[1], w=1920, start=T_SHAPE, show=(0, T_SHAPE + 6.5), fade=0.6),
     card("lbl_sam3d", SHAPE[0], SHAPE[1] - 520, 0.9, show=(T_SHAPE, T_SHAPE + 6.0), fade=0.45),
     fit(f"{FILM}/res_whole/00000.png", RES[0], RES[1], 1250, show=(0, 0)),     # (sizing only)
-    dict(src=f"{FILM}/res_whole", x=RES[0], y=RES[1] + 40, w=1900, start=T_RES, show=(T_RES - 1.5, T_RES + 8.2),
+    dict(src=f"{FILM}/res_whole", x=RES[0], y=RES[1] - 10, w=1550, start=T_RES, show=(T_RES - 1.5, T_RES + 8.2),
          fade=0.5),
-    dict(src=f"{FILM}/res_layers", x=RES[0], y=RES[1] + 40, w=1900, start=T_RES + 8.0, show=(T_RES + 8.0, T_FILL + 1),
+    dict(src=f"{FILM}/res_layers", x=RES[0], y=RES[1] - 10, w=1550, start=T_RES + 8.0, show=(T_RES + 8.0, T_FILL + 1),
          fade=0.5),
-    card("cap_res", RES[0], RES[1] - 600, 0.85, pop=T_RES + 0.8),
-    card("cap_res2", RES[0], RES[1] - 500, 0.85, pop=T_RES + 8.5),
+    card("cap_res", RES[0], RES[1] - 430, 0.8, pop=T_RES + 0.8),
+    card("cap_res2", RES[0], RES[1] + 380, 0.8, pop=T_RES + 8.5),
     dict(src=f"{FILM}/fill", x=FILL[0], y=FILL[1], w=1920, start=T_FILL),
     card("cap_slab", FILL[0], FILL[1] + 520, 0.85, pop=T_FILL + 11.0, show=(T_FILL + 11.0, T_WORK + 1)),
 
@@ -142,11 +144,11 @@ ELEMENTS = [
     card("cap_parts", PARTS[0], PARTS[1] - 470, 0.8, pop=T_PARTS + 0.4),
 
     # the held-out machines, replacing each other in one spot
-    *swap(MACHINES, UNSEEN[0], UNSEEN[1] + 60, 1150, T_UNSEEN + 0.6, 2.3),
+    *swap(MACHINES, UNSEEN[0], UNSEEN[1] + 70, 1100, T_UNSEEN + 0.6, 2.3, content_h=560),
     card("cap_unseen", UNSEEN[0], UNSEEN[1] - 560, 0.85, pop=T_UNSEEN + 1.2),
 
     # over everything: today/next, the numbers, the end card (fixed on screen)
-    dict(src=SCRIM, x=960, y=540, w=1920, screen=True, show=(158.5, 181), fade=1.4),
+    dict(src=SCRIM, x=960, y=540, w=1920, screen=True, show=(151.8, 181), fade=1.2),
     card("cap_mfg3", 960, 540, 0.9, screen=True, pop=152.5, show=(152.5, 159.0)),
     dict(src=f"{C}/num0.png", x=360, y=470, w=nat(f"{C}/num0.png", 0.68), screen=True, pop=160.4, show=(160.4, 168.4)),
     dict(src=f"{C}/num0_sub.png", x=360, y=640, w=nat(f"{C}/num0_sub.png", 0.72), screen=True, pop=160.6, show=(160.6, 168.4)),
