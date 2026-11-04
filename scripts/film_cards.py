@@ -211,6 +211,7 @@ def chips(out: Path):
          ["add technic_brick 1x4 at (14, 2..8, 2)", "add axle at x=16", "add wheel x2"], mono=True)
     chip(out / "chip_check2.png", "CHECKER", GREEN, ["Rolls, and stands on its wheels"], ok=True)
     chip(out / "chip_doors.png", "CHECKER", GREEN, ["Doors swing clear on their hinges"], ok=True)
+    chip(out / "chip_spark2.png", "MUSE SPARK", SPARK_C, ["It has doors, hinged at the front."])
     chip(out / "chip_glass.png", "SAM 3.1 + MUSE SPARK", (90, 100, 112), ["Glass where the photo has it. Painted red."])
 
 
@@ -230,6 +231,7 @@ def main():
     text_png(out / "cap_layers.png", ["LAYER BY LAYER"], size=64, color=MUTED, track=0.1)
     text_png(out / "cap_res2.png", ["SCALED DOWN TO SOMETHING YOU CAN BUILD"], size=64, color=MUTED, track=0.1)
     text_png(out / "cap_slab.png", ["REAL PLATES.  NO WHEELS, NO DOORS, NOTHING MOVES."], size=60, color=MUTED, track=0.1)
+    text_png(out / "cap_steps.png", ["56 STEPS, EACH ONE CHECKED TO HOLD"], size=64, color=MUTED, track=0.1)
     text_png(out / "cap_parts.png", ["THIS IS A REAL BUILD, WITH REAL PARTS"], size=84, track=0.08)
     text_png(out / "cap_unseen.png", ["NONE OF THESE WERE IN THE TRAINING DATA"], size=84, track=0.1)
     text_png(out / "cap_mfg1.png", ["KNOWN PARTS"], size=150, track=0.12)

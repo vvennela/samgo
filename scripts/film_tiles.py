@@ -188,6 +188,15 @@ def main():
                 m.position.set(r.x, r.up, r.z); m.userData = {t0: r.t0, t1: r.t1, catcher: true, styled: true};
                 scene.add(m); return m;
               });
+              // Spark's door outlines: a thin red frame on each side of the car
+              (p.rects || []).forEach(r => {
+                const g = new THREE.Group(), t = 1.2, mat = new THREE.MeshBasicMaterial({color: 0xd01012, transparent: true, opacity: 0});
+                const bar = (w, h, x, y) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, t), mat); b.position.set(x, y, r.z); g.add(b); };
+                const cx = (r.x0 + r.x1) / 2, cy = (r.z0 + r.z1) / 2, W = r.x1 - r.x0, H = r.z1 - r.z0;
+                bar(W, t, cx, r.z0); bar(W, t, cx, r.z1); bar(t, H, r.x0, cy); bar(t, H, r.x1, cy);
+                g.userData = {t0: r.t0, t1: r.t1, catcher: true, styled: true, mat: mat};
+                scene.add(g); window.__rings.push(g);
+              });
             }""", plan)
         if ao:
             for f in AO_SCRIPTS:
@@ -210,10 +219,13 @@ def main():
                 for ev in plan["events"]:
                     if t >= ev["t"] - ev["dur"]:
                         u = min(1.0, (t - (ev["t"] - ev["dur"])) / ev["dur"])
-                        frame["step"], frame["lift"] = ev["step"], lift * (1 - (1 - (1 - u) ** 3))
+                        if ev.get("out"):        # taken away: lifts off along its way in, then is gone
+                            frame["step"], frame["lift"] = (ev["step"] - 1, 0) if u >= 1 else (ev["step"], lift * u ** 2)
+                        else:
+                            frame["step"], frame["lift"] = ev["step"], lift * (1 - (1 - (1 - u) ** 3))
                 pg.evaluate("""(t) => window.__rings.forEach(m => {
                   const a = Math.min(1, Math.max(0, (t - m.userData.t0) / 0.35)) * Math.min(1, Math.max(0, (m.userData.t1 - t) / 0.4));
-                  m.material.opacity = a; m.visible = a > 0.01;
+                  (m.userData.mat || m.material).opacity = a; m.visible = a > 0.01;
                   const s = 1 + 0.35 * Math.max(0, 1 - (t - m.userData.t0) / 0.35); m.scale.set(s, s, s);
                 })""", t)
             if mesh:

@@ -128,6 +128,8 @@ def frame_of(e: dict, t: float):
     k = int(round((t - e.get("start", 0)) * e.get("fps", 30) * e.get("rate", 1))) + e.get("offset", 0)
     if e.get("loop"):
         k %= len(files)
+    if "frames" in e:            # play only this range of the sequence, holding its ends
+        k = max(e["frames"][0], min(e["frames"][1], k))
     return files[max(0, min(len(files) - 1, k))]
 
 

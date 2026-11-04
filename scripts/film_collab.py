@@ -18,6 +18,7 @@ TIMELINE = [("rear_bricks", 4.2, 0.8), ("rear_axle", 5.4, 0.6), ("rear_wheels", 
             ("front_bricks", 8.4, 0.8), ("front_axle", 9.6, 0.6), ("front_wheels", 10.3, 0.6)]
 RINGS_AT = (1.6, 2.4)        # Spark's markers appear (rear, front)
 RINGS_OFF = 11.2
+DOORS_AT, DOORS_OFF = 11.6, 14.4   # Spark's door outlines
 
 
 def main():
@@ -45,7 +46,16 @@ def main():
     for k, edge in enumerate((rear, front)):
         for side in (-6.0, width + 6.0):   # both sides of the car, just outside the body
             rings.append({"x": edge * STUD, "up": z, "z": side, "r": r + 3, "t0": RINGS_AT[k], "t1": RINGS_OFF})
-    plan = {"steps": steps, "dirs": [[d[0], d[2], d[1]] for d in dirs],
+    summ = json.loads((run / "summary.json").read_text())
+    rects = []
+    # Spark's door outlines are drawn only if the built doors follow them (MARK_SPARK_DOORS=1): on a model whose doors
+    # were placed otherwise, marking Spark's spots would show a placement the doors do not have.
+    import os
+    for d in (summ.get("layout", {}).get("doors", []) if os.environ.get("MARK_SPARK_DOORS") == "1" else []):
+        for side in (-5.0, width + 5.0):
+            rects.append({"x0": d["x0"] * STUD, "x1": d["x1"] * STUD, "z0": d["z0"] * PLATE, "z1": d["z1"] * PLATE,
+                          "z": side, "t0": DOORS_AT, "t1": DOORS_OFF})
+    plan = {"rects": rects, "steps": steps, "dirs": [[d[0], d[2], d[1]] for d in dirs],
             "events": [{"step": names.index(g) + 1, "t": t, "dur": d} for g, t, d in TIMELINE],
             "rings": rings, "blocked": blocked}
     plan_out.write_text(json.dumps(plan))
