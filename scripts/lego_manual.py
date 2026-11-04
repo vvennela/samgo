@@ -59,6 +59,16 @@ COLOR_NAMES = {"red": "Red", "black": "Black", "dark_gray": "Dark Bluish Gray", 
                "trans_clear": "Trans-Clear", "white": "White", "blue": "Blue", "yellow": "Yellow"}
 
 
+ICON_FILL = {"red": (220, 30, 36), "trans_clear": (205, 230, 248)}  # all other colours drawn white; the label says which
+
+
+def label(k):
+    """Two lines under a part: what it is, and its colour and LEGO number."""
+    t, a, b, col = k
+    what = f"{NAMES.get(t, t)} " + (f"{a}x{b}" if t in ("plate", "brick", "technic_brick") else "" if t in SPECIAL else str(a))
+    return what.strip(), f"{COLOR_NAMES.get(col, col)} · {number(k)}"
+
+
 def key(p):
     t = p["type"]
     if t in ("wheel",):
@@ -107,11 +117,10 @@ def icon(k, s=26):
     top = [P(0, 0, 1), P(w, 0, 1), P(w, l, 1), P(0, l, 1)]
     front = [P(0, 0, 0), P(w, 0, 0), P(w, 0, 1), P(0, 0, 1)]
     right = [P(w, 0, 0), P(w, l, 0), P(w, l, 1), P(w, 0, 1)]
-    if col in EXTRA:
-        c = (200, 225, 240)
-    d.polygon(front, fill=shade(c, 0.78), outline=INK)
-    d.polygon(right, fill=shade(c, 0.62), outline=INK)
-    d.polygon(top, fill=c, outline=INK)
+    c = ICON_FILL.get(col, (255, 255, 255))
+    for poly, k in ((front, 0.86), (right, 0.72), (top, 1.0)):
+        d.polygon(poly, fill=shade(c, k))
+        d.line(poly + [poly[0]], fill=INK, width=3, joint="curve")
     if t == "technic_brick":  # holes on the long side
         for i in range(1, w):
             cx, cy = P(i, 0, 0.5)
@@ -124,38 +133,57 @@ def icon(k, s=26):
             cx, cy = P(i + 0.5, j + 0.5, 1)
             rx, ry = 0.3 * s, 0.17 * s
             d.rectangle((cx - rx, cy - 0.18 * s, cx + rx, cy), fill=shade(c, 0.8))
-            d.ellipse((cx - rx, cy - ry - 0.18 * s, cx + rx, cy + ry - 0.18 * s), fill=c, outline=INK)
-            d.arc((cx - rx, cy - ry, cx + rx, cy + ry), 0, 180, fill=INK)
+            d.ellipse((cx - rx, cy - ry - 0.18 * s, cx + rx, cy + ry - 0.18 * s), fill=c, outline=INK, width=2)
+            d.arc((cx - rx, cy - ry, cx + rx, cy + ry), 0, 180, fill=INK, width=2)
     return im
 
 
 def callout(groups, maxw=1100):
-    """The parts box: each part drawn with its count."""
-    icons = [(icon(k), n) for k, n in groups]
-    pad, gap = 22, 26
+    """The parts box: each part drawn (white, or red, with black outlines), its count, and under it what it is,
+    its colour and LEGO number."""
+    f1, f2, f3 = font(30), font(19), font(17, False)
+    cells = []
+    for k, n in groups:
+        im = icon(k, s=30)
+        a, b = label(k)
+        w = max(im.width, int(f2.getlength(a)), int(f3.getlength(b))) + 6
+        cells.append((im, n, a, b, w))
+    pad, gap = 22, 30
     rows, row, x = [], [], pad
-    for im, n in icons:
-        if row and x + im.width > maxw - pad:
+    for c in cells:
+        if row and x + c[4] > maxw - pad:
             rows.append(row)
             row, x = [], pad
-        row.append((im, n))
-        x += im.width + gap
+        row.append(c)
+        x += c[4] + gap
     if row:
         rows.append(row)
-    rh = [max(im.height for im, _ in r) + 34 for r in rows]
-    W = min(maxw, max(sum(im.width + gap for im, _ in r) for r in rows) + pad)
+    rh = [max(c[0].height for c in r) + 96 for r in rows]
+    W = min(maxw, max(sum(c[4] + gap for c in r) for r in rows) + pad)
     box = Image.new("RGB", (W, sum(rh) + 2 * pad - 10), CALLOUT)
     d = ImageDraw.Draw(box)
     y = pad
     for r, h in zip(rows, rh):
         x = pad
-        for im, n in r:
-            box.paste(im, (x, y + (h - 34 - im.height)), im)
-            d.text((x, y + h - 30), f"{n}x", fill=INK, font=font(24))
-            x += im.width + gap
+        for im, n, a, b, w in r:
+            box.paste(im, (x, y + (h - 96 - im.height)), im)
+            d.text((x, y + h - 94), f"{n}x", fill=INK, font=f1)
+            d.text((x, y + h - 58), a, fill=INK, font=f2)
+            d.text((x, y + h - 34), b, fill=(70, 70, 70), font=f3)
+            x += w + gap
         y += h
     d.rectangle((0, 0, W - 1, box.height - 1), outline=(120, 150, 180), width=3)
     return box
+
+
+def crop(img, pad=50):
+    """Cut the empty background (and the faint floor) away round the model and its arrows."""
+    bg = img.getpixel((5, 5))
+    diff = ImageChops.difference(img, Image.new("RGB", img.size, bg)).convert("L").point(lambda v: 255 if v > 40 else 0)
+    b = diff.getbbox()
+    if not b:
+        return img
+    return img.crop((max(0, b[0] - pad), max(0, b[1] - pad), min(img.width, b[2] + pad), min(img.height, b[3] + pad)))
 
 
 def arrows(img, marks):
@@ -214,14 +242,24 @@ def main():
     plain = {i for st in steps if st.get("kind") == "layer" for i in st["parts"]}
     _paths = anim.paths
 
-    def paths(ps, order):  # a layer comes straight down onto the model (from below while it is built upside down)
+    def paths(ps, order):
+        """A layer part comes straight down onto the model, unless a part placed in an earlier step is over it:
+        then it comes up from below (that is also every step built upside down)."""
         dirs, blocked = _paths(ps, order)
-        return [[0, 0, -1] if i in flipped else [0, 0, 1] if i in plain else d for i, d in enumerate(dirs)], blocked
+        cells_at = {}
+        for i in sorted(plain, key=lambda i: order[i]):
+            p = ps[i]
+            foot = [(x, y) for x in range(p["x"], p["x"] + p.get("w", 1)) for y in range(p["y"], p["y"] + p.get("l", 1))]
+            above = any(z > p["z"] and order[j] < order[i] for c in foot for z, j in cells_at.get(c, []))
+            dirs[i] = [0, 0, -1] if above else [0, 0, 1]
+            for c in foot:
+                cells_at.setdefault(c, []).append((p["z"], i))
+        return dirs, blocked
     anim.paths = paths
     html = Path(tempfile.mkdtemp()) / "m.html"
     html.write_text(page([("model", parts, facts_for(parts), man)]))
     shots = Path(tempfile.mkdtemp())
-    view = {"dist": 0.9, "az": 0.75, "elev": 0.6, "orbit": 1e9, "move": False, "fit": 0.4}
+    view = {"dist": 0.9, "az": 0.75, "elev": 0.6, "orbit": 1e9, "move": False, "fit": 0.4, "edges": True}
     LIFT = 30   # mm the new parts hover above their places
     marks = {}
     with sync_playwright() as pw:
@@ -233,7 +271,7 @@ def main():
         pg.wait_for_timeout(400)
         for k in range(len(steps)):
             flip = bool(steps[k].get("frame", {}).get("flipped"))
-            marks[k] = pg.evaluate("([o]) => window.renderAt(0, 0, o)", [dict(view, step=k, fitTo=k, lift=LIFT, flip=flip)])
+            marks[k] = pg.evaluate("([o]) => window.renderAt(0, 0, o)", [dict(view, step=k, fitTo=k, lift=LIFT if k else 0, flip=flip)])
             pg.locator("#stage canvas").screenshot(path=str(shots / f"{k:03d}.png"))
         pg.evaluate("([o]) => window.renderAt(0, 0, o)", [dict(view, step=len(steps), az=0.45, elev=0.35, dist=1.05, fit=None)])
         pg.locator("#stage canvas").screenshot(path=str(shots / "cover.png"))
@@ -253,16 +291,19 @@ def main():
     pages.append(pgc)
 
     for k, s in enumerate(steps):
-        cur = Image.new("RGB", LAND, BG)
+        cur = Image.new("RGB", LAND, BG)  # white page; the render's own background is cropped away
         pages.append(cur)
         img = Image.open(shots / f"{k:03d}.png").convert("RGB")
+        ImageDraw.Draw(cur).rectangle((0, 0, LAND[0], LAND[1]), fill=img.getpixel((5, 5)))  # page = render background
         arrows(img, marks[k] if isinstance(marks[k], list) else [])
         top = 40
         groups = sorted(collections.Counter(key(parts[i]) for i in s["parts"]).items(), key=lambda kv: (kv[0][0], kv[0][3], kv[0][1], kv[0][2]))
         box = callout(groups, maxw=1000)
-        scale = min((LAND[0] - 60) / img.width, (LAND[1] - 40) / img.height)
+        img = crop(img)
+        y_img = top + box.height + 24
+        scale = min((LAND[0] - 80) / img.width, (LAND[1] - y_img - 30) / img.height)
         img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
-        cur.paste(img, ((LAND[0] - img.width) // 2, LAND[1] - img.height - 20))
+        cur.paste(img, ((LAND[0] - img.width) // 2, y_img))
         d = ImageDraw.Draw(cur)
         d.text((50, top - 10), str(k + 1), fill=INK, font=font(120))
         cur.paste(box, (260, top))
@@ -280,24 +321,38 @@ def main():
     pinv = Image.new("RGB", PAGE, BG)
     d = ImageDraw.Draw(pinv)
     d.text((60, 50), "Parts list", fill=INK, font=font(64))
-    x, y, colw, rowh = 60, 160, 375, 0
-    for k, n in sorted(inv.items(), key=lambda kv: (kv[0][3], kv[0][0], kv[0][1], kv[0][2])):
-        im = icon(k, s=20)
+    x, y, colw, rowh = 60, 150, 375, 0
+    order = {"red": 0, "black": 1, "dark_gray": 2, "trans_clear": 3, "light_gray": 4}
+    last = None
+    for k, n in sorted(inv.items(), key=lambda kv: (order.get(kv[0][3], 9), kv[0][0], kv[0][1], kv[0][2])):
+        im = icon(k, s=22)
+        if k[3] != last:  # a heading per colour
+            if last is not None:
+                x, y, rowh = 60, y + rowh + 30, 0
+            if y + 60 + im.height + 90 > PAGE[1] - 40:
+                pages.append(pinv)
+                pinv = Image.new("RGB", PAGE, BG)
+                d = ImageDraw.Draw(pinv)
+                y = 60
+            d.text((60, y), COLOR_NAMES.get(k[3], k[3]), fill=INK, font=font(40))
+            d.line((60, y + 52, PAGE[0] - 60, y + 52), fill=INK, width=3)
+            y += 70
+            last = k[3]
         if x + colw > PAGE[0]:
             x, y = 60, y + rowh + 20
             rowh = 0
-        if y + im.height + 70 > PAGE[1] - 40:
+        if y + im.height + 90 > PAGE[1] - 40:
             pages.append(pinv)
             pinv = Image.new("RGB", PAGE, BG)
             d = ImageDraw.Draw(pinv)
             x, y, rowh = 60, 60, 0
         pinv.paste(im, (x, y), im)
         t, a, b, col = k
-        label = f"{n}x  {NAMES.get(t, t)} " + (f"{a}x{b}" if t in ("plate", "brick", "technic_brick") else "" if t in SPECIAL else str(a))
-        label += f"  ({number(k)})"
-        d.text((x, y + im.height + 4), label, fill=INK, font=font(18))
-        d.text((x, y + im.height + 26), COLOR_NAMES.get(col, col), fill=(90, 90, 90), font=font(16, False))
-        rowh = max(rowh, im.height + 50)
+        l1, l2 = label(k)
+        d.text((x, y + im.height + 2), f"{n}x", fill=INK, font=font(26))
+        d.text((x, y + im.height + 34), l1, fill=INK, font=font(18))
+        d.text((x, y + im.height + 56), l2, fill=(70, 70, 70), font=font(16, False))
+        rowh = max(rowh, im.height + 80)
         x += colw
     pages.append(pinv)
     pages[0].save(out, save_all=True, append_images=pages[1:], resolution=150)

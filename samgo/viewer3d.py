@@ -300,6 +300,17 @@ function build(m) {
     inst.userData.base = list.map((b, i) => { const q = new THREE.Matrix4(); inst.getMatrixAt(i, q); return q; });
     buildables.push(inst);
     holder(list[0]).add(inst);
+    if (window.EDGES && shape === "0") {  // instructions: a black outline round every part, as in printed manuals
+      const c3 = new THREE.Color(col), dark = 0.3 * c3.r + 0.59 * c3.g + 0.11 * c3.b < 0.22;
+      const eg = edgeGeo || (edgeGeo = new THREE.EdgesGeometry(geo[0]));
+      const em = new THREE.LineBasicMaterial({color: dark ? 0x9aa0a8 : 0x000000});  // light lines on dark parts
+      list.forEach((b, i) => {
+        const e = new THREE.LineSegments(eg, em);
+        e.applyMatrix4(inst.userData.base[i]);
+        e.userData.step = inst.userData.steps[i]; e.userData.dir = inst.userData.dirs[i];
+        holder(b).add(e); buildables.push(e);
+      });
+    }
   }
   const axleMat = new THREE.MeshLambertMaterial({color: hl ? 0xffb000 : 0x7a7f86});
   for (const a of m.scene.axles) {
@@ -457,6 +468,8 @@ bg(); show(0); resize();
 // Recording (scripts/record_video.py): one exact frame at time t, every joint moving at once (spins turn on, swings
 // open and close), the camera orbiting; o.build = seconds into the build animation. The live loop stands down.
 window.RECORDING = false;
+window.EDGES = false;
+let edgeGeo = null, edgeMat = null;
 function showUpTo(k, lift = 0) {  // everything up to step k at rest; step k's parts lifted along their way in
   const q = new THREE.Matrix4(), mv = new THREE.Matrix4();
   for (const o of buildables) {
@@ -497,6 +510,7 @@ function stepMarks(k, lift) {  // screen points of step k's parts: [x, y] where 
 }
 window.renderAt = (i, t, o = {}) => {
   window.RECORDING = true;
+  if (o.edges && !window.EDGES) { window.EDGES = true; show(i, true); MODELS[i]._bb = null; }  // rebuild with outlines
   if (current !== i || !group) { show(i, true); MODELS[i]._bb = null; }
   const m = MODELS[i], joints = m.joints || [];
   if (!m._bb) { buildOn = false; buildFrame(); m._bb = bounds(group); }
