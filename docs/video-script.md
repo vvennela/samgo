@@ -5,16 +5,24 @@ asset path is in `video_handoff.md` section 3. Name the Meta models on screen as
 
 ---
 
-## 0:00-0:08 · Cold open
+## 0:00-0:09 · Cold open (on camera)
 
-**Picture:** SF / San Jose skyline at dusk (stock, URL in the credits). **SAMgo** slams in, huge bold sans, the
-"QUEENS" title style. A beat of silence, then the music hits.
+**Picture:** you, landscape, head and shoulders, the camera at eye level. Stand where the frame's middle band (where
+the title sits) is darker or busier than a white wall: trees, a street, a skyline.
 
-**OST:** SAMgo
+**You:**
+> We know models can draw. But can they build in the real world?
+> Introducing SAMgo.
+
+**Title:** on the vowel of "Sam", **SAMGO** cuts on in huge flat off-white Futura Medium capitals, ~80% of the frame
+width, a little letter-spacing, no shadow (the "QUEENS" title style), settling from 103% to 100% over 8 frames, with
+a cinematic boom (free-licence). Hold 2-3 s still, looking into the lens, then cut.
+Title frames: `scripts/title_card.py` (Pillow, `Futura.ttc` face 0), overlaid by ffmpeg at the
+word's onset from whisper word timing.
 
 ---
 
-## 0:08-0:22 · The promise
+## 0:09-0:22 · The promise
 
 **Picture:** your hand holds a phone; on its screen, the Camry photo (`runs/video/steps/1_photo.png`). Tap. Lower the
 phone. Hard cut to the red LEGO Camry orbiting, doors swinging open, wheels turning (`clips/01_Camry.mp4`).
