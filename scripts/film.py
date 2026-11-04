@@ -103,19 +103,40 @@ def frame_of(e: dict, t: float):
     return files[max(0, min(len(files) - 1, k))]
 
 
+def pop(e: dict, t: float):
+    """(alpha, scale, dy) of a pop entrance at e["pop"]: fades in fast, settles from 108% with a small overshoot,
+    rises 30 px into place."""
+    if "pop" not in e:
+        return 1.0, 1.0, 0.0
+    u = (t - e["pop"]) / e.get("pop_dur", 0.45)
+    if u <= 0:
+        return 0.0, 1.0, 0.0
+    u = min(1.0, u)
+    c1, c3 = 1.4, 2.4
+    back = 1 + c3 * (u - 1) ** 3 + c1 * (u - 1) ** 2       # ease-out-back, 0 -> 1 with a small overshoot
+    return min(1.0, u * 3), 1.08 - 0.08 * back, 30 * (1 - ease(u, "out"))
+
+
 def opacity(e: dict, t: float) -> float:
-    a = 1.0
+    a = pop(e, t)[0]
     if "show" in e:
         t_in, t_out = e["show"]
         f = e.get("fade", 0.4)
-        a = min(ease((t - t_in) / f, "out") if f else float(t >= t_in),
+        a = min(a, ease((t - t_in) / f, "out") if f else float(t >= t_in),
                 ease((t_out - t) / f, "out") if f else float(t <= t_out))
     return max(0.0, min(1.0, a))
 
 
 # ---------------------------------------------------------------- drawing
+@lru_cache(maxsize=2)
+def _bg_image(path: str, w: int, h: int) -> Image.Image:
+    return Image.open(path).convert("RGB").resize((w, h), Image.LANCZOS)
+
+
 def background(cx: float, cy: float, z: float) -> Image.Image:
     W, H = SPEC["W"], SPEC["H"]
+    if SPEC.get("BG_IMAGE"):
+        return _bg_image(SPEC["BG_IMAGE"], W, H).copy()
     im = Image.new("RGB", (W, H), SPEC["BG"])
     grid = SPEC.get("GRID", 64)
     step = grid * z
@@ -148,7 +169,7 @@ def render(k: int) -> Image.Image:
         if path is None:
             continue
         src = _load(path, e.get("radius", 0))
-        scale = e.get("scale_fn", lambda t: 1.0)(t) if callable(e.get("scale_fn")) else 1.0
+        _, scale, dy = pop(e, t)
         ww = e["w"] * scale
         wh = ww * src.height / src.width
         if e.get("screen"):   # fixed on screen (x, y, w in 1920x1080 frame pixels), not on the canvas
@@ -156,7 +177,7 @@ def render(k: int) -> Image.Image:
             sx, sy, sw, sh = e["x"] * k, e["y"] * k, ww * k, wh * k
         else:
             sx = (e["x"] - cx) * z + W / 2
-            sy = (e["y"] - cy) * z + H / 2
+            sy = (e["y"] + dy - cy) * z + H / 2
             sw, sh = ww * z, wh * z
         if sx + sw / 2 < 0 or sx - sw / 2 > W or sy + sh / 2 < 0 or sy - sh / 2 > H or sw < 2:
             continue

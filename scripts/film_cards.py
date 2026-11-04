@@ -173,6 +173,46 @@ def spark(out: Path, target_npz: str, layout: dict, wheels_x=(4, 16), seconds=5.
         im.save(out / f"{k:05d}.png")
 
 
+SPARK_C, GLIMMER_C = (124, 58, 237), (8, 102, 255)
+
+
+def chip(path: Path, who: str, color, lines, mono=False, ok=False):
+    """A small speech card: a coloured dot and the speaker's name, then its line(s)."""
+    f_who = font(30, 2)
+    f_txt = font(30, 0, MONO) if mono else font(40, 0)
+    pad, gap = 34, 14
+    width = max([f_who.getlength(who) + 70] + [f_txt.getlength(l) + (64 if ok else 0) for l in lines]) + 2 * pad
+    lh = 46 if mono else 54
+    height = pad + 40 + gap + lh * len(lines) + pad - 6
+    im = card(int(width), int(height), (255, 255, 255), 26)
+    d = ImageDraw.Draw(im)
+    d.ellipse([pad, pad + 6, pad + 22, pad + 28], fill=color + (255,))
+    x = pad + 36
+    for c in who:
+        d.text((x, pad), c, font=f_who, fill=color + (255,))
+        x += f_who.getlength(c) + 3
+    y = pad + 40 + gap
+    for l in lines:
+        tx = pad
+        if ok:
+            tick(d, pad + 20, y + 24, 20, GREEN)
+            tx = pad + 56
+        d.text((tx, y), l, font=f_txt, fill=INK + (255,))
+        y += lh
+    im.save(path)
+
+
+def chips(out: Path):
+    chip(out / "chip_spark1.png", "MUSE SPARK", SPARK_C, ["It's a car. The wheels go here, and here."])
+    chip(out / "chip_glimmer1.png", "MUSE GLIMMER", GLIMMER_C,
+         ["add technic_brick 1x4 at (2, 2..8, 2)", "add axle at x=4", "add wheel x2"], mono=True)
+    chip(out / "chip_check1.png", "CHECKER", GREEN, ["Turns, held by studs"], ok=True)
+    chip(out / "chip_glimmer2.png", "MUSE GLIMMER", GLIMMER_C,
+         ["add technic_brick 1x4 at (14, 2..8, 2)", "add axle at x=16", "add wheel x2"], mono=True)
+    chip(out / "chip_check2.png", "CHECKER", GREEN, ["Rolls, and stands on its wheels"], ok=True)
+    chip(out / "chip_glass.png", "SAM 3.1 + MUSE SPARK", (90, 100, 112), ["Glass where the photo has it. Painted red."])
+
+
 def main():
     out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
     labels = {
@@ -199,6 +239,7 @@ def main():
              color=MUTED, track=0.12)
     checklist(out / "checklist.png")
     terminal(out / "terminal")
+    chips(out)
     if len(sys.argv) > 2:   # run dir of the pipeline build: Spark's layout on its voxel side view
         import json
         run = Path(sys.argv[2])
