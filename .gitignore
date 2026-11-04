@@ -234,3 +234,7 @@ docs/HANDOFF.md
 docs/demo-script.md
 docs/video-script.md
 runs/build_kit/camry_red_final/
+runs/video/
+scripts/film*
+runs/*.log
+scripts/record_layers.py
