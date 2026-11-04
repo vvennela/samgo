@@ -1,8 +1,7 @@
-"""Run 8: Glimmer's own wrong answers on training wings, turned into rows that teach acting on feedback.
+"""Run 8: Glimmer's own answers on generic training sheets, turned into rows that teach acting on feedback.
 
-Run 7 repeats its answer, byte for byte, after precise feedback once it is confident (the 747 flap: same answer all
-three rounds). Synthetic mistakes only teach fixing mistakes we imagined; these rows use the mistakes it actually
-makes. For each training case (samgo.flap_data, never a test object): sample the model greedily, as at test time;
+Rows built from the model's own answers teach it to change a confident answer when the checker's feedback says so,
+on exactly the mistakes it makes. For each training case (samgo.flap_data, never a test object): sample the model greedily, as at test time;
 if the answer fails the generic checks, the row is the prompt, its own answer, the precise feedback, then the
 verified reference answer (which always differs from the wrong one).
 
