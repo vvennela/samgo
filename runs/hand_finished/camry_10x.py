@@ -12,6 +12,7 @@ painted, glazed and re-laid as plates outside / bricks inside.
     python runs/hand_finished/camry_10x.py grid.npz out.json [ZB] [paint]
 """
 import json
+import os
 import sys
 import time
 
@@ -51,6 +52,27 @@ def main():
     g = np.load(src)["grid"]
     occ = g > 0
     X, Y, Z = g.shape
+    if "--no-wheels" in sys.argv:
+        # the tyres: what reaches the ground (below WZ plates) is the tyres' bottoms; their y range gives the tyre
+        # bands, their x range the wheel centre. Clear the wheel's disc (x in studs, z in plates: 2.5 plates a stud)
+        # in those bands, leaving the arch above like the rear's
+        WZ = 12
+        xs, ys, _ = np.nonzero(occ[:, :, :WZ])
+        cxw = (xs.min() + xs.max()) / 2
+        r = float(os.environ.get("WHEEL_R", 16))  # studs
+        bands = np.zeros(Y, bool)
+        bands[ys.min():ys.max() + 1] = True
+        bands[ys[ys < Y / 2].max() + 1:ys[ys > Y / 2].min()] = False
+        xg, zg = np.meshgrid(np.arange(X), np.arange(Z), indexing="ij")
+        disc = ((xg - cxw) / r) ** 2 + ((zg - 2.5 * r) / (2.5 * r)) ** 2 <= 1
+        wheel = disc[:, None, :] & bands[None, :, None] & occ
+        print(f"wheels removed: {int(wheel.sum())} cells, centre x {cxw}, y bands {np.nonzero(bands)[0].tolist()}",
+              flush=True)
+        occ &= ~wheel
+        from scipy import ndimage
+        lab, _ = ndimage.label(occ)  # bits of tyre outside the disc: keep only the car
+        occ = lab == np.argmax(np.bincount(lab.ravel())[1:]) + 1
+        g = np.where(occ, g, 0)
     shell = neighbours_air(occ)
     zz = np.arange(Z)[None, None, :]
     ztop = np.array([np.nonzero(occ[x].any(axis=0))[0].max() if occ[x].any() else -1 for x in range(X)])
