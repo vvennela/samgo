@@ -107,15 +107,15 @@ ELEMENTS = [
 
     # ---- over everything: the numbers, the end card (fixed on screen)
     dict(src=SCRIM, x=960, y=540, w=1920, screen=True, show=(168.5, 181), fade=1.2),
-    dict(src=f"{C}/num0.png", x=400, y=470, w=nat(f"{C}/num0.png", 0.8), screen=True, show=(169.5, 175.5)),
-    dict(src=f"{C}/num0_sub.png", x=400, y=610, w=nat(f"{C}/num0_sub.png", 0.62), screen=True, show=(169.5, 175.5)),
-    dict(src=f"{C}/num1.png", x=960, y=470, w=nat(f"{C}/num1.png", 0.8), screen=True, show=(170.6, 175.5)),
-    dict(src=f"{C}/num1_sub.png", x=960, y=610, w=nat(f"{C}/num1_sub.png", 0.62), screen=True, show=(170.6, 175.5)),
-    dict(src=f"{C}/num2.png", x=1520, y=470, w=nat(f"{C}/num2.png", 0.8), screen=True, show=(171.7, 175.5)),
-    dict(src=f"{C}/num2_sub.png", x=1520, y=610, w=nat(f"{C}/num2_sub.png", 0.62), screen=True, show=(171.7, 175.5)),
+    dict(src=f"{C}/num0.png", x=360, y=470, w=nat(f"{C}/num0.png", 0.68), screen=True, show=(169.5, 175.5)),
+    dict(src=f"{C}/num0_sub.png", x=360, y=640, w=nat(f"{C}/num0_sub.png", 0.72), screen=True, show=(169.5, 175.5)),
+    dict(src=f"{C}/num1.png", x=960, y=470, w=nat(f"{C}/num1.png", 0.68), screen=True, show=(170.6, 175.5)),
+    dict(src=f"{C}/num1_sub.png", x=960, y=640, w=nat(f"{C}/num1_sub.png", 0.72), screen=True, show=(170.6, 175.5)),
+    dict(src=f"{C}/num2.png", x=1560, y=470, w=nat(f"{C}/num2.png", 0.68), screen=True, show=(171.7, 175.5)),
+    dict(src=f"{C}/num2_sub.png", x=1560, y=640, w=nat(f"{C}/num2_sub.png", 0.72), screen=True, show=(171.7, 175.5)),
     dict(src=f"{C}/end_title.png", x=960, y=450, w=nat(f"{C}/end_title.png", 1.0), screen=True, show=(176.0, 181)),
     dict(src=f"{C}/end_sub.png", x=960, y=640, w=nat(f"{C}/end_sub.png"), screen=True, show=(176.6, 181)),
-    dict(src=f"{C}/end_models.png", x=960, y=730, w=nat(f"{C}/end_models.png"), screen=True, show=(177.0, 181)),
+    dict(src=f"{C}/end_models.png", x=960, y=730, w=nat(f"{C}/end_models.png", 0.6), screen=True, show=(177.0, 181)),
 ]
 
 CAMERA = [

@@ -177,7 +177,7 @@ def main():
     out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
     labels = {
         "lbl_photo": "ONE PHOTO", "lbl_sam31": "SAM 3.1  ·  FINDS THE CAR AND ITS GLASS",
-        "lbl_sam3d": "SAM 3D  ·  THE 3D SHAPE   →   GREEDY FILL  ·  PLATES",
+        "lbl_sam3d": "SAM 3D  ·  THE 3D SHAPE,  THEN A GREEDY FILL OF PLATES",
         "lbl_spark": "MUSE SPARK  ·  KNOWS WHAT MOVES", "lbl_glimmer": "MUSE GLIMMER  ·  BUILDS IT, THE CHECKER CHECKS",
         "lbl_build": "THE BUILD", "lbl_manual": "THE MANUAL  ·  56 STEPS, EACH ONE CHECKED",
         "lbl_parts": "320 REAL PARTS, READY TO ORDER", "lbl_verified": "VERIFIED, NOT GENERATED",
@@ -188,11 +188,11 @@ def main():
     text_png(out / "cap_mfg1.png", ["KNOWN PARTS"], size=150, track=0.12)
     text_png(out / "cap_mfg2.png", ["AN ASSEMBLY THAT HOLDS AT EVERY STEP"], size=84, track=0.08)
     text_png(out / "cap_mfg3.png", ["TODAY: LEGO.  NEXT: REAL CAD."], size=110, track=0.08)
-    nums = [("50 / 50", "HELD-OUT CARS BUILT"), ("10 / 10", "DOORS ON VEHICLES IT NEVER SAW"),
-            ("8  →  24", "A NEW SKILL IN ONE TRAINING RUN")]
+    nums = [("50/50", ["HELD-OUT CARS", "BUILT"]), ("10/10", ["DOORS ON VEHICLES", "IT NEVER SAW"]),
+            ("3×", ["A NEW SKILL IN ONE RUN", "8 TO 24 OF 30"])]
     for i, (big, small) in enumerate(nums):
-        text_png(out / f"num{i}.png", [big], size=220, face=0, track=0.04)
-        text_png(out / f"num{i}_sub.png", [small], size=56, color=MUTED, track=0.12)
+        text_png(out / f"num{i}.png", [big], size=200, face=0, track=0.02)
+        text_png(out / f"num{i}_sub.png", small, size=44, color=MUTED, track=0.1, gap=0.4)
     text_png(out / "end_title.png", ["SAMGO"], size=260, track=0.06)
     text_png(out / "end_sub.png", ["github.com/vvennela/samgo"], size=60, color=MUTED, track=0.04)
     text_png(out / "end_models.png", ["BUILT WITH  SAM 3.1  ·  SAM 3D  ·  MUSE SPARK  ·  MUSE GLIMMER"], size=48,
