@@ -215,7 +215,7 @@ def main():
             if az_keys:
                 frame["az"] = keyed(az_keys, t, smooth=True)
             if plan:
-                frame["step"], frame["lift"] = 0, 0
+                frame["step"], frame["lift"] = plan.get("initial", 0), 0     # before the first event
                 for ev in plan["events"]:
                     if t >= ev["t"] - ev["dur"]:
                         u = min(1.0, (t - (ev["t"] - ev["dur"])) / ev["dur"])

@@ -25,7 +25,7 @@ BG = (238, 241, 245)
 BG_IMAGE = f"{FILM}/bg.png"
 SMOOTH = True
 T0 = 0.0
-DURATION = 168.0
+DURATION = 168.0          # trimmed to T_END + 18 below
 
 
 def nat(path, k=1.0):
@@ -85,8 +85,8 @@ if not Path(SCRIM).exists():
     Image.new("RGBA", (1920, 1080), BG + (225,)).save(SCRIM)
 
 # ---------------------------------------------------------------- where things are
-INTRO, PHOTO, HERO, ANY = (0, 0), (2250, 0), (4150, 0), (6050, 0)
-B747, HELI = (4150, 1300), (6050, 1300)
+INTRO, PHOTO, HERO, ANY = (0, 0), (2250, 0), (4150, 0), (5750, 0)
+B747, HELI = (4150, 1150), (5750, 1150)
 CAR, RES, PARTS, UNSEEN = (2250, -1350), (4150, -1350), (6050, -1350), (7950, -1350)
 STEPS_AT = RES                     # the full-scale clips are gone by then
 CHIPS_X = CAR[0] + 980
@@ -109,7 +109,40 @@ T_END = T_UNSEEN + 9.0
 
 ANY_OBJECTS = [f"{FILM}/s_{o}/00000.png" for o in
                ("bed_f2b3a71f", "chair_6dc3eff5", "duck_19f3599a", "boat_439c61b8", "sofa_5979a6cd")]
-MACHINES = [f"{FILM}/b747/00000.png", f"{FILM}/helicopter/00000.png", f"{FILM}/cessna/00000.png"]
+MACHINES = [f"{FILM}/b747/00000.png", f"{V5}/s_heli/00000.png", f"{FILM}/cessna/00000.png"]
+
+_hero = frame_on(T_HERO + 0.8, f"{V5}/hero", HERO, frame=0, fill=0.66)
+_car = frame_on(T_MESH + 0.4, f"{V5}/fill", CAR, frame=0, fill=0.6)
+_slab = frame_on(T_FILL, f"{V5}/fill", CAR, frame=449, fill=0.56)
+_heli = frame_on(T_HELI, f"{V5}/heli", HELI, frame=30, fill=0.6)
+_747 = frame_on(T_747, f"{FILM}/b747", B747, frame=0, fill=0.72)
+
+
+# the time-lapse view: the car on the left two thirds, the chips on the right third, all inside the frame
+_zw = _slab["zoom"] * 0.82
+_work = dict(_slab, t=T_WORK, x=_slab["x"] + (960 - 700) / _zw, zoom=_zw)
+
+
+def screen(view, sx, sy):
+    """World point shown at screen pixel (sx, sy) in a view."""
+    return view["x"] + (sx - 960) / view["zoom"], view["y"] + (sy - 540) / view["zoom"]
+
+
+def on(view, name, sx, sy, px_w, **kw):
+    """A card shown at screen (sx, sy), px_w pixels wide, in a view."""
+    x, y = screen(view, sx, sy)
+    p = f"{C}/{name}.png"
+    return dict(src=p, x=x, y=y, w=px_w / view["zoom"], **kw)
+
+
+def chip_on(view, name, sy, at, until):
+    p = f"{C}/{name}.png"
+    w = Image.open(p).width * 0.62
+    x, y = screen(view, 1440, sy)
+    return dict(src=p, x=x, y=y, w=w / view["zoom"], pop=at, show=(at, until), fade=0.3, shadow=True, radius=0.05)
+
+
+_unseen = dict(t=T_UNSEEN, x=UNSEEN[0], y=UNSEEN[1], zoom=1.1)
 
 ELEMENTS = [
     # intro, the photo, the Camry working
@@ -123,26 +156,26 @@ ELEMENTS = [
     dict(src=f"{V5}/hero", x=HERO[0], y=HERO[1], w=1920, start=T_HERO),
     *swap(ANY_OBJECTS, ANY[0], ANY[1], 760, T_ANY + 0.2, 1.3, content_h=470),
     dict(src=f"{FILM}/b747", x=B747[0], y=B747[1], w=1920, start=T_747 - 1, loop=True),
-    dict(src=f"{FILM}/helicopter", x=HELI[0], y=HELI[1], w=1920, start=T_HELI - 1, loop=True),
+    dict(src=f"{V5}/heli", x=HELI[0], y=HELI[1], w=1920, start=T_HELI - 1),
 
     # the car's spot: SAM 3D's mesh (held), then the plates, then Spark and Glimmer, paint, doors
     dict(src=f"{V5}/fill", x=CAR[0], y=CAR[1], w=1920, start=T_MESH, frames=(0, 89), show=(0, T_FILL + 0.05), fade=0),
     dict(src=f"{V5}/fill", x=CAR[0], y=CAR[1], w=1920, start=T_FILL - 3.0, show=(T_FILL, T_WORK + 0.6), fade=0.6),
-    card("lbl_sam3d", CAR[0], CAR[1] - 500, 0.9, show=(T_MESH, T_MESH + 4.4), fade=0.4),
-    card("cap_slab", CAR[0], CAR[1] + 470, 0.85, pop=T_FILL + 10.6, show=(T_FILL + 10.6, T_WORK + 0.8)),
+    on(_car, "lbl_sam3d", 960, 110, 760, show=(T_MESH, T_MESH + 4.4), fade=0.4),
+    on(_slab, "cap_slab", 960, 985, 1150, pop=T_FILL + 10.6, show=(T_FILL + 10.6, T_WORK - 0.3)),
     dict(src=f"{V5}/collab", x=CAR[0], y=CAR[1], w=1920, start=T_WORK, show=(T_WORK, T_PAINT + 0.5), fade=0.5),
     dict(src=f"{V5}/painted", x=CAR[0], y=CAR[1], w=1920, start=T_PAINT, show=(T_PAINT, T_DOORS + 0.4), fade=0.4),
     dict(src=f"{V5}/doors", x=CAR[0], y=CAR[1], w=1920, start=T_DOORS, show=(T_DOORS, T_APART + 0.3), fade=0.3),
     dict(src=f"{V5}/apart", x=CAR[0], y=CAR[1], w=1920, start=T_APART, show=(T_APART, 999), fade=0.3),
-    card("cap_steps", CAR[0], CAR[1] + 470, 0.85, pop=T_APART + 6.0, show=(T_APART + 6.0, T_APART + 12.6)),
-    chip("chip_spark1", CHIPS_X, CAR[1] - 330, T_WORK + 1.4, T_WORK + 7.2),
-    chip("chip_glimmer1", CHIPS_X, CAR[1] - 110, T_WORK + 3.0, T_WORK + 7.2),
-    chip("chip_check1", CHIPS_X, CAR[1] + 130, T_WORK + 6.6, T_WORK + 7.2),
-    chip("chip_glimmer2", CHIPS_X, CAR[1] - 110, T_WORK + 7.5, T_WORK + 12.3),
-    chip("chip_check2", CHIPS_X, CAR[1] + 130, T_WORK + 10.9, T_WORK + 12.3),
-    chip("chip_glass", CHIPS_X, CAR[1] - 110, T_PAINT + 0.2, T_PAINT + 3.9),
-    chip("chip_spark2", CHIPS_X, CAR[1] - 330, T_PAINT + 2.6, T_DOORS + 5.8),
-    chip("chip_doors", CHIPS_X, CAR[1] - 110, T_DOORS + 1.4, T_DOORS + 5.8),
+    on(_slab, "cap_steps", 960, 985, 900, pop=T_APART + 6.0, show=(T_APART + 6.0, T_APART + 11.8)),
+    chip_on(_work, "chip_spark1", 290, T_WORK + 1.4, T_WORK + 7.2),
+    chip_on(_work, "chip_glimmer1", 470, T_WORK + 3.0, T_WORK + 7.2),
+    chip_on(_work, "chip_check1", 660, T_WORK + 6.6, T_WORK + 7.2),
+    chip_on(_work, "chip_glimmer2", 470, T_WORK + 7.5, T_WORK + 12.3),
+    chip_on(_work, "chip_check2", 660, T_WORK + 10.9, T_WORK + 12.3),
+    chip_on(_work, "chip_glass", 470, T_PAINT + 0.2, T_PAINT + 3.9),
+    chip_on(_work, "chip_spark2", 290, T_PAINT + 2.6, T_DOORS + 5.8),
+    chip_on(_work, "chip_doors", 470, T_DOORS + 1.4, T_DOORS + 5.8),
 
     # full scale, beside the car
     dict(src=f"{FILM}/res_whole", x=RES[0], y=RES[1] - 10, w=1550, start=T_RES, show=(T_RES - 1.0, T_RES + 8.2),
@@ -155,20 +188,20 @@ ELEMENTS = [
 
     # the parts; the held-out machines
     dict(src=MANUAL[57], x=PARTS[0], y=PARTS[1] + 90, w=700, radius=0.02, shadow=True, pop=T_PARTS - 0.4),
-    card("cap_parts", PARTS[0], PARTS[1] - 460, 0.8, pop=T_PARTS + 0.4),
+    card("cap_parts", PARTS[0], PARTS[1] - 460, 0.8, pop=T_PARTS + 0.4, show=(T_PARTS + 0.4, T_UNSEEN - 0.6)),
     *swap(MACHINES, UNSEEN[0], UNSEEN[1] + 60, 1050, T_UNSEEN + 0.3, 2.7, content_h=520),
-    card("cap_unseen", UNSEEN[0], UNSEEN[1] - 420, 0.85, pop=T_UNSEEN + 0.9),
+    on(_unseen, "cap_unseen", 960, 120, 1100, pop=T_UNSEEN + 0.9, show=(T_UNSEEN + 0.9, T_END + 0.3)),
 
     # the close, over the last machine: today/next, the numbers, the end card
     dict(src=SCRIM, x=960, y=540, w=1920, screen=True, show=(T_END, 999), fade=1.0),
-    card("cap_mfg3", 960, 540, 0.9, screen=True, pop=T_END + 0.6, show=(T_END + 0.6, T_END + 6.2)),
+    card("cap_mfg3", 960, 540, 0.9, screen=True, pop=T_END + 0.6, show=(T_END + 0.6, T_END + 5.2)),
     *[dict(src=f"{C}/num{i}.png", x=360 + 600 * i, y=470, w=nat(f"{C}/num{i}.png", 0.68), screen=True,
-           pop=T_END + 6.8 + 0.9 * i, show=(T_END + 6.8 + 0.9 * i, T_END + 13.4)) for i in range(3)],
+           pop=T_END + 5.6 + 0.7 * i, show=(T_END + 5.6 + 0.7 * i, T_END + 11.4)) for i in range(3)],
     *[dict(src=f"{C}/num{i}_sub.png", x=360 + 600 * i, y=640, w=nat(f"{C}/num{i}_sub.png", 0.72), screen=True,
-           pop=T_END + 7.0 + 0.9 * i, show=(T_END + 7.0 + 0.9 * i, T_END + 13.4)) for i in range(3)],
-    card("end_title", 960, 450, 1.0, screen=True, pop=T_END + 14.0, pop_dur=0.6),
-    card("end_sub", 960, 640, 1.0, screen=True, pop=T_END + 14.5),
-    card("end_models", 960, 730, 0.6, screen=True, pop=T_END + 14.9),
+           pop=T_END + 5.8 + 0.7 * i, show=(T_END + 5.8 + 0.7 * i, T_END + 11.4)) for i in range(3)],
+    card("end_title", 960, 450, 1.0, screen=True, pop=T_END + 12.0, pop_dur=0.6),
+    card("end_sub", 960, 640, 1.0, screen=True, pop=T_END + 12.5),
+    card("end_models", 960, 730, 0.6, screen=True, pop=T_END + 12.9),
 ]
 ELEMENTS = [e for e in ELEMENTS if e.get("show") != (0, 0)]
 
@@ -181,13 +214,6 @@ def hold(key, dt, push=1.04):
     """The same framing dt later, pushed in a touch (a slow drift instead of a dead stop)."""
     return dict(key, t=key["t"] + dt, zoom=key["zoom"] * push)
 
-
-_hero = frame_on(T_HERO + 0.8, f"{V5}/hero", HERO, frame=0, fill=0.66)
-_car = frame_on(T_MESH + 0.4, f"{V5}/fill", CAR, frame=0, fill=0.6)
-_slab = frame_on(T_FILL, f"{V5}/fill", CAR, frame=449, fill=0.56)
-_work = dict(_slab, t=T_WORK, x=_slab["x"] + 330)
-_heli = frame_on(T_HELI, f"{FILM}/helicopter", HELI, frame=0, fill=0.6)
-_747 = frame_on(T_747, f"{FILM}/b747", B747, frame=0, fill=0.72)
 
 CAMERA = [
     at(0.0, INTRO, 1.0), at(9.0, INTRO, 1.0),
@@ -203,5 +229,8 @@ CAMERA = [
     _work, hold(_work, T_APART - T_WORK, 1.03),
     dict(_slab, t=T_APART + 1.0), hold(dict(_slab, t=T_APART + 1.0), 10.5),
     at(T_PARTS, PARTS, 1.0), at(T_PARTS + 4.4, PARTS, 1.03),
-    at(T_UNSEEN, UNSEEN, 1.1), at(DURATION, UNSEEN, 1.16),
+    _unseen, at(DURATION, UNSEEN, 1.16),
 ]
+
+DURATION = T_END + 18.0
+CAMERA[-1] = at(DURATION, UNSEEN, 1.16)
