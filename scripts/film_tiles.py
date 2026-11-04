@@ -23,8 +23,32 @@ HIDE = ("header, .bar, .facts { display: none !important; } html, body { backgro
 CLEAR = """() => {
   // transparent clear, no floor plane, softer light from above
   renderer.setClearColor(0x000000, 0); scene.background = null; window.bg = () => {};
-  const hide = () => scene.traverse(o => { if (o.isMesh && o.geometry && o.geometry.type === 'PlaneGeometry') o.visible = false; });
+  const hide = () => scene.traverse(o => { if (o.isMesh && o.geometry && o.geometry.type === 'PlaneGeometry' && !o.userData.catcher) o.visible = false; });
   hide(); window.__hide = hide;
+  // soft contact shadows on an invisible ground that only catches shadow (sized to the finished model)
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  let catcher = null;
+  window.__shadows = () => {
+    const m = MODELS[0];
+    if (!catcher && m._bb) {
+      const bb = m._bb, c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3());
+      const R = Math.max(s.x, s.y, s.z);
+      catcher = new THREE.Mesh(new THREE.PlaneGeometry(R * 6, R * 6), new THREE.ShadowMaterial({opacity: 0.22}));
+      catcher.rotation.x = -Math.PI / 2; catcher.position.set(c.x, bb.min.y - 0.05, c.z); catcher.receiveShadow = true; catcher.userData.catcher = true;
+      scene.add(catcher);
+      sun.position.set(c.x + R * 0.35, c.y + R * 2.2, c.z + R * 0.5); sun.target.position.copy(c); scene.add(sun.target);
+      sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 6; sun.shadow.bias = -0.0005;
+      const sc = sun.shadow.camera; sc.left = sc.bottom = -R * 1.2; sc.right = sc.top = R * 1.2; sc.near = 1; sc.far = R * 6;
+      sc.updateProjectionMatrix();
+    }
+    scene.traverse(o => {
+      if ((o.isMesh || o.isInstancedMesh) && o !== catcher && !o.castShadow) {
+        o.castShadow = true;
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach(mt => { mt.needsUpdate = true; });
+      }
+    });
+    if (catcher && !catcher.material.__ok) { catcher.material.needsUpdate = true; catcher.material.__ok = true; }
+  };
 }"""
 
 
@@ -66,8 +90,8 @@ def main():
             frame = dict(o)
             if building:
                 frame["build"] = t * speed
-            pg.evaluate("([t, o]) => { const r = window.renderAt(0, t, o); window.__hide(); renderer.render(scene, camera); return r; }",
-                        [t, frame])
+            pg.evaluate("([t, o]) => { const r = window.renderAt(0, t, o); window.__hide(); window.__shadows(); "
+                        "renderer.render(scene, camera); return r; }", [t, frame])
             pg.locator("#stage canvas").screenshot(path=str(out / f"{k:05d}.png"), omit_background=True)
         print(f"{n} frames in {time.time() - t0:.1f}s -> {out}", flush=True)
         br.close()
