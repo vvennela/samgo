@@ -252,7 +252,7 @@ def counters(out: Path):
     d = out / "piece_count"; d.mkdir(exist_ok=True)
     for k in range(60):
         u = ease(k / 48)
-        v = round(144753 * (293 / 144753) ** u)       # geometric: the count falls like a dial turning down
+        v = round(140493 * (293 / 140493) ** u)       # geometric: the count falls like a dial turning down
         text_png(d / f"{k:05d}.png", [f"{v:,} PIECES"], size=64, color=INK, track=0.08)
 
 
@@ -269,7 +269,7 @@ def main():
                                      ("HINGING A PART ON BODIES IT NEVER SAW", "0/20", "15/20")])
     text_png(out / "cap_skill.png", ["GLIMMER LEARNED TO BUILD WORKING HINGES AND AXLES"], size=60, track=0.08)
     text_png(out / "cap_skill2.png", ["ITS OWN ANSWER, THE CHECKER'S NOTE, THE FIX"], size=44, color=MUTED, track=0.1)
-    text_png(out / "lbl_full.png", ["144,753 PIECES"], size=56, color=MUTED, track=0.1)
+    text_png(out / "lbl_full.png", ["140,493 PIECES"], size=56, color=MUTED, track=0.1)
     text_png(out / "lbl_small.png", ["293 PIECES"], size=56, color=MUTED, track=0.1)
     text_png(out / "cap_shape.png", ["SAMGO BUILDS THE WHOLE BODY IN REAL LEGO, AND KEEPS ITS SHAPE"], size=56, track=0.08)
     text_png(out / "cap_manual.png", ["THE BUILD MANUAL  ·  56 STEPS, EACH ONE CHECKED TO HOLD"], size=52, color=MUTED, track=0.1)
@@ -284,7 +284,7 @@ def main():
     }
     for name, s in labels.items():
         text_png(out / f"{name}.png", [s], size=54, color=MUTED, track=0.12)
-    text_png(out / "cap_res.png", ["FULL SCALE  ·  144,753 PIECES"], size=96, track=0.1)
+    text_png(out / "cap_res.png", ["FULL SCALE  ·  140,493 PIECES"], size=96, track=0.1)
     text_png(out / "cap_valid.png", ["EVERY PIECE CONNECTED"], size=64, color=MUTED, track=0.1)
     text_png(out / "cap_layers.png", ["LAYER BY LAYER"], size=64, color=MUTED, track=0.1)
     text_png(out / "cap_res2.png", ["SCALED DOWN TO SOMETHING YOU CAN BUILD"], size=64, color=MUTED, track=0.1)

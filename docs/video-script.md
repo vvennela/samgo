@@ -10,7 +10,7 @@ no hinges, and nothing tells you what holds the mirror on. There's no parts list
 SAM 3D, Muse Spark, and Muse Glimmer, which I fine-tuned."
 
 0:32 What SAMgo does (VO): "SAMgo takes one photo, and builds the whole thing out of real LEGO pieces. At full size,
-that's 144,753 pieces, every one connected. Nobody's building that. So we scale it down to 293 pieces, and it keeps
+that's 140,493 pieces, every one connected. Nobody's building that. So we scale it down to 293 pieces, and it keeps
 its shape."
 
 0:52 Making it work (VO): "But a shape isn't a car. Muse Spark looks at the photo and knows what a car does: wheels
@@ -25,7 +25,7 @@ wheels, and the checker signs off on every piece."  (the recorded run ends at th
 checked to hold. These are real instructions. You could build this tonight."
 
 2:07 Generalizes (VO over the tour): "And SAMgo generalizes really well. A 747. A helicopter. A Cessna. None of them
-were in the training data. Same models, same checker. A bed, an office chair, a skateboard, a laptop."
+were in the training data. Same models, same checker. A bed, an office chair, a skateboard, a TV."
 
 2:35 Why it matters (on camera): "A lot of manufacturing is assembling known parts, and people still work out how they
 go together by hand. SAMgo does that for LEGO today. Next, I want to do it with real CAD parts."
