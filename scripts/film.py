@@ -148,7 +148,7 @@ def pop(e: dict, t: float):
 
 
 def opacity(e: dict, t: float) -> float:
-    a = pop(e, t)[0]
+    a = pop(e, t)[0] * e.get("alpha", 1.0)
     if "show" in e:
         t_in, t_out = e["show"]
         f = e.get("fade", 0.4)

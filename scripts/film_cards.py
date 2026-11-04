@@ -215,8 +215,44 @@ def chips(out: Path):
     chip(out / "chip_glass.png", "SAM 3.1 + MUSE SPARK", (90, 100, 112), ["Glass where the photo has it. Painted red."])
 
 
+def arrow(path: Path, length=520, color=INK):
+    im = Image.new("RGBA", (length + 40, 120), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.line([(20, 60), (length - 30, 60)], fill=color + (255,), width=10)
+    d.polygon([(length + 20, 60), (length - 50, 22), (length - 50, 98)], fill=color + (255,))
+    im.save(path)
+
+
+def stats(path: Path, rows):
+    """Before/now rows: label, before, now."""
+    f_l, f_n = font(46, 0), font(84, 0)
+    W, rh = 1500, 190
+    im = Image.new("RGBA", (W, rh * len(rows)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for i, (label, before, now) in enumerate(rows):
+        y = i * rh
+        d.text((0, y + 8), label, font=f_l, fill=MUTED + (255,))
+        d.text((0, y + 70), before, font=f_n, fill=(170, 176, 186, 255))
+        x = 30 + f_n.getlength(before)
+        d.line([(x, y + 118), (x + 90, y + 118)], fill=INK + (255,), width=7)
+        d.polygon([(x + 120, y + 118), (x + 86, y + 98), (x + 86, y + 138)], fill=INK + (255,))
+        d.text((x + 150, y + 70), now, font=f_n, fill=GREEN + (255,))
+    im.save(path)
+
+
 def main():
     out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
+    arrow(out / "arrow.png")
+    stats(out / "skill_stats.png", [("DOOR HINGES ON VEHICLES IT NEVER SAW", "0/10", "10/10"),
+                                     ("HINGING A PART ON BODIES IT NEVER SAW", "0/20", "15/20")])
+    text_png(out / "cap_skill.png", ["GLIMMER LEARNED TO BUILD WORKING HINGES AND AXLES"], size=60, track=0.08)
+    text_png(out / "cap_skill2.png", ["ITS OWN ANSWER, THE CHECKER'S NOTE, THE FIX"], size=44, color=MUTED, track=0.1)
+    text_png(out / "lbl_full.png", ["144,753 PIECES"], size=56, color=MUTED, track=0.1)
+    text_png(out / "lbl_small.png", ["293 PIECES"], size=56, color=MUTED, track=0.1)
+    text_png(out / "cap_shape.png", ["SAMGO BUILDS THE WHOLE BODY IN REAL LEGO, AND KEEPS ITS SHAPE"], size=56, track=0.08)
+    text_png(out / "cap_manual.png", ["THE BUILD MANUAL  ·  56 STEPS, EACH ONE CHECKED TO HOLD"], size=52, color=MUTED, track=0.1)
+    text_png(out / "cap_any.png", ["ANY OBJECT"], size=60, color=MUTED, track=0.14)
+    text_png(out / "cap_works.png", ["AND IT WORKS"], size=60, color=MUTED, track=0.14)
     labels = {
         "lbl_photo": "ONE PHOTO", "lbl_sam31": "SAM 3.1  ·  FINDS THE CAR AND ITS GLASS",
         "lbl_sam3d": "SAM 3D  ·  ONE PHOTO TO A 3D SHAPE",
