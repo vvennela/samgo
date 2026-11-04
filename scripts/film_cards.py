@@ -240,8 +240,26 @@ def stats(path: Path, rows):
     im.save(path)
 
 
+def counters(out: Path):
+    """Moving numbers: the skill stats counting up (1.2 s), and 144,753 rolling down to 293 (1.6 s)."""
+    ease = lambda u: 1 - (1 - min(1.0, max(0.0, u))) ** 3
+    d = out / "skill_count"; d.mkdir(exist_ok=True)
+    n = 45
+    for k in range(n):
+        u = ease(k / 36)
+        stats(d / f"{k:05d}.png", [("DOOR HINGES ON VEHICLES IT NEVER SAW", "0/10", f"{round(10 * u)}/10"),
+                                   ("HINGING A PART ON BODIES IT NEVER SAW", "0/20", f"{round(15 * u)}/20")])
+    d = out / "piece_count"; d.mkdir(exist_ok=True)
+    for k in range(60):
+        u = ease(k / 48)
+        v = round(144753 * (293 / 144753) ** u)       # geometric: the count falls like a dial turning down
+        text_png(d / f"{k:05d}.png", [f"{v:,} PIECES"], size=64, color=INK, track=0.08)
+
+
 def main():
     out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
+    counters(out)
+    text_png(out / "lbl_drawn.png", ["DRAWN BY META MUSE IMAGE"], size=40, color=MUTED, track=0.14)
     arrow(out / "arrow.png")
     stats(out / "skill_stats.png", [("DOOR HINGES ON VEHICLES IT NEVER SAW", "0/10", "10/10"),
                                      ("HINGING A PART ON BODIES IT NEVER SAW", "0/20", "15/20")])

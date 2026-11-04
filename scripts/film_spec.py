@@ -5,6 +5,7 @@ centred and the same size whatever its render. Placeholder timing until the narr
 start time below; moving one moves its shot.
 (The earlier canvas-and-camera layout is kept in scripts/film_spec_canvas.py.)
 """
+import json
 import os
 from pathlib import Path
 
@@ -89,9 +90,21 @@ DURATION = T_CLOSE + 17.0
 ANY = [f"{V6}/{n}/00000.png" for n in ("bed", "chair", "skate", "tv", "laptop")]
 ORBITS = [f"{V6}/o_gt1", f"{V6}/o_747", f"{V6}/o_heli", f"{V6}/o_cessna"]   # 6 s half-orbits
 
+# the intro's words (scripts/film_words.py), with whisper's mishearings fixed
+FIX = {"drop,": "draw,", "drop": "draw", "Sam": "SAMgo", "Go?": ""}
+WORDS = json.loads(Path(f"{FILM}/words_intro.json").read_text()) if Path(f"{FILM}/words_intro.json").exists() else []
+WORDS = [dict(w, w=FIX.get(w["w"], w["w"])) for w in WORDS]
+WORDS = [w for w in WORDS if w["w"]]
+_at = {w["w"].strip(",.?").lower(): w for w in WORDS}
+T_DRAW = _at.get("models", {"t0": 0.6})["t0"]              # the drawing appears as "models can draw" is said
+T_BUT = _at.get("but", {"t0": 2.4})["t0"]                  # and gives way to you on "but can they build..."
+
 ELEMENTS = [
-    # intro
+    # intro: "We know models can draw" over Muse Image's drawing, "but can they build..." on you, then the title
     image(f"{FILM}/intro", (0, T_PHOTO + 0.3), 1920, start=0, fade=0.0),
+    image("/Users/vishnuv/Documents/Projects/samgo/runs/video/muse_image/lego_sedan_a.png", (T_DRAW, T_BUT), 1620,
+          y=520, fade=0.25),
+    card("lbl_drawn", (T_DRAW + 0.2, T_BUT), y=1010, k=0.9, fade=0.25),
     # one photo -> the LEGO Camry, working
     image(f"{STEPS_DIR}/1_photo.png", (T_PHOTO, T_HERO + 0.3), 1500, radius=0.018, shadow=True),
     model(f"{V5}/hero", (T_HERO, T_ANY + 0.2), start=T_HERO, cw=1250, ch=640),
@@ -116,8 +129,7 @@ ELEMENTS = [
     model(f"{FILM}/res_layers/00001.png", (T_DOWN, T_OVER + 0.2), cx=500, cy=560, cw=640, ch=420),
     card("arrow", (T_DOWN + 0.6, T_OVER + 0.2), x=960, y=560, k=0.55),
     model(f"{V6}/slab/00000.png", (T_DOWN + 1.0, T_OVER + 0.2), cx=1420, cy=560, cw=640, ch=420),
-    card("lbl_full", (T_DOWN, T_OVER + 0.2), x=500, y=820, k=0.8),
-    card("lbl_small", (T_DOWN + 1.0, T_OVER + 0.2), x=1420, y=820, k=0.8),
+    image(f"{C}/piece_count", (T_DOWN + 0.2, T_OVER + 0.2), 640, x=960, y=850, start=T_DOWN + 0.8),
     # the 293-piece model over SAM 3D's mesh: same shape, real LEGO
     model(f"{V6}/mesh/00000.png", (T_OVER, T_WORK + 0.2), cw=1250, ch=650, cy=560),
     model(f"{V6}/slab/00000.png", (T_OVER + 1.4, T_WORK + 0.2), cw=1250, ch=650, cy=560, alpha=0.62),
@@ -134,7 +146,7 @@ ELEMENTS = [
 
     # what Glimmer learned: valid hinges and axles, which it could not do before
     card("cap_skill", (T_SKILL, T_MANUAL + 0.2), y=290, k=0.78),
-    card("skill_stats", (T_SKILL + 1.0, T_MANUAL + 0.2), x=1010, y=580, k=1.0),
+    image(f"{C}/skill_count", (T_SKILL + 0.6, T_MANUAL + 0.2), 1500, x=1010, y=580, start=T_SKILL + 0.8),
 
     # the build manual, flipped through like stop motion: the only building in the film
     card("cap_manual", (T_MANUAL, T_PARTS + 0.2), y=95, k=0.8),
@@ -158,3 +170,16 @@ ELEMENTS = [
     card("end_sub", (T_CLOSE + 12.2, 999), y=640),
     card("end_models", (T_CLOSE + 12.5, 999), y=730, k=0.6),
 ]
+
+
+# ---------------------------------------------------------------- the stud dissolves (scripts/film_transitions.py)
+CUTS = [T_HERO, T_SAM31, T_DOWN, T_MANUAL, T_UNSEEN]
+if not os.environ.get("FILM_NO_TRANSITIONS"):
+    for i, t in enumerate(CUTS):
+        d = Path(f"{FILM}/trans/{i}")
+        if d.exists() and any(d.iterdir()):
+            ELEMENTS.append(dict(src=str(d), screen=True, x=960, y=540, w=1920, start=t - 0.4, show=(t - 0.4, t + 0.4),
+                                 fade=0.0))
+
+# captions last, over everything (the title line is the title card's, so it is not captioned)
+ELEMENTS.append(dict(words=[w for w in WORDS if w["t0"] < _at.get("introducing", {"t0": 99})["t0"]], y=1000, size=44))

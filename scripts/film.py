@@ -204,6 +204,11 @@ def render_at(t: float) -> Image.Image:
     cx, cy, z = camera(t)
     im = background(cx, cy, z).convert("RGBA")
     for e in SPEC["ELEMENTS"]:
+        if "words" in e:                                    # captions, drawn last-in-order where listed
+            if "_phrases" not in e:
+                e["_phrases"] = phrases(e["words"], e.get("max_words", 7))
+            draw_captions(im, e, t)
+            continue
         a = opacity(e, t)
         if a <= 0.004:
             continue
@@ -240,6 +245,53 @@ def render_at(t: float) -> Image.Image:
             piece.putalpha(piece.getchannel("A").point(lambda v: int(v * a)))
         im.alpha_composite(piece, (round(left + fx0 * sw), round(top + fy0 * sh)))
     return im.convert("RGB")
+
+
+# ---------------------------------------------------------------- captions
+CAP_FONT = "/System/Library/Fonts/Supplemental/Futura.ttc"
+
+
+def phrases(words: list[dict], max_words: int = 7) -> list[list[dict]]:
+    """Group words into caption phrases: break after punctuation, a pause, or max_words."""
+    out, cur = [], []
+    for i, w in enumerate(words):
+        cur.append(w)
+        nxt = words[i + 1] if i + 1 < len(words) else None
+        if (w["w"][-1:] in ".,?!:;" or len(cur) >= max_words or nxt is None or nxt["t0"] - w["t1"] > 0.45):
+            out.append(cur); cur = []
+    return out
+
+
+@lru_cache(maxsize=256)
+def _caption_img(text: str, size: int) -> Image.Image:
+    from PIL import ImageFont
+    f = ImageFont.truetype(CAP_FONT, size, index=0)
+    l, t, r, b = f.getbbox(text)
+    pad_x, pad_y = int(size * 0.55), int(size * 0.32)
+    w, h = r - l + 2 * pad_x, int(size * 1.25) + 2 * pad_y
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle([0, 0, w - 1, h - 1], h // 2, fill=(18, 22, 28, 170))
+    d.text((pad_x - l, pad_y + int(size * 0.08)), text, font=f, fill=(255, 255, 255, 255))
+    return im
+
+
+def draw_captions(im: Image.Image, e: dict, t: float) -> None:
+    for ph in e["_phrases"]:
+        if ph[0]["t0"] - 0.05 <= t <= ph[-1]["t1"] + e.get("hold", 0.5):
+            said = [w["w"] for w in ph if w["t0"] <= t + 0.03]
+            if not said:
+                return
+            cap = _caption_img(" ".join(said), e.get("size", 46))
+            W = SPEC["W"]
+            k = W / 1920
+            if k != 1:
+                cap = cap.resize((max(1, int(cap.width * k)), max(1, int(cap.height * k))), Image.LANCZOS)
+            x = int(W / 2 - cap.width / 2)                     # centred on the full phrase's width would jump;
+            full = _caption_img(" ".join(w["w"] for w in ph), e.get("size", 46))
+            x = int(W / 2 - full.width * k / 2)                # anchor at the full phrase's left edge instead
+            im.alpha_composite(cap, (x, int(e.get("y", 960) * k - cap.height / 2)))
+            return
 
 
 def work(args):
