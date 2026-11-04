@@ -1,4 +1,4 @@
-# Feedback in action (for the video)
+# Feedback in action
 
 A real case from the frozen flap test `runs/audit/r9-sheets` (case `flap8_val_100006`, run 10, unseen body).
 
