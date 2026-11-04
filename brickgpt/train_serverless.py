@@ -162,6 +162,11 @@ def main() -> None:
                         service.delete_training_session()
                     except Exception:  # noqa: BLE001
                         pass
+                    # a fresh client: the old one still holds the failed trainer ("already exists" on retry)
+                    service = FiretitanServiceClient(api_key=os.environ["FIREWORKS_API_KEY"],
+                                                     base_url=serverless_base_url(os.environ.get(
+                                                         "FIREWORKS_BASE_URL", "https://api.fireworks.ai")))
+                    enable_serverless_supervised_409_retry(service)
                 elif attempt % 5 == 0:
                     say(event="waiting_for_slot", detail=str(e)[:160])
                 time.sleep(120)
