@@ -118,7 +118,7 @@ def main() -> None:
     ys = [q["y"] * STUD for q in parts] + [(q["y"] + q["l"]) * STUD for q in parts]
     centre = [(min(xs) + max(xs)) / 2, Z * PLATE / 2, (min(ys) + max(ys)) / 2]
     radius = max(max(xs) - min(xs), max(ys) - min(ys), Z * PLATE) / 2
-    data = {"layers": layers, "centre": centre, "radius": radius, "gap": Z * PLATE / n * 1.5}
+    data = {"layers": layers, "centre": centre, "radius": radius, "gap": Z * PLATE / n * 1.2}
     html = Path(tempfile.mkdtemp()) / "layers.html"
     html.write_text(PAGE.replace("__DATA__", json.dumps(data)).replace("__W__", str(W)).replace("__H__", str(H)))
     print(f"{shown} visible parts drawn; page {html.stat().st_size / 1e6:.1f} MB", flush=True)
@@ -131,7 +131,7 @@ def main() -> None:
         "whole": (8.0, lambda t: {"sep": 0.0, "angle0": 2.1, "spin": 0.35, "dist": 2.6, "height": 0.4}),
         # the same 3/4 side angle as "whole", barely drifting: turning toward the front would foreshorten the car
         "layers": (12.0, lambda t: {"sep": ease((t - 2.0) / 5.0), "angle0": 2.1, "spin": 0.02,
-                                    "dist": 2.6 + 1.8 * ease((t - 2.0) / 5.0), "height": 0.22}),
+                                    "dist": 3.7, "height": 0.22}),
     }
     with sync_playwright() as pw:
         import os
