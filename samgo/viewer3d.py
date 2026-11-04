@@ -230,7 +230,7 @@ h1 b { color: var(--accent); }
 <script>
 const MODELS = __MODELS__;
 const stage = document.getElementById("stage");
-const renderer = new THREE.WebGLRenderer({antialias: true, preserveDrawingBuffer: true});
+const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true, preserveDrawingBuffer: true});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 stage.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
