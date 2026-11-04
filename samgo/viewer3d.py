@@ -300,6 +300,22 @@ function build(m) {
     inst.userData.base = list.map((b, i) => { const q = new THREE.Matrix4(); inst.getMatrixAt(i, q); return q; });
     buildables.push(inst);
     holder(list[0]).add(inst);
+    if (window.EDGES && shape === "0") {  // instructions: studs on top of every plate and brick, as real parts have
+      const pos = [], stp = [], drs = [];
+      list.forEach((b, i) => {
+        const nx = Math.round(b[3] / 8), nz = Math.round(b[5] / 8);
+        for (let u = 0; u < nx; u++) for (let v = 0; v < nz; v++) {
+          pos.push([b[0] + (u + 0.5) * 8, b[1] + b[4] + 0.85, b[2] + (v + 0.5) * 8]);
+          stp.push(inst.userData.steps[i]); drs.push(inst.userData.dirs[i]);
+        }
+      });
+      const studs = new THREE.InstancedMesh(studGeo || (studGeo = new THREE.CylinderGeometry(2.4, 2.4, 1.7, 14)), mat, pos.length);
+      const sm = new THREE.Matrix4();
+      pos.forEach((p, i) => { sm.makeTranslation(p[0], p[1], p[2]); studs.setMatrixAt(i, sm); });
+      studs.userData.steps = stp; studs.userData.dirs = drs; studs.userData.noMark = true;
+      studs.userData.base = pos.map((p, i) => { const q = new THREE.Matrix4(); studs.getMatrixAt(i, q); return q; });
+      holder(list[0]).add(studs); buildables.push(studs);
+    }
     if (window.EDGES && shape === "0") {  // instructions: a black outline round every part, as in printed manuals
       const c3 = new THREE.Color(col), dark = 0.3 * c3.r + 0.59 * c3.g + 0.11 * c3.b < 0.22;
       const eg = edgeGeo || (edgeGeo = new THREE.EdgesGeometry(geo[0]));
@@ -307,7 +323,7 @@ function build(m) {
       list.forEach((b, i) => {
         const e = new THREE.LineSegments(eg, em);
         e.applyMatrix4(inst.userData.base[i]);
-        e.userData.step = inst.userData.steps[i]; e.userData.dir = inst.userData.dirs[i];
+        e.userData.step = inst.userData.steps[i]; e.userData.dir = inst.userData.dirs[i]; e.userData.noMark = true;
         holder(b).add(e); buildables.push(e);
       });
     }
@@ -469,7 +485,7 @@ bg(); show(0); resize();
 // open and close), the camera orbiting; o.build = seconds into the build animation. The live loop stands down.
 window.RECORDING = false;
 window.EDGES = false;
-let edgeGeo = null, edgeMat = null;
+let edgeGeo = null, edgeMat = null, studGeo = null;
 function showUpTo(k, lift = 0) {  // everything up to step k at rest; step k's parts lifted along their way in
   const q = new THREE.Matrix4(), mv = new THREE.Matrix4();
   for (const o of buildables) {
@@ -493,6 +509,7 @@ function stepMarks(k, lift) {  // screen points of step k's parts: [x, y] where 
   const W = renderer.domElement.clientWidth, H = renderer.domElement.clientHeight, out = [];
   const px = v => { v.project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
   for (const o of buildables) {
+    if (o.userData.noMark) continue;  // studs and outlines go with their part: one arrow per part
     o.updateMatrixWorld(true);
     if (o.isInstancedMesh) {
       const st = o.userData.steps, base = o.userData.base, ds = o.userData.dirs;

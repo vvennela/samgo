@@ -199,7 +199,7 @@ def arrows(img, marks):
         if L < 20:
             continue
         ux, uy = vx / L, vy / L
-        sx, sy = hx + vx * 0.35, hy + vy * 0.35        # from under the hovering part
+        sx, sy = hx + vx * 0.3, hy + vy * 0.3          # from under the hovering part
         ex, ey = tx - ux * 6, ty - uy * 6               # to the place
         head = 26
         bx, by = ex - ux * head, ey - uy * head
@@ -260,7 +260,7 @@ def main():
     html.write_text(page([("model", parts, facts_for(parts), man)]))
     shots = Path(tempfile.mkdtemp())
     view = {"dist": 0.9, "az": 0.75, "elev": 0.6, "orbit": 1e9, "move": False, "fit": 0.4, "edges": True}
-    LIFT = 30   # mm the new parts hover above their places
+    LIFT = 48   # mm the new parts hover above their places
     marks = {}
     with sync_playwright() as pw:
         br = pw.chromium.launch(args=["--use-gl=angle", "--use-angle=swiftshader", "--ignore-gpu-blocklist"])
