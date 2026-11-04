@@ -24,7 +24,7 @@ HEIGHT = {"plate": 1, "brick": 3, "technic_brick": 3, "hinge_base": 1, "hinge_to
 # Real parts behind the pivoting kinds (LDraw): swivel hinge 2429/2430, car door 3821/3822 (1x3x1),
 # click hinge plates 44301/44302, turntable 2x2 3680/3679.
 TOL = 0.5  # mm
-BEAMS = {"liftarm", "cross_block", "propeller"}  # Technic parts with a body that can collide but no studs to grip by
+BEAMS = {"liftarm", "cross_block", "blade_cross"}  # Technic parts with a body that can collide but no studs to grip by
 AXES = {"x": np.array([1.0, 0, 0]), "y": np.array([0.0, 1, 0]), "z": np.array([0.0, 0, 1])}
 
 
@@ -111,8 +111,9 @@ def connectors(p: dict) -> list[Connector]:
         centre = _start(p) + ax * STUD / 2 + off
         return [Connector("axle_hole", _start(p), ax, (0.0, STUD)),
                 Connector("round_hole", centre - pin_axis * STUD / 2, pin_axis, (0.0, STUD))]
-    if t == "propeller":  # 4032's axle hole: the one plate just before the propeller's line, where the axle ends
-        return [Connector("prop_hub", _start(p), AXES[p["axis"]], (-PLATE, 0.0))]
+    if t == "blade_cross":  # 4032's axle hole: the one plate just before the propeller's line, where the axle ends
+        return [Connector("prop_hub", _start(p), AXES[p["axis"]],
+                          (0.0, PLATE) if p.get("facing", "+") == "-" else (-PLATE, 0.0))]
     if t in ("hinge_base", "hinge_top"):  # swivel hinge 2429/2430: pin vertical, on the long edge at the joint
         pin = np.array([p["pin_x"] * STUD, p["pin_y"] * STUD, p["z"] * PLATE])
         return [Connector("hinge_pin_a" if t == "hinge_base" else "hinge_pin_b", pin, z_axis, (0.0, PLATE))]
@@ -326,14 +327,15 @@ def _corners(p: dict) -> np.ndarray:
         th = np.linspace(0, 2 * np.pi, 32, endpoint=False)
         ring = [c + k * r * (np.cos(t) * u + np.sin(t) * v) for k in (1.0, 0.66, 0.33) for t in th] + [c]
         return np.array([q + s * w * along for q in ring for s in np.linspace(0, 1, 4)])
-    if p["type"] == "propeller":  # the two crossed blades (2 studs wide), not the square round them
+    if p["type"] == "blade_cross":  # the two crossed blades (2 studs wide), not the square round them
         from .technic import PROPELLER_THICK
         c, along = _start(p), AXES[p["axis"]]
         u = AXES["x"] if p["axis"] == "y" else AXES["y"]
         v = AXES["z"]
         r = p["blade"] * STUD / 2
         g = lambda a, b, n: np.linspace(a, b, max(2, int(np.ceil((b - a) / 4)) + 1))
-        pts = [c + a * along + s * u + w * v for a in g(-PLATE, PROPELLER_THICK, 0) for s in g(-r, r, 0)
+        a_lo, a_hi = (-PROPELLER_THICK, PLATE) if p.get("facing", "+") == "-" else (-PLATE, PROPELLER_THICK)
+        pts = [c + a * along + s * u + w * v for a in g(a_lo, a_hi, 0) for s in g(-r, r, 0)
                for w in g(-STUD, STUD, 0)]
         pts += [c + a * along + s * u + w * v for a in g(0, PROPELLER_THICK, 0) for s in g(-STUD, STUD, 0)
                 for w in g(-r, r, 0)]
@@ -606,7 +608,7 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
             why = "nothing is locked on the axle"
             continue
         elif _through_blades(parts, moving):
-            why = ("the axle runs on through the propeller's blade plates, which have no hole: shorten it so it ends "
+            why = ("the axle runs on through the blade cross's plates, which have no hole: shorten it so it ends "
                    "inside the round hub plate")
             continue
         if sweep(parts, moving, point, ax, 360, steps=24, ignore=partners) is not None:
@@ -630,11 +632,14 @@ def rotors(parts: list[dict], axis: str = "horizontal") -> tuple[int, str]:
 
 def _through_blades(parts: list[dict], ids: list[int]) -> bool:
     """Does an axle among `ids` pass the end of a propeller's hub into its blades (a plate cannot be threaded)?"""
-    for p in (parts[i] for i in ids if parts[i].get("type") == "propeller"):
+    for p in (parts[i] for i in ids if parts[i].get("type") == "blade_cross"):
         along, end = AXES[p["axis"]], float(_start(p) @ AXES[p["axis"]])
         for a in (parts[i] for i in ids if parts[i].get("type") == "axle" and parts[i]["axis"] == p["axis"]):
             off = _start(a) - _start(p)
-            if np.linalg.norm(off - (off @ along) * along) <= TOL and float(_start(a) @ along) + a["length"] * STUD > end + TOL:
+            if np.linalg.norm(off - (off @ along) * along) > TOL:
+                continue
+            a0 = float(_start(a) @ along)
+            if (a0 < end - TOL) if p.get("facing", "+") == "-" else (a0 + a["length"] * STUD > end + TOL):
                 return True
     return False
 

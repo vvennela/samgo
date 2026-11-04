@@ -10,7 +10,7 @@ from gear_747_thin import ok  # noqa: E402
 from samgo.free_edit_test import check  # noqa: E402
 from samgo.spark_gear import raised, spots, stands  # noqa: E402
 
-TECH = ("axle", "bush", "wheel", "propeller", "liftarm")  # bearings stay: they are part of the structure
+TECH = ("axle", "bush", "wheel", "blade_cross", "liftarm")  # bearings stay: they are part of the structure
 
 
 def main():

@@ -320,11 +320,17 @@ HGT = {"plate": 1, "brick": 3, "technic_brick": 3}
 def describe(p: dict) -> str:
     t = p.get("type")
     if t == "axle":
+        if p.get("axis", "y") == "x":
+            return f'{"stop " if p.get("stop") else ""}axle {p["length"]} long at y={p["y"]}, z={p["z"]}, x={p["x"]}..{p["x"] + p["length"]}'
         return f'{"stop " if p.get("stop") else ""}axle {p["length"]} long at x={p["x"]}, z={p["z"]}, y={p["y"]}..{p["y"] + p["length"]}'
     if t == "wheel":
         return f'{p.get("size", "30.4x14")} wheel at x={p["x"]}, z={p["z"]}, y={p["y"]}'
     if t == "bush":
         return f'bush at x={p["x"]}, z={p["z"]}, y={p["y"]}'
+    if t == "blade_cross":
+        return f'blade_cross (blade {p.get("blade")}, facing {p.get("facing", "+")}) on an axle along {p.get("axis")} at (x={p.get("x")}, y={p.get("y")}, z={p.get("z")})'
+    if "w" not in p:
+        return f'{t} at (x={p.get("x")}, y={p.get("y")}, z={p.get("z")})'
     return f'{t} {p.get("w")}x{p.get("l")} at (x={p.get("x")}, y={p.get("y")}, z={p.get("z")})'
 
 

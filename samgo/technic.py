@@ -69,7 +69,7 @@ TOLERANCE = 0.3                  # mm; contact closer than this is not an inters
 GROUND_CLEARANCE = 1.0           # wheels must reach this far below the lowest body part, mm
 
 FUNCTIONAL = {"technic_brick", "axle", "wheel", "bush", "pin", "axle_pin", "axle_joiner", "half_bush", "cross_block",
-              "liftarm", "propeller"}
+              "liftarm", "blade_cross"}
 # Technic bush (LDraw 3713): a 1-stud collar that grips an axle, used to hold a wheel in place along it.
 
 # Technic connection parts, measured from the official LDraw library (20 LDU = 1 stud = 8 mm). Pins: a 1-stud
@@ -91,7 +91,7 @@ BEAM_HEIGHT = 7.2                # thick liftarm, 18 LDU
 LENGTH = {"axle_pin": 2, "axle_joiner": 2, "half_bush": 0.5, "cross_block": 1}  # studs along the axis
 # Parts that live in holes or on axles and hold by pins, not studs: never stud-grid cells.
 OFF_GRID = {"axle", "wheel", "bush", "pin", "axle_pin", "axle_joiner", "half_bush", "cross_block", "liftarm",
-            "propeller"}
+            "blade_cross"}
 # Propeller: a round 2x2 plate with an axle hole (4032) locked on the END of the axle (the axle stops inside it: a
 # plate has no hole, so no axle may run on through the blades), its studs facing out along the axle; two 2 x `blade`
 # plates crossed on its studs (the first gripping the round plate's four studs, the second the first's middle four);
@@ -135,10 +135,12 @@ def extent(p: dict) -> tuple[tuple[float, float, float], tuple[float, float, flo
         a0, a1, b0, b1 = (along - 0.5) * STUD, (along + p["length"] - 0.5) * STUD, row * STUD, (row + 1) * STUD
         x0, x1, y0, y1 = (a0, a1, b0, b1) if p["axis"] == "x" else (b0, b1, a0, a1)
         return (x0, y0, h - BEAM_HEIGHT / 2), (x1, y1, h + BEAM_HEIGHT / 2)
-    if p["type"] == "propeller":  # the blade cross's bounding box: square across the axle, 3 plates along it
+    if p["type"] == "blade_cross":  # the blade cross's bounding box: square across the axle, 3 plates along it
         r = p["blade"] * STUD / 2
         e, s0 = (p["x"], p["y"]) if p["axis"] == "y" else (p["y"], p["x"])
         a0, a1 = s0 * STUD - PLATE, s0 * STUD + PROPELLER_THICK  # hub, then blades and cap
+        if p.get("facing", "+") == "-":  # facing down the axis: hub just after the line, blades and cap before it
+            a0, a1 = s0 * STUD - PROPELLER_THICK, s0 * STUD + PLATE
         x0, x1, y0, y1 = (e * STUD - r, e * STUD + r, a0, a1) if p["axis"] == "y" else (a0, a1, e * STUD - r, e * STUD + r)
         return (x0, y0, h - r), (x1, y1, h + r)
     # cross block: a 1-stud cube round the axle hole, and one round the pin hole beside it
@@ -248,9 +250,9 @@ def _validate(p: dict) -> str | None:
                 return "pins are 2 long (with friction 2780, without 3673) or 3 long with friction (6558)"
             if t == "axle_pin" and p.get("axle_end", "end") not in ("start", "end"):
                 return "axle_end must be start or end"
-        elif t == "propeller":
-            if p["axis"] not in ("x", "y") or int(p["blade"]) not in PROPELLER_BLADES:
-                return f"propeller needs axis x or y and blade plates {', '.join(map(str, PROPELLER_BLADES))} long"
+        elif t == "blade_cross":
+            if p["axis"] not in ("x", "y") or int(p["blade"]) not in PROPELLER_BLADES or p.get("facing", "+") not in "+-":
+                return f"blade_cross needs axis x or y and blade plates {', '.join(map(str, PROPELLER_BLADES))} long"
         elif t in ("axle_joiner", "half_bush", "cross_block", "liftarm"):
             if p["axis"] not in ("x", "y"):
                 return f"{t} needs axis x or y"

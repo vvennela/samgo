@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 
 LEG = [{"name": "leg", "kind": "spin", "count": 2, "stands": False}]
-CLEAR = 13  # a 30.4 mm wheel on a Technic brick at z = 3 reaches ~9.5 plates: the model's lowest cell sits above it
+CLEAR = 10  # a 30.4 mm wheel on a Technic brick at z = 3 reaches 9.5 plates: the model's lowest cell sits just above it
 
 PROMPT = """The first image is a photo of {obj}. The second is a top view of a LEGO-scale model of it: x runs across
 (numbered ticks, one per stud), y runs up (numbered ticks), lighter is higher.
@@ -127,7 +127,9 @@ def site(parts: list[dict], x: int, y: int, taken: list[tuple[int, int]], limit:
     from .free_edit_test import check
 
     found = spots(parts)
-    order = sorted(found, key=lambda s: (s[0] + 0.5 - x) ** 2 + (s[1] - 0.5 - y) ** 2)
+    low = min(found.values(), default=0)
+    # near Spark's point, and low: a spot 3 plates higher counts like one 2 studs further (short legs, as real gear)
+    order = sorted(found, key=lambda s: (s[0] + 0.5 - x) ** 2 + (s[1] - 0.5 - y) ** 2 + 0.45 * (found[s] - low) ** 2)
     order = [s for s in order if all(abs(s[0] - t[0]) > 4 or abs(s[1] - t[1]) > 9 for t in taken)]
     for x0, yc in order[:limit]:
         a = apply_edits(parts, reference(parts, x0, yc, found[(x0, yc)]))
