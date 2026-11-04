@@ -39,11 +39,10 @@
   },
   {
    "clips": [
-    "/private/tmp/claude-501/-Users-vishnuv-Documents-Projects-samgo/8e62d17f-cb50-41fb-8609-cb7914a1e9e1/scratchpad/film/demo/09_manual.mp4",
-    "/private/tmp/claude-501/-Users-vishnuv-Documents-Projects-samgo/8e62d17f-cb50-41fb-8609-cb7914a1e9e1/scratchpad/film/demo/09b_done.mp4"
+    "/private/tmp/claude-501/-Users-vishnuv-Documents-Projects-samgo/8e62d17f-cb50-41fb-8609-cb7914a1e9e1/scratchpad/film/demo/09_manual.mp4"
    ],
    "vo": "/private/tmp/claude-501/-Users-vishnuv-Documents-Projects-samgo/8e62d17f-cb50-41fb-8609-cb7914a1e9e1/scratchpad/film/vo/sec/e_manual.wav",
-   "slow": true
+   "slow": false
   },
   {
    "clips": [
