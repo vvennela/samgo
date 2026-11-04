@@ -18,6 +18,7 @@ from studio_show import serve  # noqa: E402
 def main():
     video, out, assets = Path(sys.argv[1]).resolve(), Path(sys.argv[2]), Path(sys.argv[3])
     target = float(sys.argv[4]) if len(sys.argv) > 4 else 44.0
+    stop_after = sys.argv[5] if len(sys.argv) > 5 else None
     vids = Path(out).resolve() / "_video_show"
     vids.mkdir(exist_ok=True)
     for f in vids.glob("*.webm"):
@@ -28,20 +29,20 @@ def main():
         ctx = br.new_context(viewport={"width": 1920, "height": 1080}, record_video_dir=str(vids),
                              record_video_size={"width": 1920, "height": 1080})
         pg = ctx.new_page()
-        serve(out, assets, 8767, target)
+        serve(out, assets, 8767, target, stop_after)
         pg.goto("http://127.0.0.1:8767/")
         while True:
             st = json.loads(urllib.request.urlopen("http://127.0.0.1:8767/state").read())
             if st["ended"]:
                 break
             pg.wait_for_timeout(300)
-        pg.wait_for_timeout(3500)
+        pg.wait_for_timeout(2000)
         try:
             vf = pg.frame(url=lambda u: u.endswith("viewer.html"))
             vf.evaluate("() => { const b = document.getElementById('sim'); b.hidden = false; b.click(); }")
         except Exception as e:  # noqa: BLE001
             print("viewer:", e, flush=True)
-        pg.wait_for_timeout(8000)
+        pg.wait_for_timeout(4500)
         ctx.close()
         br.close()
     webm = max(vids.glob("*.webm"), key=lambda p: p.stat().st_mtime)

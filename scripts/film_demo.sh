@@ -8,28 +8,23 @@ STUDIO=$1; TOUR=$2; OUT=$3
 F=${FILM_ASSETS:-/private/tmp/claude-501/-Users-vishnuv-Documents-Projects-samgo/8e62d17f-cb50-41fb-8609-cb7914a1e9e1/scratchpad/film}
 W=$F/demo; mkdir -p $W
 PY=$HOME/.venvs/samgo/bin/python
-seg() { $PY scripts/film.py scripts/film_spec.py $W/$1.mp4 --from $2 --to $3 --workers 10 --blur 3 >/dev/null; echo "segment $1 $2-$3"; }
-seg 1_intro 0 9.6            # "we know models can draw (Muse Image's picture) ... but can they build" + the title
-seg 3_photo 9.6 12.6         # one photo
-seg 4_scale 43.6 62.4        # full scale 144,753 -> 293 pieces -> the 293 over SAM 3D's mesh
-seg 5_work 62.4 85.3         # Spark and Glimmer make it a car: wheels and axles, glass, doors
-seg 7_manual 91.8 99.7       # the certified manual, flipped
-seg 9_close 127.5 144.5      # today LEGO, next real CAD; the numbers; the end card
-# the marked-up drawing (scripts/film_drawing.py)
-ffmpeg -v error -y -framerate 30 -i $F/drawing/%05d.png -c:v libx264 -pix_fmt yuv420p -crf 18 $W/2_drawing.mp4
-# the real footage, normalised to 30 fps; the tour at 3x
-ffmpeg -v error -y -i "$STUDIO" -r 30 -c:v libx264 -pix_fmt yuv420p -crf 18 -an $W/6_studio.mp4
-ffmpeg -v error -y -i "$TOUR" -filter:v "setpts=PTS/3,fps=30" -c:v libx264 -pix_fmt yuv420p -crf 18 -an $W/8_tour.mp4
-# join with 0.4 s fades
-FILES=($W/1_intro.mp4 $W/2_drawing.mp4 $W/3_photo.mp4 $W/4_scale.mp4 $W/5_work.mp4 $W/6_studio.mp4 $W/7_manual.mp4 $W/8_tour.mp4 $W/9_close.mp4)
-IN=""; FG=""; OFF=0; prev="0:v"
-for i in "${!FILES[@]}"; do IN="$IN -i ${FILES[$i]}"; done
-for i in $(seq 1 $((${#FILES[@]} - 1))); do
-  d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 ${FILES[$((i-1))]})
-  OFF=$(python3 -c "print(round($OFF + $d - 0.4, 3))")
-  FG="$FG[$prev][$i:v]xfade=transition=fade:duration=0.4:offset=$OFF[v$i];"; prev="v$i"
-done
-ffmpeg -v error -y $IN -filter_complex "${FG%;}" -map "[$prev]" -c:v libx264 -pix_fmt yuv420p -crf 18 $W/video.mp4
+seg() { FILM_NO_TRANSITIONS=1 $PY scripts/film.py scripts/film_spec.py $W/$1.mp4 --from $2 --to $3 --workers 10 --blur 3 >/dev/null; echo "segment $1 $2-$3"; }
+# one clip per shot; every cut between them is a stud dissolve (scripts/film_join.py)
+seg 01_intro 0 9.6            # "we know models can draw (Muse Image's picture) ... but can they build" + the title
+seg 03_photo 10.1 12.6         # one photo
+seg 04_full 44.1 51.0         # full scale: 144,753 pieces, every piece connected
+seg 05_down 51.5 56.0         # -> 293 pieces
+seg 06_over 56.5 62.4         # the 293 over SAM 3D's mesh: same shape, real LEGO
+seg 07_work 62.9 85.3         # Spark and Glimmer make it a car: wheels and axles, glass, doors
+seg 09_manual 92.3 99.7       # the certified manual, flipped
+seg 11_today 128.8 132.8      # today LEGO, next real CAD
+seg 12_nums 133.3 138.8       # the numbers
+seg 13_end 140.9 144.5        # the end card
+ffmpeg -v error -y -framerate 30 -i $F/drawing/%05d.png -c:v libx264 -pix_fmt yuv420p -crf 18 $W/02_drawing.mp4
+ffmpeg -v error -y -i "$STUDIO" -r 30 -c:v libx264 -pix_fmt yuv420p -crf 18 -an $W/08_studio.mp4
+ffmpeg -v error -y -i "$TOUR" -filter:v "setpts=PTS/3,fps=30" -c:v libx264 -pix_fmt yuv420p -crf 18 -an $W/10_tour.mp4
+$PY scripts/film_join.py $W/video.mp4 $W/01_intro.mp4 $W/02_drawing.mp4 $W/03_photo.mp4 $W/04_full.mp4 $W/05_down.mp4 \
+  $W/06_over.mp4 $W/07_work.mp4 $W/08_studio.mp4 $W/09_manual.mp4 $W/10_tour.mp4 $W/11_today.mp4 $W/12_nums.mp4 $W/13_end.mp4
 TOTAL=$(ffprobe -v error -show_entries format=duration -of csv=p=0 $W/video.mp4)
 # audio: the intro's own sound, the music bed under everything
 $PY scripts/film_music.py $W/music.wav $TOTAL >/dev/null

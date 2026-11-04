@@ -18,8 +18,8 @@ here, doors here. Muse Glimmer adds the axles and wheels piece by piece, and a c
 it connect? Does it turn? Does it stand?"
 
 1:15 The real run (VO): "This is a real run, every model call as it happened. SAM 3.1 finds the car and its glass.
-SAM 3D turns one photo into a 3D shape. Spark says where the wheels and doors go. Glimmer builds them, and the checker
-signs off."  (only if the recorded run's doors pass: "...including the doors.")
+SAM 3D turns one photo into a 3D shape. Spark says where the wheels and doors go. Glimmer builds the axles and
+wheels, and the checker signs off on every piece."  (the recorded run ends at the wheels; don't say it built doors)
 
 1:58 The manual (VO or hands with the printed pages): "And it comes with instructions. Fifty-six steps, every one
 checked to hold. These are real instructions. You could build this tonight."

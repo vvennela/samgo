@@ -102,9 +102,11 @@ T_BUT = _at.get("but", {"t0": 2.4})["t0"]                  # and gives way to yo
 ELEMENTS = [
     # intro: "We know models can draw" over Muse Image's drawing, "but can they build..." on you, then the title
     image(f"{FILM}/intro", (0, T_PHOTO + 0.3), 1920, start=0, fade=0.0),
-    image("/Users/vishnuv/Documents/Projects/samgo/runs/video/muse_image/lego_sedan_a.png", (T_DRAW, T_BUT), 1620,
-          y=520, fade=0.25),
-    card("lbl_drawn", (T_DRAW + 0.2, T_BUT), y=1010, k=0.9, fade=0.25),
+    image("/Users/vishnuv/Documents/Projects/samgo/runs/video/muse_image/lego_sedan_a.png", (T_DRAW, T_BUT), 920,
+          x=500, y=500, fade=0.25, radius=0.02, shadow=True),
+    image("/Users/vishnuv/Documents/Projects/samgo/runs/video/muse_image/lego_sedan_b.png", (T_DRAW + 0.15, T_BUT), 920,
+          x=1420, y=500, fade=0.25, radius=0.02, shadow=True),
+    card("lbl_drawn", (T_DRAW + 0.2, T_BUT), y=880, k=0.9, fade=0.25),
     # one photo -> the LEGO Camry, working
     image(f"{STEPS_DIR}/1_photo.png", (T_PHOTO, T_HERO + 0.3), 1500, radius=0.018, shadow=True),
     model(f"{V5}/hero", (T_HERO, T_ANY + 0.2), start=T_HERO, cw=1250, ch=640),

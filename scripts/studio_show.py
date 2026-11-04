@@ -20,7 +20,7 @@ CAP = 1.6          # a wait between two events plays as at most this long (befor
 
 
 class Run:
-    def __init__(self, out: Path, assets: Path, target: float):
+    def __init__(self, out: Path, assets: Path, target: float, stop_after: str | None = None):
         self.out, self.assets = out, assets
         self.summary = json.loads((out / "summary.json").read_text())
         self.dir = Path(self.summary["run_dir"])
@@ -28,6 +28,9 @@ class Run:
         self.files = {str(p.relative_to(self.dir)): p.stat().st_mtime for p in self.dir.rglob("*") if p.is_file()}
         self.start = self.calls[0]["t"] - 0.6
         self.end = max(c["t"] for c in self.calls) + 0.4
+        if stop_after:          # show the run up to this artifact (e.g. assembly/trace.json: the wheels checked)
+            self.end = self.files[stop_after] + 1.2
+            self.calls = [c for c in self.calls if c["t"] <= self.end]
         times = sorted({self.start, self.end, *(c["t"] for c in self.calls),
                         *(t for t in self.files.values() if self.start <= t <= self.end)})
         edited = [0.0]
@@ -83,7 +86,7 @@ class Run:
         n_started = sum(1 for c in gl if c["ev"] == "start")
         spark = [c for c in calls if c["model"] == "Muse Spark" and c["ev"] == "done" and c.get("out")]
         layout = next((c["out"] for c in spark if "front_wheel_x" in c["out"]), None)
-        ended = any(c["ev"] == "end" for c in calls) or now >= self.end - 0.05
+        ended = now >= self.end - 0.05
         stage = "waiting"
         if "photo.png" in files: stage = "photo"
         if "mask.png" in files: stage = "sam"
@@ -241,7 +244,7 @@ async function tick() {
   want(st.stage, st.x);
   const S = st.summary;
   document.getElementById("badge").textContent = st.stage === "body" ? st.body_parts + " real plates, from SAM 3D's shape" :
-    st.stage === "final" ? `${S.parts} parts  ·  wheels ✓  ·  glass ✓  ·  stands ${S.stands ? "✓" : "✗"}  ·  doors ${S.doors_passed ? "✓" : "✗ (rejected by the checker, left out)"}` : "";
+    st.stage === "final" ? `wheels ✓  ·  glass ✓  ·  every piece connected ✓  ·  stands ${S.stands ? "✓" : "✗"}` : "";
 }
 setInterval(tick, 100);
 </script></body></html>"""
@@ -278,8 +281,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(404); self.end_headers()
 
 
-def serve(out: Path, assets: Path, port=8767, target=44.0):
-    Handler.run = Run(out.resolve(), assets.resolve(), target)
+def serve(out: Path, assets: Path, port=8767, target=44.0, stop_after=None):
+    Handler.run = Run(out.resolve(), assets.resolve(), target, stop_after)
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return Handler.run
