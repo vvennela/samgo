@@ -128,9 +128,10 @@ def main() -> None:
         return u * u * (3 - 2 * u)
 
     shots = {
-        "whole": (8.0, lambda t: {"sep": 0.0, "angle0": 0.6, "spin": 0.35, "dist": 2.6, "height": 0.45}),
-        "layers": (12.0, lambda t: {"sep": ease((t - 2.0) / 5.0), "angle0": 1.0, "spin": 0.12,
-                                    "dist": 2.6 + 1.9 * ease((t - 2.0) / 5.0), "height": 0.22}),
+        "whole": (8.0, lambda t: {"sep": 0.0, "angle0": 2.1, "spin": 0.35, "dist": 2.6, "height": 0.4}),
+        # the same 3/4 side angle as "whole", barely drifting: turning toward the front would foreshorten the car
+        "layers": (12.0, lambda t: {"sep": ease((t - 2.0) / 5.0), "angle0": 2.1, "spin": 0.02,
+                                    "dist": 2.6 + 1.8 * ease((t - 2.0) / 5.0), "height": 0.22}),
     }
     with sync_playwright() as pw:
         import os

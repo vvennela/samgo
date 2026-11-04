@@ -6,6 +6,7 @@ painted, glazed and re-laid as plates outside / bricks inside.
   (above the window line ZB, below the flat roof's last ROOF plates, where the cabin rises at least 8 plates above the
   line) is trans-clear, except A/C pillars (cabin corners) and a B pillar (middle of each side). Cells just behind the
   glass are black, so the windows read dark.
+- Headlights: the photo's dark patches at the front's outer corners, under the hood line: glass, white behind.
 - Layout: one cell of plates on the outside; bricks wherever all three of their layers are inside.
 
     python runs/hand_finished/camry_10x.py grid.npz out.json [ZB] [paint]
@@ -87,6 +88,20 @@ def main():
     colour[behind] = COLOR_INDEX["black"]
     PLACE = COLOR_INDEX["tan"]  # placeholder the builder knows for glass (the car has no tan)
     colour[glass] = PLACE
+    # headlights: on the front face (the first cells from the front, x=0), the photo's dark patches at the outer
+    # corners just under the hood line (HZ0..HZ1, at least HY studs off the centre line, outside the grille), glass
+    # with white behind so they read as lamps
+    HZ0, HZ1, HY = 74, 92, 20
+    first = np.argmax(occ, axis=0)
+    xs = np.arange(X)[:, None, None]
+    face = occ & (xs <= first[None] + 1)
+    yy = np.arange(Y)[None, :, None]
+    lamp = (face & (zz >= HZ0) & (zz <= HZ1) & (np.abs(yy - (Y - 1) / 2) >= HY)
+            & np.isin(g, [COLOR_INDEX["black"], COLOR_INDEX["dark_gray"]]))
+    lamp_behind = occ & ~lamp & (xs <= first[None] + 3) & dilate(lamp, 2)
+    colour[lamp_behind] = COLOR_INDEX["white"]
+    colour[lamp] = PLACE
+    print(f"headlights: {int(lamp.sum())} glass cells, {int(lamp_behind.sum())} white behind", flush=True)
     inside = occ & ~shell
     print(f"cells {int(occ.sum())}, shell {int(shell.sum())}, glass {int(glass.sum())}, dark behind glass "
           f"{int(behind.sum())}, inside {int(inside.sum())}", flush=True)
