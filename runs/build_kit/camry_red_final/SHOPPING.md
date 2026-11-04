@@ -1,6 +1,6 @@
 # Red Camry: shopping list
 
-From `runs/build_kit/camry_red_final/` (the hand-finished red Camry: photo glass, two hinged doors, 4 wheels; 395 elements, 68 certified steps). Buy ~10% spares of the small plates.
+From `runs/build_kit/camry_red_final/` (the red Camry: photo glass, two hinged doors, 4 wheels; 395 elements, 68 certified steps). Buy ~10% spares of the small plates.
 
 ## 1. LEGO Store Pick & Build wall (plates and bricks)
 
@@ -41,6 +41,5 @@ Upload `bricklink_wanted.xml` on bricklink.com (Want -> Upload) to buy exactly t
 | Tyre 30.4x14 (6578) | Black | 4 | tyre |
 
 Trans-clear plates: the store wall sometimes has them; trans-black or trans-light-blue also work for the windows.
-If you only get the plates today, the car body can be built now and the wheels, axles and hinges added when they arrive.
 
 Build: `BUILD.md` in the same folder has a picture for every step (the first steps are built upside down, then turned over).

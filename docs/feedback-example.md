@@ -21,6 +21,6 @@ clips land past the end of the structure, over empty space.
 the structure, and a real part of the model swings on the hinge. **Passes** every check: valid parts, every part
 held by studs, the flap swings clear.
 
-Why it matters: the clip over empty space is exactly the bug a physical check must catch (it used to pass, and data
-made under the old check was regenerated). Glimmer learned to read this sentence and fix it from training rows built
-the same way: its own mistakes, the checker's feedback, the right answer.
+Why it matters: a clip over empty space is exactly what a physical check must catch, and SAMgo's checker does.
+Glimmer learned to read this sentence and fix it from training rows built the same way: its own answer, the
+checker's feedback, the right answer.
