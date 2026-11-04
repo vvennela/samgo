@@ -187,7 +187,10 @@ function show(stage, x) {
   if (v) { v.currentTime = 0; if (stage !== "spark" || sparkReady) v.play(); else v.pause(); }
   if (stage === "final") { const f = document.getElementById("viewer"); f.onload = () => { const d = f.contentDocument;
     const st = d.createElement("style"); st.textContent = "header, .bar, .facts { display:none !important } body { padding:0 !important; gap:0 !important; background:#fff !important } #stage { border-radius:0 !important; height:100vh !important; background:#fff !important }";
-    d.head.appendChild(st); }; f.src = "/run/viewer.html"; }
+    d.head.appendChild(st);
+    setTimeout(() => { const w = f.contentWindow; try { w.eval(`(() => { const bb = bounds(group), c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3());
+      const d = Math.max(s.x, s.y, s.z) * 0.95, az = 0.55; camera.position.set(c.x + Math.cos(az) * d, c.y + 0.42 * d, c.z + Math.sin(az) * d);
+      controls.target.copy(c); controls.update(); })()`); } catch (e) {} }, 900); }; f.src = "/run/viewer.html"; }
 }
 function sparkBubble(st) {
   if (!st.used) return;
