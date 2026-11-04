@@ -36,10 +36,38 @@ def ease(u: float, kind: str = "inout") -> float:
     return 4 * u ** 3 if u < 0.5 else 1 - (-2 * u + 2) ** 3 / 2      # cubic in-out
 
 
+def _smooth(keys, t):
+    """Monotone cubic Hermite through (t_i, x_i, y_i, log zoom_i): continuous velocity, no overshoot."""
+    ts = [k["t"] for k in keys]
+    vals = [(k["x"], k["y"], math.log(k["zoom"])) for k in keys]
+    if t <= ts[0]:
+        return vals[0]
+    if t >= ts[-1]:
+        return vals[-1]
+    i = max(j for j in range(len(ts) - 1) if ts[j] <= t)
+    h = ts[i + 1] - ts[i]
+    u = (t - ts[i]) / h
+    out = []
+    for d in range(3):
+        def slope(j):
+            if j == 0 or j == len(ts) - 1:
+                return 0.0
+            a = (vals[j][d] - vals[j - 1][d]) / (ts[j] - ts[j - 1])
+            b = (vals[j + 1][d] - vals[j][d]) / (ts[j + 1] - ts[j])
+            return 0.0 if a * b <= 0 else 2 / (1 / a + 1 / b)      # harmonic mean: monotone (Fritsch-Carlson)
+        p0, p1, m0, m1 = vals[i][d], vals[i + 1][d], slope(i), slope(i + 1)
+        h00, h10, h01, h11 = 2*u**3 - 3*u**2 + 1, u**3 - 2*u**2 + u, -2*u**3 + 3*u**2, u**3 - u**2
+        out.append(h00 * p0 + h10 * h * m0 + h01 * p1 + h11 * h * m1)
+    return tuple(out)
+
+
 def camera(t: float):
     """(cx, cy, zoom) at time t. Keyframes: dict(t, x, y, zoom, ease='inout', arc=0). Between two keyframes the
     position eases, zoom eases in log space, and arc > 0 pulls the zoom out mid-move (a flight over the canvas)."""
     keys = SPEC["CAMERA"]
+    if SPEC.get("SMOOTH"):
+        x, y, lz = _smooth(keys, t)
+        return x, y, math.exp(lz)
     if t <= keys[0]["t"]:
         k = keys[0]
         return k["x"], k["y"], k["zoom"]
@@ -97,7 +125,7 @@ def frame_of(e: dict, t: float):
         import bisect
         k = bisect.bisect_right(e["schedule"], t - e.get("start", 0)) - 1
         return files[max(0, min(len(files) - 1, k))]
-    k = int(round((t - e.get("start", 0)) * e.get("fps", 30) * e.get("rate", 1)))
+    k = int(round((t - e.get("start", 0)) * e.get("fps", 30) * e.get("rate", 1))) + e.get("offset", 0)
     if e.get("loop"):
         k %= len(files)
     return files[max(0, min(len(files) - 1, k))]
@@ -157,8 +185,20 @@ def background(cx: float, cy: float, z: float) -> Image.Image:
 
 
 def render(k: int) -> Image.Image:
-    W, H = SPEC["W"], SPEC["H"]
+    n = SPEC.get("BLUR", 1)
     t = SPEC["T0"] + k / SPEC["FPS"]
+    if n <= 1:
+        return render_at(t)
+    import numpy as np
+    acc = None
+    for j in range(n):
+        im = np.asarray(render_at(t + ((j + 0.5) / n - 0.5) * 0.5 / SPEC["FPS"]), dtype=np.float32)
+        acc = im if acc is None else acc + im
+    return Image.fromarray((acc / n).clip(0, 255).astype("uint8"))
+
+
+def render_at(t: float) -> Image.Image:
+    W, H = SPEC["W"], SPEC["H"]
     cx, cy, z = camera(t)
     im = background(cx, cy, z).convert("RGBA")
     for e in SPEC["ELEMENTS"]:
@@ -216,11 +256,12 @@ def main():
     ap.add_argument("--scale", type=float, default=1.0, help="render smaller for previews")
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--audio", default=None)
+    ap.add_argument("--blur", type=int, default=1, help="motion blur sub-frames per frame (3 for the final)")
     a = ap.parse_args()
     SPEC.update(runpy.run_path(a.spec))
     t1 = a.t1 if a.t1 is not None else SPEC["DURATION"]
     W, H = int(SPEC["W"] * a.scale), int(SPEC["H"] * a.scale)
-    overrides = {"W": W, "H": H, "T0": a.t0}
+    overrides = {"W": W, "H": H, "T0": a.t0, "BLUR": a.blur}
     if a.scale != 1:   # previews: the same film, every world size and camera zoom scaled down
         overrides["CAMERA"] = [dict(k, zoom=k["zoom"] * a.scale) for k in SPEC["CAMERA"]]
         overrides["GRID"] = SPEC.get("GRID", 64)
@@ -233,7 +274,11 @@ def main():
     if a.audio:
         cmd += ["-ss", str(a.t0), "-i", a.audio, "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "192k"]
     cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "17", "-preset", "medium", a.out]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    finally:
+        import shutil
+        shutil.rmtree(outdir, ignore_errors=True)      # the frames are large: never leave them behind
     print(f"{done} frames -> {a.out}", flush=True)
 
 

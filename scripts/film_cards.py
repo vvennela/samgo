@@ -210,6 +210,7 @@ def chips(out: Path):
     chip(out / "chip_glimmer2.png", "MUSE GLIMMER", GLIMMER_C,
          ["add technic_brick 1x4 at (14, 2..8, 2)", "add axle at x=16", "add wheel x2"], mono=True)
     chip(out / "chip_check2.png", "CHECKER", GREEN, ["Rolls, and stands on its wheels"], ok=True)
+    chip(out / "chip_doors.png", "CHECKER", GREEN, ["Doors swing clear on their hinges"], ok=True)
     chip(out / "chip_glass.png", "SAM 3.1 + MUSE SPARK", (90, 100, 112), ["Glass where the photo has it. Painted red."])
 
 
@@ -217,13 +218,17 @@ def main():
     out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
     labels = {
         "lbl_photo": "ONE PHOTO", "lbl_sam31": "SAM 3.1  ·  FINDS THE CAR AND ITS GLASS",
-        "lbl_sam3d": "SAM 3D  ·  THE 3D SHAPE,  THEN A GREEDY FILL OF PLATES",
+        "lbl_sam3d": "SAM 3D  ·  ONE PHOTO TO A 3D SHAPE",
         "lbl_spark": "MUSE SPARK  ·  KNOWS WHAT MOVES", "lbl_glimmer": "MUSE GLIMMER  ·  BUILDS IT, THE CHECKER CHECKS",
         "lbl_build": "THE BUILD", "lbl_manual": "THE MANUAL  ·  56 STEPS, EACH ONE CHECKED",
         "lbl_parts": "320 REAL PARTS, READY TO ORDER", "lbl_verified": "VERIFIED, NOT GENERATED",
     }
     for name, s in labels.items():
         text_png(out / f"{name}.png", [s], size=54, color=MUTED, track=0.12)
+    text_png(out / "cap_res.png", ["RESOLUTION IS A DIAL"], size=96, track=0.1)
+    text_png(out / "cap_res2.png", ["TURN IT DOWN TO A SIZE YOU CAN BUILD"], size=64, color=MUTED, track=0.1)
+    text_png(out / "cap_slab.png", ["REAL PLATES.  NO WHEELS, NO DOORS, NOTHING MOVES."], size=60, color=MUTED, track=0.1)
+    text_png(out / "cap_parts.png", ["THIS IS A REAL BUILD, WITH REAL PARTS"], size=84, track=0.08)
     text_png(out / "cap_unseen.png", ["NONE OF THESE WERE IN THE TRAINING DATA"], size=84, track=0.1)
     text_png(out / "cap_mfg1.png", ["KNOWN PARTS"], size=150, track=0.12)
     text_png(out / "cap_mfg2.png", ["AN ASSEMBLY THAT HOLDS AT EVERY STEP"], size=84, track=0.08)
