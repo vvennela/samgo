@@ -27,3 +27,8 @@ Note on scoring r12-blades: the rotor check passes any rotor (run 11 makes lifta
 |---|---|---|
 | r12-blades: any rotor passes | 23/30 | |
 | r12-blades: passed with a blade cross | **5/30** (L1 0/6, L2 0/11, L3 5/13) | |
+
+## Stopped (Nov 3, ~20:40 PT)
+
+Repeated Fireworks connection failures (heartbeats lost for ~30 min across sessions). Stopped on the user's call
+("forget about run 12"); trainer and chain killed, all six training sessions deleted. Run 11 remains the serving model.
