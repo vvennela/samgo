@@ -8,8 +8,9 @@ nothing written for any one object. Built for the Meta Global AI Developer Hacka
 Frontier"), Oct 27 - Nov 4, 2026, on Meta's models: **SAM 3.1**, **SAM 3D**, **Muse Spark** and **Muse Glimmer**
 (fine-tuned by us).
 
-- **Demo video (3 min):** DEMO_VIDEO_LINK
-- **Fine-tuned model:** HF_MODEL_LINK (Muse Glimmer 30B LoRA, run 11)
+- **Demo video (3 min):** https://youtu.be/jUHE-NSDsxY
+- **Fine-tuned model:** Muse Glimmer 30B + our LoRA (run 11), served on Fireworks as `accounts/vvennela/models/objects-r11-tuned`.
+  Training data, script and card: https://huggingface.co/datasets/vvennelakanti/samgo-glimmer-train-r11
 - **Built during the hackathon:** all of it. This repository starts on Oct 27; every model, dataset, checker,
   training run and tool here was made during the event.
 
@@ -148,8 +149,8 @@ lean formal/MergeRule.lean && lean formal/AnimationPath.lean
 
 Training: `brickgpt/train_serverless.py` (LoRA rank 32, batch 64, 2 epochs, Fireworks serverless); each run's chain
 script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/objects-rN/run.md`. Run 11 is the model
-used everywhere (Fireworks sampler `vvennela/run-736d451107854752b6ba9b0cb0ad5b78/objects-r11-tuned-d5f4be8e`, weights
-on Hugging Face above). Run 13 trained the same skills on 1.5-2.5x larger bodies: rotors and blade crosses improved at
+used everywhere (Fireworks sampler `vvennela/run-736d451107854752b6ba9b0cb0ad5b78/objects-r11-tuned-d5f4be8e`;
+its training data on Hugging Face above). Run 13 trained the same skills on 1.5-2.5x larger bodies: rotors and blade crosses improved at
 large sizes; its notes are in `fireworks-training-runs/objects-r13/run.md`.
 
 ## Layout
