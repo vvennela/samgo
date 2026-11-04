@@ -27,8 +27,9 @@ checked to hold. These are real instructions. You could build this tonight."
 2:07 Generalizes (VO over the tour): "And SAMgo generalizes really well. A 747. A helicopter. A Cessna. None of them
 were in the training data. Same models, same checker. A bed, an office chair, a skateboard, a TV."
 
-2:35 Why it matters (on camera): "A lot of manufacturing is assembling known parts, and people still work out how they
-go together by hand. SAMgo does that for LEGO today. Next, I want to do it with real CAD parts."
+2:35 Why it matters (on camera, separate video, ~25 s): "Most of manufacturing is putting known parts together. But
+figuring out how they fit, and in what order, is still done by hand. SAMgo shows a model can do that: pick real parts,
+make the mechanisms work, and check that every step holds. Today it's LEGO. Next, it's real CAD parts."
 
 2:52 Close: "SAMgo. One photo, a machine you can actually build."
 
