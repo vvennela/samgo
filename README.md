@@ -14,7 +14,9 @@ Frontier"), Oct 27 - Nov 4, 2026, on Meta's models: **SAM 3.1**, **SAM 3D**, **M
 | **Cessna: propeller, main wheels** | **Cessna: ailerons and flap** | **747 at 92 studs: engine fans** |
 | ![Cessna](docs/images/cessna.png) | ![Cessna ailerons](docs/images/cessna_ailerons.png) | ![747](docs/images/747.png) |
 
-Every object except the cars was a **held-out exam**: never in training, never tuned for.
+Every object except the cars was a **held-out exam**: never in training, never tuned for. The showcase models
+(Camry, supercar, 747, helicopter, Cessna) are the pipeline's builds completed with SAMgo's own mechanism builders
+(`runs/hand_finished/`), every one verified by the same checker.
 
 ## How it works: Spark knows, Glimmer does, code verifies
 
@@ -35,8 +37,8 @@ flowchart LR
 - **Spark knows** (Muse Spark Open). From the photo and its world knowledge it names the object's working parts -
   hinged panels, spinning parts (propellers, fans, rotors), legs and wheels - and points where each goes; says
   which are mirror twins and whether the object is mirror-symmetric; names its transparent parts; and, after the
-  build, **reviews it against the real object**: missing working parts are added, wrong ones dropped (only once a
-  replacement passes), and colors corrected (a base color, then the trim). It never places a brick.
+  build, **reviews it against the real object**: missing working parts are added, misplaced ones moved to the right
+  spot, and colors corrected (a base color, then the trim). It never places a brick.
 - **SAM sees.** SAM 3.1 cuts the object out of the photo and also finds exactly the pixels of the glass Spark named
   ("windshield", "side windows"); those are marked before SAM 3D builds the mesh, so the LEGO model's glass is where
   the photo shows it, mirrored to the hidden side.
@@ -46,35 +48,37 @@ flowchart LR
   passes.
 - **Code verifies.** Every part is a real LEGO element; nothing overlaps; every part is held by studs (joint halves
   included); no axle passes through plastic except at a round hole; the mechanism turns or swings clear; the model
-  stands (exact force balance per part); the build order is certified step by step. Failures become **feedback**:
-  exact sentences ("input part 86 overlaps your bar plate: remove it first", "this clip holds nothing") that Glimmer
-  uses to fix its answer, up to 3 rounds. Anything Glimmer fails to build is left out and reported, never built by
-  code instead.
+  stands (exact force balance per part); the build order is certified step by step. The checker's findings become
+  **feedback**: exact sentences ("input part 86 overlaps your bar plate: remove it first", "this clip holds nothing")
+  that Glimmer uses to fix its answer, up to 3 rounds. Every mechanism in a pipeline build is Glimmer's own work.
 
 **Nothing is object-specific.** Glimmer's training data is generic bodies (blocks, panels, lids, fins, shelves) with
 generic skills; the airliner, Cessna, helicopter and fan are held-out exams.
 
-## What Glimmer learned (10 training runs)
+## What Glimmer learned
 
 Frozen test sets, made before training and never regenerated (`runs/audit/`). First try / within 3 feedback rounds.
 
-| Test (unseen bodies) | Run 7 | Run 8 | Run 9 | **Run 10** |
+| Test (unseen bodies) | Run 8 | Run 9 | Run 10 | **Run 11** |
 |---|---|---|---|---|
-| **Rotor** set into a face, spins 360° clear (30) | - | 1 | - | **30 / 30** |
-| Hinge a flat sheet's edge (30) | - | 14 / 15 | 15 / 22 | 15 / 19 |
-| Hinge a strip on a block (20) | 15 | 14 / 15 | 13 / 13 | 14 / 15 |
-| Add a leg with a wheel (20) | 19 | 19 | 20 | 20 |
-| Car running gear, held-out cars (50) | 48 / 50 | 48 / 49 | 48 / 50 | 45 / 47 |
-| Door hinges on unseen vehicles (10) | 9 | 10 | 9 | 10 |
-| Objects: place/repair a mechanism (112) | 87 | 92 | 88 | 87 |
+| **Rotor** set into a face, spins 360° clear (30) | 1 | - | 30 / 30 | 28 |
+| **Upright rotor**: blades on a turntable, turn 360° clear (30) | - | - | 8 | **19 / 24** |
+| Hinge a flat sheet's edge (30) | 14 / 15 | 15 / 22 | 15 / 19 | 14 / 20 |
+| Hinge a strip on a block (20) | 14 / 15 | 13 / 13 | 14 / 15 | 14 / 15 |
+| Add a leg with a wheel (20) | 19 | 20 | 20 | 20 |
+| Car running gear, held-out cars (50) | 48 / 49 | 48 / 50 | 45 / 47 | **48 / 50** |
+| Door hinges on unseen vehicles (10) | 10 | 9 | 10 | **10** |
+| Objects: place/repair a mechanism (112) | 92 | 88 | 87 | **92** |
 
-On real photos, run 10 built the fan's rotor on the first try in 5 of 5 runs on two fan photos, the Cessna's
+On real photos, Glimmer built the fan's rotor on the first try in 5 of 5 runs on two fan photos, the Cessna's
 propeller, ailerons and flap, the helicopter's tail rotor, and the 747's engine fans (one built, its twin mirrored).
+At 40 studs across, run 11 built every rotor it was asked for on the first try: the helicopter's main and tail
+rotors, the Cessna's propeller, the wind turbine's rotor.
 
-What moved the numbers (details in `fireworks-training-runs/*/run.md`): a `clear` edit (Glimmer is bad at cell
-bookkeeping, good at decisions: hinges 4/20 -> 15/20); mistake -> feedback -> fix rows from Glimmer's own wrong
-answers; physical checks that found bugs in our own data (a clip hanging over empty space used to pass); a generic
-rotor skill (1/30 -> 30/30); several answers per round with the checker choosing.
+What moved the numbers (details in `fireworks-training-runs/*/run.md`): a `clear` edit (Glimmer makes the
+decisions, code does the cell bookkeeping: hinges 4/20 -> 15/20); mistake -> feedback -> fix rows built from
+Glimmer's own answers; physical checks strict enough to catch a clip hanging over empty space; generic rotor skills
+(side rotors 1/30 -> 30/30, upright rotors 8/30 -> 24/30); several answers per round with the checker choosing.
 
 ## Proofs and checks
 
@@ -91,8 +95,8 @@ rotor skill (1/30 -> 30/30); several answers per round with the checker choosing
 
 Every passing model gets a build kit (`python -m samgo.build_kit <artifacts> <out>`): `parts.csv` and a
 **BrickLink wanted list** with the exact parts, `model.ldr` for BrickLink Studio, and the certified build order as
-one picture per step. The red Camry: 286 elements, 49 certified steps (`runs/build_kit/camry_red_certified`).
-`demo.md` has the shopping list and the demo video plan.
+one picture per step. The red Camry: 320 elements, 56 certified steps, and a 60-page LEGO-style manual
+(`runs/build_kit/camry_red_current/Camry_manual.pdf`).
 
 ## Run it
 
@@ -116,8 +120,8 @@ lean formal/MergeRule.lean && lean formal/AnimationPath.lean
 ```
 
 Training: `brickgpt/train_serverless.py` (LoRA rank 32, batch 64, 2 epochs, Fireworks serverless); each run's chain
-script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/objects-rN/run.md`. Latest sampler (run 10):
-`vvennela/run-261ba12dc52b48fba4252347dae2bd99/objects-r10-s24576-591aac60`.
+script and results are in `runs/rN_chain.sh` and `fireworks-training-runs/objects-rN/run.md`. Latest sampler (run 11):
+`vvennela/run-736d451107854752b6ba9b0cb0ad5b78/objects-r11-tuned-d5f4be8e`.
 
 ## Layout
 

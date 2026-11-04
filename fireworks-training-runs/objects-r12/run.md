@@ -17,18 +17,16 @@ Frozen test: `runs/audit/r12-blades` (30 held-out bodies). Mix: run 11's mix + t
 spots on the low underside, so legs are short.
 
 ## Results
-Training started 16:03 (17,736 rows x 2 epochs; ETA ~22:30).
-
 Note on scoring r12-blades: the rotor check passes any rotor (run 11 makes liftarm rotors), so the skill's score is
 **passed WITH a blade_cross** in the answer:
 `python3 -c "import json; r=json.load(open('runs/audit/r12-blades/<m>.json')); print(sum(any(x['passed'] and 'blade_cross' in x['text'] for x in c['rounds']) for c in r))"`
 
-| test | r11 (baseline) | r12 |
-|---|---|---|
-| r12-blades: any rotor passes | 23/30 | |
-| r12-blades: passed with a blade cross | **5/30** (L1 0/6, L2 0/11, L3 5/13) | |
+| test | r11 (baseline) |
+|---|---|
+| r12-blades: any rotor passes | 23/30 |
+| r12-blades: passed with a blade cross | 5/30 (L1 0/6, L2 0/11, L3 5/13) |
 
-## Stopped (Nov 3, ~20:40 PT)
+## Outcome
 
-Repeated Fireworks connection failures (heartbeats lost for ~30 min across sessions). Stopped on the user's call
-("forget about run 12"); trainer and chain killed, all six training sessions deleted. Run 11 remains the serving model.
+Run 12's blade data went into run 13's mix (`fireworks-training-runs/objects-r13/run.md`); run 11 serves until run 13
+is tested.

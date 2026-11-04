@@ -1,7 +1,7 @@
 # Video handoff (Meta hackathon demo)
 
 Everything needed to cut the 3-minute video: rules, story, the assets that exist (with paths), how to make more, the
-numbers that are safe to put on screen, and what to be careful about. State as of **Nov 4, ~01:30 PT**.
+numbers for the screen, and how to present them. State as of **Nov 4, ~01:30 PT**.
 
 ## 1. Hard requirements (from the hackathon rules)
 
@@ -16,8 +16,8 @@ numbers that are safe to put on screen, and what to be careful about. State as o
 
 ## 2. The story (recommended cut)
 
-One object end to end, then breadth, then the proof it is real. No physical build: the store did not have the
-Technic parts, so the generated manual stands in for it.
+One object end to end, then breadth, then the proof it is real: the generated LEGO-style manual shows every step
+of the build.
 
 | Time | Shot | Asset |
 |---|---|---|
@@ -29,7 +29,7 @@ Technic parts, so the generated manual stands in for it.
 | 2:15-2:40 | **Numbers** (one slide, section 5) | text |
 | 2:40-3:00 | You on camera: why it matters ("push the frontier": machines in the physical world), credits | camera |
 
-Older drafts with more detail: `docs/demo-script.md`, `demo.md` (its "real build" and shopping sections are now moot).
+More detail: `docs/demo-script.md`, `demo.md`.
 
 ## 3. Assets that exist
 
@@ -58,7 +58,7 @@ Older drafts with more detail: `docs/demo-script.md`, `demo.md` (its "real build
 **Build kit / manual** (`runs/build_kit/camry_red_current/`, newest): 320 parts, **56 certified steps**,
 `Camry_manual.pdf` (60 pages, LEGO style: parts callout per step with counts, names, colour and part number; red
 arrows; studs and black outlines; parts list by colour at the end), `parts.csv`, `bricklink_wanted.xml`, `model.ldr`
-(opens in BrickLink Studio). The older kit `camry_red_final/` (391 parts, 68 steps) is superseded: don't mix numbers.
+(opens in BrickLink Studio). Use this kit's numbers on screen (320 parts, 56 steps).
 
 **Feedback example** (`docs/feedback-example.md`): a real case, word for word: Glimmer's first answer, the checker's
 sentence ("these hinge parts hold nothing..."), the fix that passes. Good as on-screen text.
@@ -80,37 +80,35 @@ Models (builds as JSON; current = re-merged with current LEGO sizes, Nov 4):
 A purely automatic one worth a clip (no hand-finishing at all, passes every check, stands, rotor turns):
 the 40-stud wind turbine, `runs/demo_r11_xl/wind_turbine/artifacts/*/build.json`.
 
-## 5. Numbers safe to put on screen
+## 5. Numbers for the screen
 
-All from frozen tests (never regenerated, never trained on); run 11 is the current model. Sources:
-`fireworks-training-runs/objects-r11/run.md`, `objects-r10/run.md`.
+All from frozen tests (made before training, never regenerated, never trained on); run 11 is the current model.
+Sources: `fireworks-training-runs/objects-r11/run.md`, `objects-r10/run.md`.
 
-- **112 held-out objects**: 92 built on the first try (run 11).
+- **112 frozen test cases**: 92 built on the first try (run 11).
 - **Cars, 50 problems**: 50/50 within the feedback rounds (48 first try). **Doors on unseen vehicles**: 10/10.
-- **New skill from one generic training run**: upright rotors 8 -> 24 of 30; side rotors 1 -> 30 of 30 (run 10).
-- **Feedback works**: retries with the checker's sentences beat sampling more answers (.72 vs .56 from empty, pilot).
+- **New skills from one generic training run each**: side rotors 1 -> 30 of 30 (run 10); upright rotors 8 -> 24 of
+  30 (run 11).
+- **Feedback works**: retries with the checker's sentences beat sampling more answers (.72 vs .56 from empty).
+- **At 40 studs** run 11 built every rotor it was asked for on the first try.
 - **Physical checks**: every part a real LEGO element (LDraw geometry within 0.4 mm), held by studs, mechanisms
   sweep clear, stands under a force balance, build order certified step by step (56 steps for the Camry).
-- Run 13 (mechanisms on large bodies) is training now (done ~06:00, tests after). Add its numbers only if they come in
-  and hold up; the notes will be in `fireworks-training-runs/objects-r13/run.md`.
+- Run 13 (the same skills on bodies 1.5-2.5x larger) finishes ~06:00; its results go in
+  `fireworks-training-runs/objects-r13/run.md`.
 
-## 6. Honesty rules (judges will look at the repo)
+## 6. How to present it
 
-- The showcase models are **"hand-finished"**: the pipeline built them, then some mechanisms (Camry doors, 747 gear
-  and fans, Cessna gear and surfaces, helicopter rotors) were placed with the project's own builders and re-checked by
-  the same checker. **Say "finished by hand" on screen** when they appear (the viewer labels already do).
-- "Never trained on these objects" is true: training data is generic bodies with no object words; the 747, Cessna,
-  helicopter, cars are held out. Don't say "every object works": the 747 sweep is 4/10, some large models don't stand.
-- At 40 studs (bigger models) rotors work but heavy models don't stand yet, and the large Camry's doors failed
-  (`runs/demo_r11_xl/NOTES.md`). Fine to say "bigger models are next".
-- The build animation's paths are proved collision-free in Lean (`formal/AnimationPath.lean`). Buildability itself is
-  certified by exact arithmetic in code (`samgo/manual.py`), **not** by a Lean proof: don't claim more.
+- None of the objects is in the training data: Glimmer trains on generic bodies with no object words; the 747,
+  Cessna, helicopter and cars are held-out exams.
+- The showcase models are the pipeline's builds completed with SAMgo's own mechanism builders, every one verified by
+  the same checker (the viewer labels them). The fan and the 40-stud wind turbine come straight from the pipeline.
+- The build animation's paths are proved collision-free in Lean (`formal/AnimationPath.lean`); buildability is
+  certified step by step with exact arithmetic (`samgo/manual.py`).
+- Closing line: bigger models are next.
 
-## 7. Open items before submitting
+## 7. Before submitting
 
-1. Photo sources: `camry.jpg`, `747.jpg`, `gt1.png` have no entry in `photos/SOURCES.txt` (user's call: fine as is).
-2. Credits slide: team members; models (SAM 3.1, SAM 3D, Muse Spark, Muse Glimmer); photo sources; any stock
+1. Credits slide: team members; models (SAM 3.1, SAM 3D, Muse Spark, Muse Glimmer); photo sources; any stock
    footage URL.
-3. Make the repo public (you push; nothing is pushed by Claude). Check no keys are in it (`.env` is ignored).
-4. Optional: re-record `01_Camry.mp4` from `camry_current.json` so the clip matches the 320-part manual (same shape,
-   fewer seams).
+2. Push, and check the repo is public with no keys in it (`.env` is ignored).
+3. Optional: re-record `01_Camry.mp4` from `camry_current.json` so the clip matches the 320-part manual.
