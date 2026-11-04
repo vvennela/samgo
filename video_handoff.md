@@ -14,15 +14,17 @@ numbers for the screen, and how to present them. State as of **Nov 4, ~01:30 PT*
 - **No military objects.** Never show the F-16 (`photos/f16.jpg`) or anything from it. Civil machines only.
 - **Only assets we have rights to** (photo sources: `photos/SOURCES.txt`).
 
-## 2. The story (recommended cut)
+## 2. The story
+
+**The full polished script, word for word with timings: `docs/video-script.md`.**
 
 One object end to end, then breadth, then the proof it is real: the generated LEGO-style manual shows every step
 of the build.
 
 | Time | Shot | Asset |
 |---|---|---|
-| 0:00-0:10 | Title "SAMgo" + one line: "a photo of any machine -> a LEGO model that works, and that you can build" | text |
-| 0:10-0:20 | The photo -> cut to the finished LEGO car, doors swinging, wheels turning | `runs/video/steps/1_photo.png`, `runs/video/clips/01_Camry.mp4` |
+| 0:00-0:10 | **"SAMgo"** in a huge bold sans (the "QUEENS" title style) over SF / San Jose skyline footage | stock footage (Pexels / Pixabay), text |
+| 0:10-0:20 | Your hand holds a phone showing the Camry photo; lower the phone -> cut to the LEGO car, doors swinging, wheels turning | `runs/video/steps/1_photo.png`, `runs/video/clips/01_Camry.mp4` |
 | 0:20-1:20 | **Every step, visualized** (voice over each): SAM 3.1 mask and glass -> SAM 3D mesh -> voxels -> Spark names the working parts -> Glimmer builds them, the checker's sentence, the fix -> the build animation | `runs/video/steps/*` (table in section 3), `docs/feedback-example.md` as on-screen text, `runs/video/clips/02_Camry_build.mp4` |
 | 1:20-1:45 | **You can build it:** flip through the LEGO-style manual (callouts, arrows, parts list) | `runs/build_kit/camry_red_current/Camry_manual.pdf` |
 | 1:45-2:15 | **It generalizes:** the montage (747 fans + flaps, helicopter rotors, Cessna propeller + ailerons, supercar) with one line: "none of these was in the training data" | `runs/video/clips/montage.mp4` |

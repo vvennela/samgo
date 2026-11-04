@@ -1,14 +1,14 @@
 # Demo: video plan
 
 3 minutes, civil machines, all work from the hackathon (Oct 27 - Nov 4). The full cut, assets and numbers are in
-`video_handoff.md`.
+`video_handoff.md`; the word-for-word script is `docs/video-script.md`.
 
 ## The video
 
 | Time | Shot | How to make it |
 |---|---|---|
-| 0:00-0:10 | **"SAMgo"** title: "a photo of any machine -> a LEGO model that works, and that you can build" | text over stock skyline footage (Pexels / Pixabay; clip URL in the credits) |
-| 0:10-0:20 | The photo -> cut to the LEGO car, doors swinging, wheels turning | `runs/video/steps/1_photo.png`, `runs/video/clips/01_Camry.mp4` |
+| 0:00-0:10 | **"SAMgo"** in a huge bold sans (the "QUEENS" title style) over SF / San Jose skyline footage | Pexels / Pixabay stock (clip URL in the credits) |
+| 0:10-0:20 | Your hand holds a phone showing the Camry photo; lower the phone -> cut to the LEGO car, doors swinging, wheels turning | `runs/video/steps/1_photo.png`, `runs/video/clips/01_Camry.mp4` |
 | 0:20-1:20 | **Every step, visualized**, your voice over each | "Step visuals" below |
 | 1:20-1:45 | **You can build it**: flip through the manual | `runs/build_kit/camry_red_current/Camry_manual.pdf` |
 | 1:45-2:15 | **It generalizes**: 747, helicopter, Cessna, supercar, each moving | `runs/video/clips/montage.mp4` |
