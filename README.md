@@ -14,12 +14,12 @@ order. Built in one week for the Meta Global AI Developer Hackathon (Oct 27 - No
 | Camry (from a photo) | Fan (held-out) | Helicopter (held-out) |
 |---|---|---|
 | ![Camry](docs/images/camry_red.png) | ![Fan](docs/images/fan.png) | ![Helicopter](docs/images/helicopter.png) |
-| **Cessna: propeller, main wheels** | **Cessna: ailerons and flap** | **747 at 92 studs: engine fans** |
+| **Cessna: propeller, main wheels** | **Cessna: ailerons and flap** | **747: engine fans, landing gear** |
 | ![Cessna](docs/images/cessna.png) | ![Cessna ailerons](docs/images/cessna_ailerons.png) | ![747](docs/images/747.png) |
 
 Every object except the cars was a **held-out exam**: never in training, never tuned for. The showcase models
-(Camry, supercar, 747, helicopter, Cessna) are the pipeline's builds completed with SAMgo's own mechanism builders
-(`runs/hand_finished/`), every one verified by the same checker.
+(Camry, supercar, 747, helicopter, Cessna) are the pipeline's builds completed with SAMgo's own mechanism builders,
+every one verified by the same checker.
 
 ## What SAMgo achieves
 
@@ -65,7 +65,7 @@ the training data, prompts or code.
 
 ## What Glimmer learned
 
-Frozen test sets, made before training and never regenerated (`runs/audit/`). First try / within 3 feedback rounds.
+Frozen test sets, made before training and never regenerated. First try / within 3 feedback rounds.
 
 | Test (unseen bodies) | Run 8 | Run 9 | Run 10 | **Run 11** |
 |---|---|---|---|---|
@@ -129,6 +129,6 @@ everywhere.
   `samgo/manual.py`, `samgo/verifier.py`, `samgo/technic.py`.
 - Outputs: `samgo/viewer3d.py`, `samgo/animation.py`, `samgo/build_kit.py`, `samgo/ldraw.py`; `scripts/studio*.py`.
 - Training: `brickgpt/`, skill data generators (`samgo/rotor_data.py`, `samgo/flap_data.py`, `samgo/primitives.py`,
-  `samgo/flap_mistakes.py`), frozen tests in `runs/audit/`, one note per run in `fireworks-training-runs/`.
+  `samgo/flap_mistakes.py`), one note per run in `fireworks-training-runs/`.
 - `formal/`: Lean proofs. `docs/`: verification notes, a feedback example, images, photo sources (photos are not in the
   repo).

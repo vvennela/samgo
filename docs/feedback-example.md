@@ -1,6 +1,6 @@
 # Feedback in action
 
-A real case from the frozen flap test `runs/audit/r9-sheets` (case `flap8_val_100006`, run 10, unseen body).
+A real case from the frozen flap test (case `flap8_val_100006`, run 10, unseen body).
 
 **Glimmer is told** (generic, no object named):
 > These are the parts along one edge of a flat structure (the edge toward -x, rows y = 29..32). Turn the outer part of

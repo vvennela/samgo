@@ -49,8 +49,8 @@ sum(forces at one shared stud) <= declared compression capacity
 
 ```bash
 uv run python -m samgo.certify prove tests/fixtures/certifiable_bed.json \
-  -o runs/audit/formal-v1/bed-certificate.json --instructions runs/audit/formal-v1/bed-instructions
-uv run python -m samgo.certify check tests/fixtures/certifiable_bed.json runs/audit/formal-v1/bed-certificate.json
+  -o runs/certify/bed-certificate.json --instructions runs/certify/bed-instructions
+uv run python -m samgo.certify check tests/fixtures/certifiable_bed.json runs/certify/bed-certificate.json
 uv run python -m samgo.synthesize build.json -o runs/support-repair --max-added 24 --max-attempts 128 --timeout 30
 ```
 

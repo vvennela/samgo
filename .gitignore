@@ -238,3 +238,12 @@ runs/video/
 scripts/film*
 runs/*.log
 scripts/record_layers.py
+runs/audit/
+runs/hand_finished/
+runs/demo_r11_xl/
+runs/demo_r11_xl.sh
+runs/eval/
+runs/granularity/
+docs/images/beetle.png
+docs/images/camry.png
+docs/images/training_car_*.png
