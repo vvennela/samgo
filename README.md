@@ -8,8 +8,8 @@ order. Built in one week for the Meta Global AI Developer Hackathon (Oct 27 - No
 **Muse Spark** and **Muse Glimmer**, fine-tuned by us.
 
 - **Demo video (3 min):** https://youtu.be/jUHE-NSDsxY
+- **Model (Muse Glimmer 30B + our LoRA, run 11):** https://huggingface.co/vvennelakanti/samgo-glimmer-lora-r11
 - **Training data, script and card:** https://huggingface.co/datasets/vvennelakanti/samgo-glimmer-train-r11
-- **Model:** Muse Glimmer 30B + our LoRA (run 11), served on Fireworks as `accounts/vvennela/models/objects-r11-tuned`
 
 | Camry (from a photo) | Fan (held-out) | Helicopter (held-out) |
 |---|---|---|
